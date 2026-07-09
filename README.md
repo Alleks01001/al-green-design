@@ -1,24 +1,37 @@
-# AL Green Design – Garden Studio 3D V0.6
+# AL Green Design – Garden Studio 3D V0.8
 
-Korrekte ZIP-Struktur wie bei V0.4.
+V0.8 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
 
-Direkt im Ordner liegen:
-- .gitignore
-- app/
-- components/
-- next.config.mjs
-- next-env.d.ts
-- package.json
-- README.md
-- tsconfig.json
+## Upload
+- .algreen
+- PDF
+- JPG / JPEG
+- PNG
+- WEBP
+- GIF
+- BMP
+- SVG
 
-## Enthalten
+## Download
+- .algreen
+- PDF
+- PNG
+- JPG
+- WEBP
+- SVG
+- CSV
+- JSON
+- TXT
+
+## Zusätzlich
 - 2D-Draufsicht
-- Zoom / Pan
-- Raster
-- Flächen
-- Objekte und Bauteile
-- Auswahl / Verschieben / Skalieren / Drehen
+- 3D-Ansicht mit Three.js
+- Zoom / Pan / Rotation
+- Flächen und Objekte
 - Eigenschaften rechts
-- m² / m³
-- .algreen, PNG/JPG, CSV
+- Browser-Speicherung
+
+## Lokal starten
+
+npm install
+npm run dev
