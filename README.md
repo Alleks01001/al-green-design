@@ -1,6 +1,6 @@
-# AL Green Design – Garden Studio 3D V0.8
+# AL Green Design – Garden Studio 3D V0.8.1.1
 
-V0.8 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
+V0.8.1 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
 
 ## Upload
 - .algreen
@@ -35,3 +35,7 @@ V0.8 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
 
 npm install
 npm run dev
+
+
+## Fix V0.8.1
+- TypeScript-Buildfehler beim PDF-Upload behoben.
