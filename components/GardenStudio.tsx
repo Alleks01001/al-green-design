@@ -423,7 +423,7 @@ export default function GardenStudio() {
   const [background, setBackground] = useState<Background | null>(null);
   const [camera, setCamera] = useState<Camera>({ x: -10, y: -8, width: 24, height: 16 });
   const [drag, setDrag] = useState<Drag>(null);
-  const [status, setStatus] = useState('Bereit: V0.8.1 mit erweiterten Formaten.');
+  const [status, setStatus] = useState('Bereit: V0.8.2 mit erweiterten Formaten.');
 
   const activeLevel = LEVELS.find((level) => level.id === activeLevelId) ?? LEVELS[0];
   const selectedArea = areas.find((area) => area.id === selectedAreaId) ?? null;
@@ -667,18 +667,18 @@ export default function GardenStudio() {
   }
 
   function exportProject(): void {
-    const project = { version: '0.8.1', levels: LEVELS, areas, objects, background };
+    const project = { version: '0.8.2', levels: LEVELS, areas, objects, background };
     downloadFile('al-green-design-v08.algreen', JSON.stringify(project, null, 2), 'application/json');
   }
 
   function exportJson(): void {
-    const project = { version: '0.8.1', levels: LEVELS, areas, objects, background };
+    const project = { version: '0.8.2', levels: LEVELS, areas, objects, background };
     downloadFile('al-green-design-v08.json', JSON.stringify(project, null, 2), 'application/json');
   }
 
   function exportTxt(): void {
     const lines = [
-      'AL Green Design – Garden Studio V0.8',
+      'AL Green Design – Garden Studio V0.8.2',
       '',
       `Flächen: ${areas.length}`,
       `Objekte: ${objects.length}`,
@@ -716,7 +716,7 @@ export default function GardenStudio() {
   function saveBrowser(): void {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ version: '0.8.1', levels: LEVELS, areas, objects, background })
+      JSON.stringify({ version: '0.8.2', levels: LEVELS, areas, objects, background })
     );
     setStatus('Im Browser gespeichert.');
   }
@@ -908,7 +908,7 @@ export default function GardenStudio() {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        await page.render({ canvasContext: context, viewport, canvas } as any).promise;
+        await (page.render({ canvasContext: context, viewport, canvas } as any)).promise;
         placeBackground(canvas.toDataURL('image/png'), file.name, 'pdf', canvas.width, canvas.height);
         setStatus('PDF als Hintergrund geladen.');
       } catch {
@@ -1049,7 +1049,7 @@ export default function GardenStudio() {
 
       <div className="canvas-wrap">
         <div className="canvas-topbar">
-          <span className="pill">V0.8.1</span>
+          <span className="pill">V0.8.2</span>
           <span className="pill">{viewMode === '2d' ? '2D-Draufsicht' : '3D-Ansicht'}</span>
           <span className="pill">Ebene: {activeLevel.name}</span>
           <span className="pill">Raster: {snapOn ? '50 cm' : 'frei'}</span>
