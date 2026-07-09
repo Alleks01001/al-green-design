@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-garden-studio-3d-v06",
-  "version": "0.6.0",
+  "name": "al-green-design-garden-studio-3d-v08",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,13 +10,17 @@
   "dependencies": {
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "three": "latest",
+    "jspdf": "latest",
+    "pdfjs-dist": "latest"
   },
   "devDependencies": {
     "typescript": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/three": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest"
   }
