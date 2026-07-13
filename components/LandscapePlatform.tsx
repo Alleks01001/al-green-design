@@ -95,7 +95,7 @@ export default function LandscapePlatform() {
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('rect');
   const [selected, setSelected] = useState<number | null>(null);
-  const [status, setStatus] = useState('Bereit: V0.12.1 FIX.');
+  const [status, setStatus] = useState('Bereit: V0.12.2 AI CHAT.');
   const [cam] = useState({ x: -12, y: -8, width: 28, height: 18 });
   const [prompt, setPrompt] = useState('Mediterraner Garten, 400 m², wenig Pflege, Pool vorhanden');
   const [chat, setChat] = useState('Ich habe zwei Kinder und wenig Zeit.');
@@ -220,11 +220,288 @@ export default function LandscapePlatform() {
     setStatus('KI-Design erzeugt: Layout, Pflanzen, Bewässerung, Licht und Kosten.');
   }
 
-  function applyChat() {
+  function extractNumberAfter(text: string, words: string[], fallback: number) {
+    for (const word of words) {
+      const regex = new RegExp(word + '\\s*(?:von|bis|ca\\.|circa|ungefähr)?\\s*(\\d+[\\.,]?\\d*)', 'i');
+      const match = text.match(regex);
+      if (match) return Number(match[1].replace(',', '.'));
+    }
+    const euro = text.match(/(\d+[\\.,]?\\d*)\\s*(?:€|euro)/i);
+    if (euro && words.includes('budget')) return Number(euro[1].replace(',', '.'));
+    const qm = text.match(/(\d+[\\.,]?\\d*)\\s*(?:m²|qm|quadratmeter)/i);
+    if (qm && words.includes('fläche')) return Number(qm[1].replace(',', '.'));
+    return fallback;
+  }
+
+  function choosePlantsFromText(text: string, maxBudget: number) {
+    const lower = text.toLowerCase();
+    const wantsDry = lower.includes('trocken') || lower.includes('wenig wasser') || lower.includes('wasserverbrauch') || lower.includes('mediterran');
+    const wantsShade = lower.includes('halbschatten') || lower.includes('schatten');
+    const wantsBio = lower.includes('biodivers') || lower.includes('insekten') || lower.includes('bienen') || lower.includes('ökologisch');
+    const lowCare = lower.includes('pflegeleicht') || lower.includes('wenig zeit') || lower.includes('kaum pflege');
+
+    return PLANTS
+      .filter((p) => !wantsDry || p.waterNeed <= 2)
+      .filter((p) => !wantsShade || p.light.toLowerCase().includes('halbschatten') || p.light.toLowerCase().includes('schatten'))
+      .filter((p) => !lowCare || p.maintenance === 'niedrig')
+      .sort((a, b) => {
+        const scoreA =
+          a.biodiversity +
+          (a.waterNeed <= 1 ? 12 : 0) +
+          (a.maintenance === 'niedrig' ? 14 : 0) +
+          (a.insectFriendly ? 10 : 0) -
+          a.price / 10;
+        const scoreB =
+          b.biodiversity +
+          (b.waterNeed <= 1 ? 12 : 0) +
+          (b.maintenance === 'niedrig' ? 14 : 0) +
+          (b.insectFriendly ? 10 : 0) -
+          b.price / 10;
+        return (wantsBio ? scoreB + b.biodiversity * .25 : scoreB) - (wantsBio ? scoreA + a.biodiversity * .25 : scoreA);
+      })
+      .filter((p, index) => index < 5 && p.price < Math.max(12, maxBudget / 18));
+  }
+
+  function generateFromChatText() {
     const text = chat.toLowerCase();
-    if (text.includes('kinder')) setStatus('Chat erkannt: Kinder → mehr Rasen/Spielbereich, giftige Pflanzen vermeiden, Schatten priorisieren.');
-    else if (text.includes('wenig zeit') || text.includes('pflege')) setStatus('Chat erkannt: Pflegeaufwand reduzieren, trockentolerante Pflanzen bevorzugen.');
-    else setStatus('Chat ausgewertet. Regeln können erweitert werden.');
+    const base = Date.now();
+
+    const budget = extractNumberAfter(text, ['budget'], project.budget);
+    const area = extractNumberAfter(text, ['fläche'], project.area);
+
+    const wantsKids = text.includes('kinder') || text.includes('familie') || text.includes('spiel');
+    const lowCare = text.includes('wenig zeit') || text.includes('pflegeleicht') || text.includes('kaum pflege');
+    const mediterranean = text.includes('mediterran') || text.includes('lavendel') || text.includes('rosmarin') || text.includes('südlich');
+    const hasPool = text.includes('pool') || text.includes('schwimm');
+    const wantsBio = text.includes('biodivers') || text.includes('bienen') || text.includes('insekten') || text.includes('ökologisch');
+    const wantsWaterSaving = text.includes('wenig wasser') || text.includes('wasser sparen') || text.includes('trocken') || text.includes('wasserverbrauch');
+    const wantsShade = text.includes('schatten') || text.includes('beschattung') || text.includes('halbschatten');
+    const wantsLight = text.includes('licht') || text.includes('beleuchtung') || text.includes('nacht');
+    const wantsTerrain = text.includes('hügel') || text.includes('erhebung') || text.includes('mulde') || text.includes('böschung') || text.includes('erdbewegung');
+
+    const scale = Math.max(.65, Math.min(1.35, Math.sqrt(area / 400)));
+    const budgetFactor = budget <= 6000 ? .65 : budget <= 15000 ? .9 : 1.15;
+
+    const created: DesignObject[] = [];
+
+    function push(obj: Omit<DesignObject, 'id'>) {
+      created.push({ ...obj, id: base + created.length + 1 });
+    }
+
+    push({
+      kind: 'rect',
+      name: wantsKids ? 'große robuste Rasen-/Spielfläche' : 'Hauptfläche Garten',
+      layer: wantsKids ? 'Spiel / Rasen' : 'Entwurf',
+      x: -2,
+      y: 0,
+      width: Math.round(8 * scale),
+      depth: Math.round(5 * scale),
+      radius: 0,
+      height: .05,
+      points: [],
+      color: wantsKids ? '#86efac' : '#dcfce7',
+      opacity: .62,
+      attrs: { generatedBy: 'KI-Chat', reason: wantsKids ? 'Kinder und Spielbereich erkannt' : 'Basisfläche aus Chat erzeugt', areaM2: area }
+    });
+
+    if (hasPool) {
+      push({
+        kind: 'rect',
+        name: 'Poolbereich mit Sicherheitszone',
+        layer: 'Wasser',
+        x: 4.5,
+        y: 2.2,
+        width: 3.8 * scale,
+        depth: 2.4 * scale,
+        radius: 0,
+        height: .08,
+        points: [],
+        color: '#38bdf8',
+        opacity: .78,
+        attrs: { generatedBy: 'KI-Chat', safety: wantsKids ? 'Kindersicherung / rutschfester Belag empfohlen' : 'Pool vorhanden', unitPrice: 0 }
+      });
+    }
+
+    push({
+      kind: 'rect',
+      name: mediterranean ? 'mediterraner Naturstein-Sitzplatz' : 'Sitzplatz / Terrasse',
+      layer: 'Belag',
+      x: -5,
+      y: 3.4,
+      width: (mediterranean ? 4.6 : 4) * scale * budgetFactor,
+      depth: 2.6 * scale,
+      radius: 0,
+      height: .12,
+      points: [],
+      color: mediterranean ? '#d6d3d1' : '#a8a29e',
+      opacity: .88,
+      attrs: { generatedBy: 'KI-Chat', material: mediterranean ? 'heller Naturstein / Kies' : 'Pflaster', unitPrice: mediterranean ? 115 : 85 }
+    });
+
+    push({
+      kind: 'line',
+      name: mediterranean ? 'geschwungener Kiesweg' : 'Hauptweg',
+      layer: 'Belag',
+      x: 0,
+      y: 0,
+      width: 0,
+      depth: 0,
+      radius: 0,
+      height: 0,
+      points: [{ x: -6, y: -3 }, { x: -2, y: -1.5 }, { x: 2, y: -.6 }, { x: 5, y: 2 }],
+      color: mediterranean ? '#d8b36a' : '#78716c',
+      opacity: 1,
+      attrs: { generatedBy: 'KI-Chat', material: mediterranean ? 'Kies wassergebunden' : 'Pflasterweg', width: 1.1 }
+    });
+
+    if (wantsTerrain) {
+      push({
+        kind: 'terrainMound',
+        name: 'sanfte Geländeerhebung aus Chat',
+        layer: 'Gelände',
+        x: 1.5,
+        y: -2.8,
+        width: 0,
+        depth: 0,
+        radius: 2.2 * scale,
+        height: .65,
+        points: [],
+        color: '#a3e635',
+        opacity: .68,
+        attrs: { generatedBy: 'KI-Chat', earthVolume: 4.6 * scale, costPerM3: 45, terrainType: 'Auftrag gleitend' }
+      });
+      push({
+        kind: 'terrainDepression',
+        name: 'kleine Retentionsmulde',
+        layer: 'Regenwasser',
+        x: 5.2,
+        y: -3.2,
+        width: 0,
+        depth: 0,
+        radius: 1.5 * scale,
+        height: -.35,
+        points: [],
+        color: '#60a5fa',
+        opacity: .52,
+        attrs: { generatedBy: 'KI-Chat', earthVolume: 2.1 * scale, costPerM3: 48, retentionM3: 1.4 }
+      });
+    }
+
+    if (wantsWaterSaving || lowCare || mediterranean) {
+      push({
+        kind: 'irrigation',
+        name: 'automatische Tropfbewässerung aus Chat',
+        layer: 'Bewässerung',
+        x: 0,
+        y: 0,
+        width: 0,
+        depth: 0,
+        radius: 0,
+        height: 0,
+        points: [{ x: -4, y: -3.8 }, { x: 0, y: -3.8 }, { x: 4.5, y: -2.8 }],
+        color: '#2563eb',
+        opacity: 1,
+        attrs: { generatedBy: 'KI-Chat', diameter: 16, pressure: 2.1, waterSaving: true }
+      });
+    }
+
+    if (wantsBio || wantsWaterSaving || text.includes('regen')) {
+      push({
+        kind: 'drainage',
+        name: 'Regenwasser-Retention / Versickerung',
+        layer: 'Regenwasser',
+        x: 0,
+        y: 0,
+        width: 0,
+        depth: 0,
+        radius: 0,
+        height: 0,
+        points: [{ x: 3.8, y: -3.8 }, { x: 5.8, y: -2.2 }],
+        color: '#0f766e',
+        opacity: 1,
+        attrs: { generatedBy: 'KI-Chat', retentionM3: 1.8, infiltration: 'Mulde/Rigole' }
+      });
+    }
+
+    if (wantsLight || mediterranean || hasPool) {
+      [-5.8, -3.2, 2.8, 5.5].forEach((x, index) => {
+        push({
+          kind: 'light',
+          name: index < 2 ? 'warmes Sitzplatzlicht' : 'Akzentlicht Weg/Pool',
+          layer: 'Licht',
+          x,
+          y: index < 2 ? 2.1 : .8,
+          width: 0,
+          depth: 0,
+          radius: .28,
+          height: .8,
+          points: [],
+          color: '#f59e0b',
+          opacity: .92,
+          attrs: { generatedBy: 'KI-Chat', lux: index < 2 ? 180 : 90, powerW: 6 }
+        });
+      });
+    }
+
+    const chosenPlants = choosePlantsFromText(text, budget);
+    chosenPlants.forEach((plant, plantIndex) => {
+      const count = Math.max(1, Math.floor((plant.type.includes('Staude') || plant.type.includes('Halbstrauch') ? 6 : 2) * budgetFactor));
+      for (let i = 0; i < count; i += 1) {
+        push({
+          kind: 'plant',
+          name: plant.german,
+          layer: 'Pflanzen',
+          x: -1 + plantIndex * 1.25 + (i % 4) * .45,
+          y: -3.1 + Math.floor(i / 4) * .5,
+          width: plant.startWidth,
+          depth: plant.startWidth,
+          radius: Math.max(.18, plant.startWidth / 2),
+          height: plant.startHeight,
+          points: [],
+          color: plant.waterNeed <= 1 ? '#65a30d' : '#16a34a',
+          opacity: .9,
+          attrs: {
+            generatedBy: 'KI-Chat',
+            plantId: plant.id,
+            botanical: plant.botanical,
+            waterNeed: plant.waterNeed,
+            maintenance: plant.maintenance,
+            biodiversity: plant.biodiversity,
+            co2: plant.co2,
+            finalHeight: plant.finalHeight,
+            finalWidth: plant.finalWidth,
+            reason: `${plant.light}, ${plant.soil}, Pflege ${plant.maintenance}`
+          }
+        });
+      }
+    });
+
+    setObjects((old) => [...old, ...created]);
+    setProject({
+      ...project,
+      budget,
+      area,
+      care: lowCare ? 'pflegeleicht' : project.care,
+      light: text.includes('halbschatten') ? 'Halbschatten' : text.includes('schatten') ? 'Schatten' : text.includes('sonne') ? 'Sonne' : project.light,
+      soil: text.includes('trocken') ? 'trocken' : project.soil
+    });
+
+    const reasons = [
+      wantsKids ? 'Kinder/Spielbereich' : '',
+      lowCare ? 'pflegeleicht' : '',
+      mediterranean ? 'mediterran' : '',
+      hasPool ? 'Pool' : '',
+      wantsBio ? 'Biodiversität' : '',
+      wantsWaterSaving ? 'Wasser sparen' : '',
+      wantsShade ? 'Schatten' : '',
+      wantsTerrain ? 'Gelände/Erdbewegung' : ''
+    ].filter(Boolean).join(', ');
+
+    setStatus(`KI-Chat hat eigenständig ${created.length} Objekte erzeugt. Erkannt: ${reasons || 'allgemeiner Gartenwunsch'}.`);
+  }
+
+  function applyChat() {
+    generateFromChatText();
   }
 
   function updateSelected(patch: Partial<DesignObject>) {
@@ -238,11 +515,11 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v0121-fix.algreen', JSON.stringify({ version: '0.12.1', project, objects, season, growthYear }, null, 2), 'application/json');
+    download('al-green-design-v0122-ai-chat.algreen', JSON.stringify({ version: '0.12.2', project, objects, season, growthYear }, null, 2), 'application/json');
   }
 
   function exportCsv() {
-    download('kosten-v0121.csv', csv([
+    download('kosten-v0122.csv', csv([
       ['Bereich', 'Kosten'],
       ['Pflanzen', costs.plants.toFixed(2)],
       ['Pflaster/Beläge', costs.paving.toFixed(2)],
@@ -260,11 +537,11 @@ export default function LandscapePlatform() {
       properties: { id: o.id, name: o.name, layer: o.layer, kind: o.kind, ...o.attrs },
       geometry: o.points.length ? { type: 'LineString', coordinates: o.points.map((p) => [p.x, p.y]) } : { type: 'Point', coordinates: [o.x, o.y] }
     }));
-    download('al-green-design-v0121.geojson', JSON.stringify({ type: 'FeatureCollection', features }, null, 2), 'application/geo+json');
+    download('al-green-design-v0122.geojson', JSON.stringify({ type: 'FeatureCollection', features }, null, 2), 'application/geo+json');
   }
 
   const tabButtons: [Tab, string][] = [
-    ['cad', 'CAD'], ['plants', 'Pflanzen'], ['ai', 'KI-Design'], ['terrain', 'Gelände'], ['water', 'Wasser'], ['drainage', 'Regen'], ['lighting', 'Licht'], ['costs', 'Kosten'], ['analysis', 'Analyse'], ['growth', 'Wachstum'], ['chat', 'Chat'], ['saas', 'SaaS'], ['roadmap', 'Technik'], ['project', 'Projekt'], ['exports', 'Export'], ['gis', 'GIS'], ['bim', 'BIM']
+    ['cad', 'CAD'], ['plants', 'Pflanzen'], ['ai', 'KI-Design'], ['terrain', 'Gelände'], ['water', 'Wasser'], ['drainage', 'Regen'], ['lighting', 'Licht'], ['costs', 'Kosten'], ['analysis', 'Analyse'], ['growth', 'Wachstum'], ['chat', 'KI-Chat'], ['saas', 'SaaS'], ['roadmap', 'Technik'], ['project', 'Projekt'], ['exports', 'Export'], ['gis', 'GIS'], ['bim', 'BIM']
   ];
 
   return (
@@ -347,9 +624,9 @@ export default function LandscapePlatform() {
 
         {tab === 'chat' && (
           <>
-            <h2>Garten-Chat</h2>
+            <h2>KI-Garten-Chat</h2>
             <textarea className="full" value={chat} onChange={(e) => setChat(e.target.value)} />
-            <button className="btn primary" style={{ marginTop: 8 }} onClick={applyChat}>Chat auswerten</button>
+            <button className="btn primary" style={{ marginTop: 8 }} onClick={applyChat}>Chat generiert Garten</button><div className="hint" style={{marginTop:8}}>Der Text erzeugt jetzt echte Objekte im Plan und in 3D: Wege, Pflanzen, Spielbereiche, Poolzonen, Bewässerung, Licht, Regenwasser und Geländeformen.</div>
           </>
         )}
 
@@ -370,7 +647,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.12.1 FIX</span>
+          <span className="pill">V0.12.2 AI CHAT</span>
           <span className="pill">{tab.toUpperCase()}</span>
           <span className="pill">{season}</span>
           <span className="pill">{growthYear === 0 ? 'heute' : `${growthYear} Jahre`}</span>
