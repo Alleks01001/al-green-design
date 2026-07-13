@@ -95,7 +95,7 @@ export default function LandscapePlatform() {
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
   const [status, setStatus] = useState('Bereit: Architektur- oder Gartenwerkzeug wählen.');
-  const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit Terrasse, kleinem Gebäude, Pergola, Pool, Bäumen und pflegeleichtem Garten.');
+  const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
 
   const [terrainBlobs, setTerrainBlobs] = useState<TerrainBlob[]>([
@@ -245,27 +245,308 @@ export default function LandscapePlatform() {
   function generateFromChat() {
     const text = chat.toLowerCase();
     const base = Date.now();
-    const blobs: TerrainBlob[] = [];
-    const generatedObjects: GardenObject[] = [];
+
+    const generatedBlobs: TerrainBlob[] = [];
     const generatedZones: Zone[] = [];
-    if (text.includes('hügel') || text.includes('erhebung')) blobs.push({ id: base + 1, name: 'KI Hügel', x: -3.8, y: -1.4, radius: 2.3, height: 0.82, softness: 1.55, source: 'KI-Chat' });
-    if (text.includes('mulde') || text.includes('senke')) blobs.push({ id: base + 2, name: 'KI Mulde', x: 2.6, y: -2.2, radius: 1.8, height: -0.42, softness: 1.6, source: 'KI-Chat' });
-    if (text.includes('terrasse')) generatedZones.push({ id: base + 10, kind: 'hardscape', name: 'KI Terrasse', x: -5.2, y: 3.0, width: 4.2, depth: 2.5, color: '#b8b0a2' });
-    if (text.includes('garten') || text.includes('pflanz')) generatedZones.push({ id: base + 11, kind: 'plantZone', name: 'KI Gartenzone', x: 4.8, y: -2.3, width: 4.4, depth: 2.6, color: '#a7f3d0' });
-    if (text.includes('gebäude') || text.includes('haus')) generatedObjects.push({ id: base + 20, type:'building', name:'KI Gebäude', x:-1.8, y:2.0, width:4.2, depth:3.0, height:3.2, rotation:0, color:'#d6c4a7' });
-    if (text.includes('pergola')) generatedObjects.push({ id: base + 21, type:'pergola', name:'KI Pergola', x:-5.2, y:0.0, width:3.0, depth:2.2, height:2.6, rotation:0, color:'#8b5e3c' });
-    if (text.includes('pool')) generatedObjects.push({ id: base + 22, type:'pool', name:'KI Pool', x:4.8, y:2.8, width:4.0, depth:2.4, height:1.3, rotation:0, color:'#38bdf8' });
-    if (text.includes('baum') || text.includes('bäume')) generatedObjects.push({ id: base + 23, type:'tree', name:'KI Baum', x:4.0, y:0.0, width:1.4, depth:1.4, height:4.0, rotation:0, color:'#16a34a' });
-    if (text.includes('hecke')) generatedObjects.push({ id: base + 24, type:'hedge', name:'KI Hecke', x:0.0, y:-4.5, width:4.5, depth:0.6, height:1.5, rotation:0, color:'#15803d' });
-    if (!blobs.length) blobs.push({ id: base + 1, name: 'KI Form', x: -2.8, y: -1.2, radius: 2.2, height: 0.58, softness: 1.55, source: 'KI-Chat' });
-    setTerrainBlobs(blobs);
+    const generatedObjects: GardenObject[] = [];
+
+    // 1. Gelände-Erkennung
+    if (text.includes('zwei erhebungen') || text.includes('zwei hügel') || text.includes('hügel') || text.includes('erhebung')) {
+      generatedBlobs.push(
+        { id: base + 1, name: 'KI Hügel Nord', x: -3.8, y: -2.5, radius: 2.8, height: 1.1, softness: 1.55, source: 'KI-Chat' },
+        { id: base + 2, name: 'KI Hügel Süd', x: 4.0, y: 2.0, radius: 2.2, height: 0.75, softness: 1.45, source: 'KI-Chat' }
+      );
+    }
+
+    if (text.includes('mulde') || text.includes('senke') || text.includes('teich')) {
+      generatedBlobs.push({
+        id: base + 3,
+        name: text.includes('teich') ? 'KI Teich-Senke' : 'KI Senke Mitte',
+        x: 0.5,
+        y: -1.8,
+        radius: 2.0,
+        height: -0.6,
+        softness: 1.65,
+        source: 'KI-Chat'
+      });
+    }
+
+    if (text.includes('sanft') || text.includes('weich')) {
+      generatedBlobs.forEach(b => {
+        b.softness = Math.max(b.softness, 1.7);
+      });
+    }
+
+    // 2. Zonen-Erkennung
+    if (text.includes('pflegeleicht') || text.includes('garten') || text.includes('pflanz')) {
+      generatedZones.push({
+        id: base + 101,
+        kind: 'plantZone',
+        name: 'KI pflegeleichte Gartenzone',
+        x: 4.5,
+        y: -2.0,
+        width: 5.0,
+        depth: 3.0,
+        color: '#a7f3d0'
+      });
+    }
+
+    if (text.includes('terrasse') || text.includes('sitzplatz') || text.includes('belag')) {
+      let tx = -4.0;
+      let ty = 2.5;
+
+      if (text.includes('süden') || text.includes('süd')) {
+        tx = 2.0;
+        ty = 4.0;
+      }
+      if (text.includes('norden') || text.includes('nord')) {
+        tx = -2.0;
+        ty = -4.0;
+      }
+
+      generatedZones.push({
+        id: base + 102,
+        kind: 'hardscape',
+        name: text.includes('terrasse') ? 'KI Terrasse' : 'KI Sitzplatz',
+        x: tx,
+        y: ty,
+        width: 4.5,
+        depth: 3.0,
+        color: '#b8b0a2'
+      });
+    }
+
+    // 3. Gebäude-Erkennung aus KI-Text
+    if (
+      text.includes('haus') ||
+      text.includes('gebäude') ||
+      text.includes('glashaus') ||
+      text.includes('hütte') ||
+      text.includes('turm') ||
+      text.includes('pavillon') ||
+      text.includes('atelier')
+    ) {
+      let bx = 0.0;
+      let by = 0.0;
+      let bw = 4.0;
+      let bd = 5.0;
+      let bh = 3.5;
+      let bcolor = '#f8fafc';
+      let bname = 'KI Gebäude';
+
+      if (text.includes('norden') || text.includes('nord')) {
+        bx = -2.0;
+        by = -3.5;
+      }
+      if (text.includes('süden') || text.includes('süd')) {
+        bx = 3.0;
+        by = 3.5;
+      }
+      if (text.includes('osten') || text.includes('ost')) {
+        bx = 5.2;
+        by = 0.0;
+      }
+      if (text.includes('westen') || text.includes('west')) {
+        bx = -5.2;
+        by = 0.0;
+      }
+
+      if (text.includes('glashaus')) {
+        bname = 'KI Glashaus';
+        bw = 2.8;
+        bd = 3.6;
+        bh = 2.8;
+        bcolor = '#e0f2fe';
+      } else if (text.includes('turm')) {
+        bname = 'KI Aussichtsturm';
+        bw = 2.0;
+        bd = 2.0;
+        bh = 8.0;
+        bcolor = '#cbd5e1';
+      } else if (text.includes('hütte')) {
+        bname = 'KI Gartenhütte';
+        bw = 2.4;
+        bd = 2.2;
+        bh = 2.6;
+        bcolor = '#78350f';
+      } else if (text.includes('pavillon')) {
+        bname = 'KI Pavillon';
+        bw = 3.4;
+        bd = 3.4;
+        bh = 2.8;
+        bcolor = '#d6c4a7';
+      } else if (text.includes('atelier')) {
+        bname = 'KI Gartenatelier';
+        bw = 4.0;
+        bd = 3.2;
+        bh = 3.0;
+        bcolor = '#f1f5f9';
+      } else if (text.includes('modern')) {
+        bname = 'KI Modernes Haus';
+        bw = 5.0;
+        bd = 6.0;
+        bh = 4.2;
+        bcolor = '#ffffff';
+      }
+
+      generatedObjects.push({
+        id: base + 201,
+        type: 'building',
+        name: bname,
+        x: bx,
+        y: by,
+        width: bw,
+        depth: bd,
+        height: bh,
+        rotation: text.includes('schräg') ? 20 : 15,
+        color: bcolor
+      });
+    }
+
+    // 4. Gartenarchitektur-Erkennung
+    if (text.includes('pool') || text.includes('schwimm')) {
+      generatedObjects.push({
+        id: base + 202,
+        type: 'pool',
+        name: 'KI Pool',
+        x: 4.8,
+        y: 2.8,
+        width: 4.0,
+        depth: 2.4,
+        height: 1.3,
+        rotation: 0,
+        color: '#38bdf8'
+      });
+    }
+
+    if (text.includes('pergola')) {
+      generatedObjects.push({
+        id: base + 203,
+        type: 'pergola',
+        name: 'KI Pergola',
+        x: -5.2,
+        y: 0.0,
+        width: 3.0,
+        depth: 2.2,
+        height: 2.6,
+        rotation: 0,
+        color: '#8b5e3c'
+      });
+    }
+
+    if (text.includes('mauer') || text.includes('wand')) {
+      generatedObjects.push({
+        id: base + 204,
+        type: 'wall',
+        name: 'KI Mauer',
+        x: -0.6,
+        y: -3.2,
+        width: 3.5,
+        depth: 0.25,
+        height: 1.0,
+        rotation: 15,
+        color: '#9ca3af'
+      });
+    }
+
+    if (text.includes('treppe') || text.includes('stufen')) {
+      generatedObjects.push({
+        id: base + 205,
+        type: 'stairs',
+        name: 'KI Stufen',
+        x: -2.5,
+        y: -2.0,
+        width: 2.2,
+        depth: 1.4,
+        height: 0.9,
+        rotation: 0,
+        color: '#c8b6a6'
+      });
+    }
+
+    if (text.includes('baum') || text.includes('bäume')) {
+      generatedObjects.push({
+        id: base + 206,
+        type: 'tree',
+        name: 'KI Baum',
+        x: 4.0,
+        y: 0.0,
+        width: 1.4,
+        depth: 1.4,
+        height: 4.0,
+        rotation: 0,
+        color: '#16a34a'
+      });
+    }
+
+    if (text.includes('strauch') || text.includes('sträucher')) {
+      generatedObjects.push({
+        id: base + 207,
+        type: 'shrub',
+        name: 'KI Strauch',
+        x: 5.4,
+        y: -1.5,
+        width: 1.0,
+        depth: 1.0,
+        height: 1.2,
+        rotation: 0,
+        color: '#22c55e'
+      });
+    }
+
+    if (text.includes('hecke')) {
+      generatedObjects.push({
+        id: base + 208,
+        type: 'hedge',
+        name: 'KI Hecke',
+        x: 0.0,
+        y: -4.5,
+        width: 4.5,
+        depth: 0.6,
+        height: 1.5,
+        rotation: 0,
+        color: '#15803d'
+      });
+    }
+
+    // 5. Fallbacks
+    if (generatedBlobs.length === 0) {
+      generatedBlobs.push({
+        id: base + 1,
+        name: 'KI Standard-Hügel',
+        x: -2.0,
+        y: -1.0,
+        radius: 2.2,
+        height: 0.6,
+        softness: 1.55,
+        source: 'KI-Chat'
+      });
+    }
+
+    if (generatedObjects.length === 0 && (text.includes('architektur') || text.includes('bauwerk'))) {
+      generatedObjects.push({
+        id: base + 209,
+        type: 'building',
+        name: 'Architektur-Kubus',
+        x: -1.0,
+        y: 1.0,
+        width: 4.0,
+        depth: 4.0,
+        height: 3.5,
+        rotation: 0,
+        color: '#f1f5f9'
+      });
+    }
+
+    setTerrainBlobs(generatedBlobs);
     if (generatedZones.length) setZones(generatedZones);
     if (generatedObjects.length) setObjects(generatedObjects);
-    setSelection('terrain', blobs[0].id, `KI-Chat hat ${blobs.length} Terrain-Formen und ${generatedObjects.length} Architektur-/Gartenobjekte erzeugt.`);
+
+    setSelection('terrain', generatedBlobs[0]?.id ?? null, `KI-Chat interpretiert: ${generatedBlobs.length} Terrain-Formen, ${generatedZones.length} Zonen und ${generatedObjects.length} Architektur-/Gartenobjekte.`);
   }
 
-  function exportProject() {
-    download('al-green-design-v0132-arch-garden.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null }, null, 2), 'application/json');
+  function exportProject  function exportProject() {
+    download('al-green-design-v0133-building-ai.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null }, null, 2), 'application/json');
   }
 
   return (
@@ -274,7 +555,7 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Architektur'],['scene','Szene'],['export','Export']
+            ['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Gebäude/Garten'],['scene','Szene'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
@@ -284,7 +565,7 @@ export default function LandscapePlatform() {
             <h2>KI-Garten grob erzeugen</h2>
             <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} />
             <button className="btn primary" style={{marginTop:8}} onClick={generateFromChat}>KI-Chat generiert Entwurf</button>
-            <div className="hint" style={{marginTop:8}}>Die KI kann jetzt Gelände, Zonen und Architektur-/Pflanzenobjekte grob setzen.</div>
+            <div className="hint" style={{marginTop:8}}>Die KI kann jetzt Gelände, Zonen, Gebäude und Architektur-/Pflanzenobjekte grob setzen. Sie erkennt z. B. „Glashaus im Norden“, „Terrasse im Süden“, „Turm“, „Hütte“ und „modernes Haus“.</div>
           </>
         )}
 
@@ -319,7 +600,7 @@ export default function LandscapePlatform() {
             <h2>Architektur + Pflanzen</h2>
             <div className="grid3">
               {([
-                ['building','Gebäude'],['pool','Pool'],['pergola','Pergola'],['wall','Mauer'],['stairs','Stufen'],['tree','Baum'],['shrub','Strauch'],['hedge','Hecke'],['select','Auswählen']
+                ['building','Gebäude/Haus'],['pool','Pool'],['pergola','Pergola'],['wall','Mauer'],['stairs','Stufen'],['tree','Baum'],['shrub','Strauch'],['hedge','Hecke'],['select','Auswählen']
               ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
             </div>
             <div className="legendList" style={{marginTop:10}}>
@@ -342,7 +623,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.13.2 ARCHITECTURE GARDEN</span>
+          <span className="pill">V0.13.3 BUILDING AI</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
