@@ -1,25 +1,29 @@
 {
-  "name": "al-green-design-landscape-architecture-v014-max",
-  "version": "0.14.0",
+  "name": "al-green-design-landscape-architecture-v015",
+  "version": "0.15.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "three": "latest"
+    "@react-three/drei": "^9.105.0",
+    "@react-three/fiber": "^8.16.0",
+    "next": "^14.2.3",
+    "openai": "^4.47.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.164.1"
   },
   "devDependencies": {
-    "typescript": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/three": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest"
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.164.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3",
+    "typescript": "^5.4.5"
   }
 }

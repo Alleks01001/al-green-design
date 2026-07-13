@@ -1,65 +1,65 @@
-# AL Green Design – V0.14 MAX
+# AL Green Design – V0.15 AI MAX
 
-Diese Version fasst die bisherigen Funktionen zusammen und verbessert die Bedienung.
+Diese Version integriert deine OpenAI-/Schema-/TransformControls-Erweiterungen und baut die Plattform weiter aus.
 
-## Wichtigste Verbesserungen V0.14
+## Neu in V0.15
 
-### 2D-Editor
-- Gebäude verschiebbar
-- Pool verschiebbar
-- Pergola verschiebbar
-- Mauern verschiebbar
-- Stufen verschiebbar
-- Bäume, Sträucher und Hecken verschiebbar
-- Erhebungen und Mulden verschiebbar
-- Pflanzzonen und Belagszonen verschiebbar
+### OpenAI KI-Modell
+- OpenAI SDK eingebaut
+- serverseitige API-Route `app/api/garden/route.ts`
+- strukturierte JSON-Ausgabe per JSON Schema
+- GPT-Modell im UI auswählbar
+- Standard: `gpt-4o`
+- freies Modellfeld möglich
+- lokaler Fallback bleibt aktiv, wenn kein API-Key gesetzt ist
 
-### 3D-Viewer
-- Gebäude und Gartenobjekte in 3D auswählbar
-- Gebäude und Gartenobjekte in 3D verschiebbar
-- Objekte bleiben automatisch auf der verformten Geländehöhe
-- bessere 3D-Kanten/Lesbarkeit
+### Strukturierte KI-Gartenplanung
+Die KI liefert ein Layout in dieser Struktur:
 
-### KI / OpenAI
-- OpenAI-API-Route vorbereitet
-- API-Key über OPENAI_API_KEY
-- Modell kann im UI frei gewählt werden
-- lokaler Fallback bleibt aktiv, falls kein API-Key vorhanden ist
-- KI-Chat erzeugt weiterhin Gelände, Gebäude, Zonen und Gartenobjekte
+- Terrain:
+  - flat
+  - hilly
+  - sunken
+  - intensity
 
-### Architektur / Garten
-- Gebäude/Haus
-- Glashaus
-- Hütte
-- Turm
-- Pavillon
-- Atelier
-- Pool
-- Pergola
-- Mauer
-- Stufen
-- Baum
-- Strauch
-- Hecke
-- Pflanzzonen
-- Belagszonen
-- weiches 3D-Gelände
+- Objects:
+  - modern_house
+  - glass_house
+  - pool
+  - pergola
+  - tree
+  - shrub
 
-## OpenAI-Backend
+Diese Objekte werden automatisch in das bestehende Planmodell übersetzt.
 
-Die Datei `app/api/openai/route.ts` ist vorbereitet.
+### 3D / TransformControls vorbereitet
+- `@react-three/fiber`
+- `@react-three/drei`
+- `TransformControls`
+- `Canvas`
+- `Sky`
+- `SoftShadows`
+- `OrbitControls`
+- Beispielkomponenten:
+  - `components/MovableObject.tsx`
+  - `components/RenderCanvas.tsx`
 
-Für echten Betrieb in Vercel:
+### Bestehende 3D-Ansicht
+- Gebäude und Objekte bleiben weiterhin in der bestehenden 3D-Ansicht verschiebbar
+- Objekte liegen weiterhin auf der Geländehöhe
+- 2D-Verschiebung bleibt aktiv
+
+## Vercel Environment Variable
+
+Für echten OpenAI-Betrieb:
 
 ```text
 OPENAI_API_KEY=dein_key
 ```
 
-Danach kann die App serverseitig die OpenAI-Route nutzen.
+Ohne Key verwendet die App den lokalen Fallback.
 
 ## Struktur
-
-Direkt im Ordner liegen:
 
 ```text
 .gitignore

@@ -103,10 +103,10 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.14 MAX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.15 AI MAX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
-  const [openAiModel, setOpenAiModel] = useState('gpt-5');
+  const [openAiModel, setOpenAiModel] = useState('gpt-4o');
   const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb OPENAI_API_KEY in Vercel setzen.');
   const [openAiLastAnswer, setOpenAiLastAnswer] = useState('');
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
@@ -283,6 +283,73 @@ export default function LandscapePlatform() {
     img.src = image.dataUrl;
   }
 
+
+  function applyStructuredGardenLayout(layout: any) {
+    if (!layout || !layout.terrain || !Array.isArray(layout.objects)) {
+      setOpenAiLastAnswer('OpenAI hat kein gültiges GardenSchema geliefert. Lokaler Fallback aktiv.');
+      return false;
+    }
+
+    const base = Date.now();
+    const style = String(layout.terrain.style || 'flat');
+    const intensity = Math.max(0.1, Math.min(2.5, Number(layout.terrain.intensity || 1)));
+
+    const nextBlobs: TerrainBlob[] = [];
+    if (style === 'hilly') {
+      nextBlobs.push(
+        { id: base + 1, name: 'OpenAI Hügel 1', x: -3.5, y: -1.8, radius: 2.4, height: 0.65 * intensity, softness: 1.55, source: 'OpenAI JSON' },
+        { id: base + 2, name: 'OpenAI Hügel 2', x: 3.5, y: 1.6, radius: 2.1, height: 0.45 * intensity, softness: 1.45, source: 'OpenAI JSON' }
+      );
+    } else if (style === 'sunken') {
+      nextBlobs.push(
+        { id: base + 1, name: 'OpenAI Senke', x: 0, y: -1.2, radius: 2.6, height: -0.55 * intensity, softness: 1.65, source: 'OpenAI JSON' }
+      );
+    } else {
+      nextBlobs.push(
+        { id: base + 1, name: 'OpenAI sanfte Modellierung', x: -1.5, y: -1.0, radius: 3.0, height: 0.18 * intensity, softness: 1.8, source: 'OpenAI JSON' }
+      );
+    }
+
+    const nextObjects: GardenObject[] = layout.objects.map((item: any, index: number) => {
+      const type = String(item.type || 'tree');
+      const x = Math.max(-10, Math.min(10, Number(item.x || 0)));
+      const y = Math.max(-7, Math.min(7, Number(item.z || 0)));
+      const scaleX = Math.max(0.4, Number(item.scaleX || 1));
+      const scaleY = Math.max(0.4, Number(item.scaleY || 1));
+      const scaleZ = Math.max(0.4, Number(item.scaleZ || 1));
+      const rotation = Number(item.rotation || 0);
+
+      if (type === 'modern_house') {
+        return { id: base + 100 + index, type: 'building', name: 'OpenAI Modernes Haus', x, y, width: 4 * scaleX, depth: 4 * scaleZ, height: 3 * scaleY, rotation, color: '#ffffff' };
+      }
+      if (type === 'glass_house') {
+        return { id: base + 100 + index, type: 'building', name: 'OpenAI Glashaus', x, y, width: 2.8 * scaleX, depth: 3.4 * scaleZ, height: 2.6 * scaleY, rotation, color: '#e0f2fe' };
+      }
+      if (type === 'pool') {
+        return { id: base + 100 + index, type: 'pool', name: 'OpenAI Pool', x, y, width: 4 * scaleX, depth: 2.4 * scaleZ, height: 1.2 * scaleY, rotation, color: '#38bdf8' };
+      }
+      if (type === 'pergola') {
+        return { id: base + 100 + index, type: 'pergola', name: 'OpenAI Pergola', x, y, width: 3 * scaleX, depth: 2.4 * scaleZ, height: 2.6 * scaleY, rotation, color: '#8b5e3c' };
+      }
+      if (type === 'shrub') {
+        return { id: base + 100 + index, type: 'shrub', name: 'OpenAI Strauch', x, y, width: 1.0 * scaleX, depth: 1.0 * scaleZ, height: 1.1 * scaleY, rotation, color: '#22c55e' };
+      }
+      return { id: base + 100 + index, type: 'tree', name: 'OpenAI Baum', x, y, width: 1.4 * scaleX, depth: 1.4 * scaleZ, height: 3.8 * scaleY, rotation, color: '#16a34a' };
+    });
+
+    const nextZones: Zone[] = [
+      { id: base + 500, kind: 'plantZone', name: 'OpenAI Pflanzzone', x: 4.5, y: -2.4, width: 4.5, depth: 2.8, color: '#a7f3d0' },
+      { id: base + 501, kind: 'hardscape', name: 'OpenAI Belagszone', x: -4.8, y: 3.2, width: 4.2, depth: 2.6, color: '#b8b0a2' }
+    ];
+
+    setTerrainBlobs(nextBlobs);
+    setZones(nextZones);
+    setObjects(nextObjects);
+    setSelection('object', nextObjects[0]?.id ?? null, `OpenAI JSON-Schema übernommen: ${nextBlobs.length} Terrain-Formen und ${nextObjects.length} Objekte.`);
+    setOpenAiLastAnswer(JSON.stringify(layout, null, 2).slice(0, 1500));
+    return true;
+  }
+
   async function generateFromChat() {
     const text = chat.toLowerCase();
     const base = Date.now();
@@ -293,18 +360,18 @@ export default function LandscapePlatform() {
     if (chatEngine === 'openai') {
       setOpenAiNote(`OpenAI-Modus gewählt: ${openAiModel}. Anfrage an /api/openai wird versucht.`);
       try {
-        const res = await fetch('/api/openai', {
+        const res = await fetch('/api/garden', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: chat, model: openAiModel })
         });
         const data = await res.json();
-        if (data?.ok && data?.text) {
-          setOpenAiLastAnswer(String(data.text));
-          setOpenAiNote('OpenAI-Antwort erhalten. Die lokale Objekt-Generierung wird zusätzlich angewendet.');
+        if (data?.ok && data?.layout && applyStructuredGardenLayout(data.layout)) {
+          setOpenAiNote('OpenAI-JSON-Schema erhalten und direkt als Gartenlayout übernommen.');
+          return;
         } else {
-          setOpenAiLastAnswer(String(data?.message || 'Kein OpenAI-Ergebnis. Lokaler Fallback aktiv.'));
-          setOpenAiNote('OpenAI nicht verfügbar oder kein API-Key gesetzt. Lokaler Fallback aktiv.');
+          setOpenAiLastAnswer(String(data?.error || data?.message || 'Kein gültiges OpenAI-Layout. Lokaler Fallback aktiv.'));
+          setOpenAiNote('OpenAI nicht verfügbar, kein API-Key gesetzt oder kein gültiges JSON. Lokaler Fallback aktiv.');
         }
       } catch (err) {
         setOpenAiLastAnswer('OpenAI-Anfrage fehlgeschlagen. Lokaler Fallback aktiv.');
@@ -369,7 +436,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v014-max.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v015-ai-max.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
   return (
@@ -396,10 +463,12 @@ export default function LandscapePlatform() {
             <label>
               OpenAI-Modell
               <select value={openAiModel} onChange={e => setOpenAiModel(e.target.value)}>
-                <option value="gpt-5">gpt-5</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
                 <option value="gpt-4.1">gpt-4.1</option>
                 <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-5">gpt-5</option>
+                <option value="gpt-5-mini">gpt-5-mini</option>
                 <option value="o4-mini">o4-mini</option>
                 <option value="o3">o3</option>
                 <option value="custom">custom / eigenes Modell unten</option>
@@ -408,7 +477,7 @@ export default function LandscapePlatform() {
             </label>
             <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} />
             <button className="btn primary" style={{marginTop:8}} onClick={generateFromChat}>Entwurf generieren</button>
-            <div className="hint" style={{marginTop:8}}>{openAiNote}</div>{openAiLastAnswer && <div className="hint" style={{marginTop:8}}>OpenAI/Serverantwort: {openAiLastAnswer}</div>}
+            <div className="hint" style={{marginTop:8}}>{openAiNote}</div>{openAiLastAnswer && <div className="hint" style={{marginTop:8}}>OpenAI/JSON-Schema: {openAiLastAnswer}</div>}
           </>
         )}
 
@@ -452,7 +521,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.14 MAX</span>
+          <span className="pill">V0.15 AI MAX</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
