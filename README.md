@@ -1,28 +1,73 @@
+# AL Green Design – V0.14 MAX
 
-# AL Green Design – V0.13.4 Move 3D OpenAI
+Diese Version fasst die bisherigen Funktionen zusammen und verbessert die Bedienung.
 
-Diese Version erweitert V0.13.3 um echte Verschiebung von Gebäuden in 2D und 3D sowie eine OpenAI-vorbereitete Chat-Oberfläche.
+## Wichtigste Verbesserungen V0.14
 
-## Neu in V0.13.4
-- Gebäude in 2D verschiebbar per Drag
-- Gebäude in 3D verschiebbar per Drag auf dem Gelände
-- Auswahl von Objekten in 2D und 3D
-- OpenAI-Chat-Bereich mit Modellauswahl
-- vorbereitete Modelleingabe für verschiedene OpenAI-Modelle
-- lokaler KI-Fallback bleibt enthalten
+### 2D-Editor
+- Gebäude verschiebbar
+- Pool verschiebbar
+- Pergola verschiebbar
+- Mauern verschiebbar
+- Stufen verschiebbar
+- Bäume, Sträucher und Hecken verschiebbar
+- Erhebungen und Mulden verschiebbar
+- Pflanzzonen und Belagszonen verschiebbar
 
-## Hinweise zum Chat
-- Standardmäßig funktioniert der lokale KI-Fallback direkt.
-- Die OpenAI-Anbindung ist als UI und Code-Struktur vorbereitet.
-- Für echten API-Betrieb musst du später selbst einen API-Key und eine Serverroute ergänzen.
+### 3D-Viewer
+- Gebäude und Gartenobjekte in 3D auswählbar
+- Gebäude und Gartenobjekte in 3D verschiebbar
+- Objekte bleiben automatisch auf der verformten Geländehöhe
+- bessere 3D-Kanten/Lesbarkeit
+
+### KI / OpenAI
+- OpenAI-API-Route vorbereitet
+- API-Key über OPENAI_API_KEY
+- Modell kann im UI frei gewählt werden
+- lokaler Fallback bleibt aktiv, falls kein API-Key vorhanden ist
+- KI-Chat erzeugt weiterhin Gelände, Gebäude, Zonen und Gartenobjekte
+
+### Architektur / Garten
+- Gebäude/Haus
+- Glashaus
+- Hütte
+- Turm
+- Pavillon
+- Atelier
+- Pool
+- Pergola
+- Mauer
+- Stufen
+- Baum
+- Strauch
+- Hecke
+- Pflanzzonen
+- Belagszonen
+- weiches 3D-Gelände
+
+## OpenAI-Backend
+
+Die Datei `app/api/openai/route.ts` ist vorbereitet.
+
+Für echten Betrieb in Vercel:
+
+```text
+OPENAI_API_KEY=dein_key
+```
+
+Danach kann die App serverseitig die OpenAI-Route nutzen.
 
 ## Struktur
+
 Direkt im Ordner liegen:
-- .gitignore
-- app/
-- components/
-- next.config.mjs
-- next-env.d.ts
-- package.json
-- README.md
-- tsconfig.json
+
+```text
+.gitignore
+app
+components
+next.config.mjs
+next-env.d.ts
+package.json
+README.md
+tsconfig.json
+```

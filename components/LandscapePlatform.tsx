@@ -9,6 +9,7 @@ type ViewMode = '2d' | '3d';
 type Tab = 'chat' | 'image' | 'terrain' | 'architecture' | 'scene' | 'export';
 type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pergola' | 'wall' | 'stairs' | 'tree' | 'shrub' | 'hedge';
 type SelectedKind = 'terrain' | 'zone' | 'object' | null;
+type Drag2D = { kind: SelectedKind; id: number } | null;
 type ChatEngine = 'local' | 'openai';
 
 type TerrainBlob = {
@@ -102,13 +103,14 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: Gebäude und Objekte können in 2D und 3D verschoben werden.');
+  const [status, setStatus] = useState('Bereit: V0.14 MAX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-5');
-  const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb später API-Key + Serverroute ergänzen.');
+  const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb OPENAI_API_KEY in Vercel setzen.');
+  const [openAiLastAnswer, setOpenAiLastAnswer] = useState('');
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
-  const [drag2DId, setDrag2DId] = useState<number | null>(null);
+  const [drag2D, setDrag2D] = useState<Drag2D>(null);
 
   const [terrainBlobs, setTerrainBlobs] = useState<TerrainBlob[]>([
     { id: 1, name: 'Hügel Nord', x: -3.5, y: -1.2, radius: 2.4, height: 0.85, softness: 1.35, source: 'Start' },
@@ -204,14 +206,25 @@ export default function LandscapePlatform() {
   }
 
   function handleSvgMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (drag2DId === null) return;
+    if (!drag2D) return;
     const p = worldFromEvent(svgRef.current, e);
-    setObjects(v => v.map(o => o.id === drag2DId ? { ...o, x: p.x, y: p.y } : o));
+
+    if (drag2D.kind === 'object') {
+      setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x: p.x, y: p.y } : o));
+    }
+
+    if (drag2D.kind === 'terrain') {
+      setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x: p.x, y: p.y } : b));
+    }
+
+    if (drag2D.kind === 'zone') {
+      setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x: p.x, y: p.y } : z));
+    }
   }
 
   function handleSvgUp() {
-    if (drag2DId !== null) setStatus('2D-Verschiebung abgeschlossen.');
-    setDrag2DId(null);
+    if (drag2D) setStatus('2D-Verschiebung abgeschlossen.');
+    setDrag2D(null);
   }
 
   function uploadImage(file: File | null) {
@@ -270,7 +283,7 @@ export default function LandscapePlatform() {
     img.src = image.dataUrl;
   }
 
-  function generateFromChat() {
+  async function generateFromChat() {
     const text = chat.toLowerCase();
     const base = Date.now();
     const generatedBlobs: TerrainBlob[] = [];
@@ -278,7 +291,25 @@ export default function LandscapePlatform() {
     const generatedObjects: GardenObject[] = [];
 
     if (chatEngine === 'openai') {
-      setOpenAiNote(`OpenAI-Modus gewählt: ${openAiModel}. In dieser Version ist die Anbindung vorbereitet. Solange kein API-Key + Backend verbunden ist, wird derselbe Prompt lokal interpretiert.`);
+      setOpenAiNote(`OpenAI-Modus gewählt: ${openAiModel}. Anfrage an /api/openai wird versucht.`);
+      try {
+        const res = await fetch('/api/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: chat, model: openAiModel })
+        });
+        const data = await res.json();
+        if (data?.ok && data?.text) {
+          setOpenAiLastAnswer(String(data.text));
+          setOpenAiNote('OpenAI-Antwort erhalten. Die lokale Objekt-Generierung wird zusätzlich angewendet.');
+        } else {
+          setOpenAiLastAnswer(String(data?.message || 'Kein OpenAI-Ergebnis. Lokaler Fallback aktiv.'));
+          setOpenAiNote('OpenAI nicht verfügbar oder kein API-Key gesetzt. Lokaler Fallback aktiv.');
+        }
+      } catch (err) {
+        setOpenAiLastAnswer('OpenAI-Anfrage fehlgeschlagen. Lokaler Fallback aktiv.');
+        setOpenAiNote('OpenAI-Anfrage fehlgeschlagen. Lokaler Fallback aktiv.');
+      }
     }
 
     if (text.includes('zwei erhebungen') || text.includes('zwei hügel') || text.includes('hügel') || text.includes('erhebung')) {
@@ -338,7 +369,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v0134-move-3d-openai.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v014-max.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
   return (
@@ -371,11 +402,13 @@ export default function LandscapePlatform() {
                 <option value="gpt-4.1-mini">gpt-4.1-mini</option>
                 <option value="o4-mini">o4-mini</option>
                 <option value="o3">o3</option>
+                <option value="custom">custom / eigenes Modell unten</option>
               </select>
+              <input value={openAiModel} onChange={e => setOpenAiModel(e.target.value)} placeholder="Modellname frei eingeben" />
             </label>
             <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} />
             <button className="btn primary" style={{marginTop:8}} onClick={generateFromChat}>Entwurf generieren</button>
-            <div className="hint" style={{marginTop:8}}>{openAiNote}</div>
+            <div className="hint" style={{marginTop:8}}>{openAiNote}</div>{openAiLastAnswer && <div className="hint" style={{marginTop:8}}>OpenAI/Serverantwort: {openAiLastAnswer}</div>}
           </>
         )}
 
@@ -419,7 +452,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.13.4 MOVE 3D OPENAI</span>
+          <span className="pill">V0.14 MAX</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -450,14 +483,14 @@ export default function LandscapePlatform() {
               {image && <image href={image.dataUrl} x={-10 * SCALE} y={-6.5 * SCALE} width={20 * SCALE} height={13 * SCALE} opacity="0.22" preserveAspectRatio="none" />}
 
               {zones.map(zone => (
-                <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}}>
+                <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'zone', id:zone.id}); setSelection('zone', zone.id, `${zone.name} wird in 2D verschoben.`); }}}>
                   <rect x={(zone.x - zone.width/2) * SCALE} y={(zone.y - zone.depth/2) * SCALE} width={zone.width * SCALE} height={zone.depth * SCALE} fill={zone.color} fillOpacity="0.42" stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':'#334155'} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : 1.5} rx="6" />
                   <text x={zone.x * SCALE} y={zone.y * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{zone.name}</text>
                 </g>
               ))}
 
               {terrainBlobs.map(blob => (
-                <g key={blob.id} onClick={(e)=>{e.stopPropagation(); setSelection('terrain', blob.id, `${blob.name} ausgewählt.`);}}>
+                <g key={blob.id} onClick={(e)=>{e.stopPropagation(); setSelection('terrain', blob.id, `${blob.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'terrain', id:blob.id}); setSelection('terrain', blob.id, `${blob.name} wird in 2D verschoben.`); }}}>
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={blob.radius * SCALE * blob.softness} fill={`url(#g-${blob.id})`} />
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={Math.max(6, blob.radius * SCALE * 0.25)} fill={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stroke={selectedKind==='terrain' && selectedId===blob.id ? '#f59e0b' : '#ffffff'} strokeWidth={selectedKind==='terrain' && selectedId===blob.id ? 3 : 1.5} />
                 </g>
@@ -469,7 +502,7 @@ export default function LandscapePlatform() {
                   obj={obj}
                   selected={selectedKind==='object' && selectedId===obj.id}
                   onClick={(e)=>{e.stopPropagation(); setSelection('object', obj.id, `${obj.name} ausgewählt.`);}}
-                  onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2DId(obj.id); setSelection('object', obj.id, `${obj.name} wird in 2D verschoben.`); }}}
+                  onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'object', id:obj.id}); setSelection('object', obj.id, `${obj.name} wird in 2D verschoben.`); }}}
                 />
               ))}
             </svg>

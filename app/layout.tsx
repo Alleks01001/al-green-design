@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AL Green Design – V0.13.3 Architecture Garden',
-  description: 'Komplette Gartenplanung mit Soft Terrain, verschiebbaren Gebäuden in 2D/3D und OpenAI-vorbereitetem Chat.',
+  description: 'Komplette Gartenplanung mit Soft Terrain, verschiebbaren Gebäuden/Zonen in 2D und 3D, Architektur-Features und vorbereitetem OpenAI-Backend.',
   robots: { index: false, follow: false }
 };
 

@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v0134-move-3d-openai",
-  "version": "0.13.4",
+  "name": "al-green-design-landscape-architecture-v014-max",
+  "version": "0.14.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

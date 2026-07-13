@@ -4,10 +4,10 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.13.4 MOVE 3D OPENAI</p>
-        <h1>Landscape Architecture – Move 3D + OpenAI</h1>
+        <p>AL Green Design · Entwicklungsstand V0.14 MAX</p>
+        <h1>Landscape Architecture – MAX – Architektur, 2D/3D, KI</h1>
         <div>
-          Weiches 3D-Gelände mit verschiebbaren Gebäuden und Objekten, Pflanzen, Pergola, Mauer, Pool, Treppe, Belägen und Pflanzzonen. Dazu ein OpenAI-vorbereiteter Chat für Entwurfsideen.
+          Weiches 3D-Gelände mit verschiebbaren Gebäuden und Objekten, Pflanzen, Pergola, Mauer, Pool, Treppe, Belägen und Pflanzzonen. Dazu ein KI-Chat mit lokalem Fallback und vorbereitetem OpenAI-Backend.
         </div>
       </section>
       <LandscapePlatform />
