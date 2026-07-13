@@ -1,15 +1,24 @@
 
-# AL Green Design – V0.13.1 Soft Terrain
+# AL Green Design – V0.13.2 Architecture Garden
 
-Diese Version erzeugt echte weiche 3D-Geländeformen.
+Diese Version erweitert Soft Terrain um architektonische und gärtnerische Werkzeuge.
 
-## Neu
-- weiches 3D-Höhenmodell statt nur Flächen
-- Erhebungen und Senken verlaufen ineinander
-- Terrain-Blobs mit Position, Radius, Höhe/Tiefe und Weichheit
-- Bild-Upload
-- KI-Bildanalyse erzeugt weiche Terrain-Formen
-- KI-Chat erzeugt grobe Terrain-Vorschläge
-- 2D-Planeditor
-- 3D-Viewer mit echtem Terrain-Mesh
-- Nachbearbeitung aller Terrain-Parameter
+## Neu in V0.13.2
+- Gebäude-Werkzeug
+- Pool-Werkzeug
+- Pergola-Werkzeug
+- Mauer-Werkzeug
+- Treppen-Werkzeug
+- Baum-, Strauch- und Hecken-Werkzeug
+- Zonen für Belag und Pflanzflächen
+- Alle Objekte liegen automatisch auf dem Gelände auf
+- 2D-Editor und 3D-Ansicht für kompletten Gartenentwurf
+- Eigenschaften rechts editierbar
+
+## Inhalt
+- weiches 3D-Gelände
+- Bild-Upload und grobe KI-Bildanalyse
+- KI-Chat für Terrain-Grundform
+- architektonische Features
+- Pflanzenobjekte
+- Export als .algreen

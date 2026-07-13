@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – V0.13.1 Soft Terrain',
-  description: 'Landschaftsarchitektur mit weichem 3D-Gelände, Bildanalyse, KI-Chat und Terrain-Bearbeitung.',
+  title: 'AL Green Design – V0.13.2 Architecture Garden',
+  description: 'Komplette Gartenplanung mit Soft Terrain, Gebäuden, Pflanzen und 3D.',
   robots: { index: false, follow: false }
 };
 
