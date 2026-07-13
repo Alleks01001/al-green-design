@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – Garden Studio 3D V0.10',
-  description: 'Garden Studio V0.10 mit 3D-Zeichnen, bewegbaren Oberflächen, Bild/PDF in 3D, Maßstab und detaillierten Objekten.',
+  title: 'AL Green Design – Landscape Architecture V0.11',
+  description: 'Landschaftsarchitektur-Plattform mit CAD, GIS, BIM, Pflanzen, Gelände, Kosten, Bewässerung und Projektmanagement.',
   robots: { index: false, follow: false }
 };
 

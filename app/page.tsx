@@ -1,18 +1,17 @@
-import GardenStudio from '@/components/GardenStudio';
+import LandscapePlatform from '@/components/LandscapePlatform';
 
 export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.10</p>
-        <h1>Garden Studio 3D</h1>
+        <p>AL Green Design · Entwicklungsstand V0.11</p>
+        <h1>Landscape Architecture Platform</h1>
         <div>
-          Verbesserte CAD-/SketchUp-Version mit detaillierten Objekten,
-          3D-Zeichnen, bewegbaren Bodenflächen, 3D-Bild/PDF-Hintergrund
-          und neuem Maßstab-Werkzeug.
+          Kombination aus CAD, GIS, BIM, Pflanzendatenbank, Geländemodellierung,
+          Kostenkalkulation, Bewässerungsplanung, Öko-Analyse und Projektmanagement.
         </div>
       </section>
-      <GardenStudio />
+      <LandscapePlatform />
     </main>
   );
 }

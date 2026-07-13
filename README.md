@@ -1,36 +1,25 @@
-# AL Green Design – Garden Studio 3D V0.10
+# AL Green Design – Landscape Architecture Platform V0.11
 
-## Hauptverbesserungen gegenüber V0.9
+Diese Version erweitert das Garden Studio zu einer Landschaftsarchitektur-Plattform.
 
-- Detaillierte Objekte statt nur Flächen
-- Türen, Fenster, Tore, Durchgänge als sichtbare Bauteile
-- Maßstab neu: PDF/Bild hochladen, Länge eingeben, zwei Punkte setzen
-- Zeichnen und Platzieren auch in 3D
-- Bodenflächen/Oberflächen in 3D anklickbar und verschiebbar
-- Bild/PDF wird auch in der 3D-Ansicht als Bodenplan angezeigt
-- 3D-Auswahl und 3D-Verschieben für Flächen, Objekte, Wände und Bauteile
-- DXF-, PDF-, Bild-, CSV-, JSON- und .algreen-Export
+## Neue Module in V0.11
 
-## Upload
+- CAD-Grundlagen mit Layern, Formen, Linien, Flächen und Symbolen
+- GIS-Modul mit GeoJSON-Import
+- BIM-Daten je Objekt
+- Pflanzendatenbank
+- Intelligente Pflanzplanung mit Standortparametern
+- Geländemodell mit Höhenpunkten, Gefälle und grober Abtrag/Auftrag-Berechnung
+- Bewässerungsplanung mit Zonen, Wasserbedarf und Rohrlängen
+- Entwässerung / Regenwasserrückhaltung
+- Kostenkalkulation und LV-Export
+- Materialbibliothek
+- Öko-Score: Biodiversität, CO₂, Versiegelung, Regenrückhalt, Hitzeschutz
+- Projektmanagement: Aufgaben, Kommentare, Versionen
+- Export JSON, CSV, LV, GeoJSON
 
-- .algreen
-- PDF
-- JPG / JPEG
-- PNG
-- WEBP
-- GIF
-- BMP
-- SVG
+## Hinweis
 
-## Download
-
-- .algreen
-- PDF
-- PNG
-- JPG
-- WEBP
-- SVG
-- CSV
-- JSON
-- TXT
-- DXF
+V0.11 ist die Plattform-Basis. Professionelle Spezialformate wie DWG, IFC, LAS/LAZ, LandXML,
+GAEB und echte Punktwolken benötigen eigene Import-/Exportmodule und können in weiteren Versionen
+schrittweise ergänzt werden.
