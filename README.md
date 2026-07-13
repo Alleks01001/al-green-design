@@ -1,4 +1,4 @@
-# AL Green Design – V0.13.3 Building AI
+# AL Green Design – V0.13.3 Building AI FIX
 
 Diese Version ergänzt die V0.13.2 Architektur-/Garten-Version um die Inhalte aus der eingefügten Datei.
 
@@ -40,3 +40,8 @@ Direkt im Ordner liegen:
 - package.json
 - README.md
 - tsconfig.json
+
+
+## FIX
+
+Diese Version enthält keine neuen Funktionen, sondern bereinigt den fehlerhaften Funktionsübergang in der Komponente.

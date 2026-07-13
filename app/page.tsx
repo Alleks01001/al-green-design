@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.13.3 BUILDING AI</p>
+        <p>AL Green Design · Entwicklungsstand V0.13.3 BUILDING AI FIX</p>
         <h1>Landscape Architecture – Building AI + Garten</h1>
         <div>
           Weiches 3D-Gelände mit Gebäuden, Pflanzen, Pergola, Mauer, Pool,

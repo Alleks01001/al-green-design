@@ -545,8 +545,8 @@ export default function LandscapePlatform() {
     setSelection('terrain', generatedBlobs[0]?.id ?? null, `KI-Chat interpretiert: ${generatedBlobs.length} Terrain-Formen, ${generatedZones.length} Zonen und ${generatedObjects.length} Architektur-/Gartenobjekte.`);
   }
 
-  function exportProject  function exportProject() {
-    download('al-green-design-v0133-building-ai.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null }, null, 2), 'application/json');
+  function exportProject() {
+    download('al-green-design-v0133-building-ai-fix.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null }, null, 2), 'application/json');
   }
 
   return (
@@ -623,7 +623,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.13.3 BUILDING AI</span>
+          <span className="pill">V0.13.3 BUILDING AI FIX</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
