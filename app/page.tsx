@@ -4,12 +4,10 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.13.3 BUILDING AI FIX</p>
-        <h1>Landscape Architecture – Building AI + Garten</h1>
+        <p>AL Green Design · Entwicklungsstand V0.13.4 MOVE 3D OPENAI</p>
+        <h1>Landscape Architecture – Move 3D + OpenAI</h1>
         <div>
-          Weiches 3D-Gelände mit Gebäuden, Pflanzen, Pergola, Mauer, Pool,
-          Treppe, Belägen und Pflanzzonen. Damit kannst du den kompletten Garten
-          in 2D zeichnen und in 3D kontrollieren.
+          Weiches 3D-Gelände mit verschiebbaren Gebäuden und Objekten, Pflanzen, Pergola, Mauer, Pool, Treppe, Belägen und Pflanzzonen. Dazu ein OpenAI-vorbereiteter Chat für Entwurfsideen.
         </div>
       </section>
       <LandscapePlatform />
