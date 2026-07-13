@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v012-pro",
-  "version": "0.12.0",
+  "name": "al-green-design-landscape-architecture-v0121-fix",
+  "version": "0.12.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,9 +11,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "three": "latest",
-    "jspdf": "latest",
-    "pdfjs-dist": "latest"
+    "three": "latest"
   },
   "devDependencies": {
     "typescript": "latest",
