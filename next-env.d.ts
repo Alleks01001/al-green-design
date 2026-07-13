@@ -1,2 +1,7 @@
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
+node_modules
+.next
+out
+.env
+.env.local
+.DS_Store
+.vercel

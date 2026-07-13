@@ -1,22 +1,37 @@
-# AL Green Design – Landscape Architecture V0.12.1 FIX
+# AL Green Design – Landscape Architecture V0.12.2 AI Chat
 
-Bereinigte Version ohne verschachtelte Altordner.
+Bereinigte Version mit eigenständigem KI-Chat-Generator.
 
-## Enthalten
+## Neu in V0.12.2
 
-- 2D-Plan und 3D-Ansicht
-- CAD-Grundobjekte
-- Geländeformen: Erhebung, Mulde, Böschung, Höhenpunkt
-- Erweiterte Pflanzendatenbank
-- Automatische Pflanzvorschläge
-- KI-Designgenerator als regelbasierter Prototyp
-- Kostenrechner
-- Bewässerung, Regenwasser, Licht, Wachstum, Chat, SaaS/Roadmap
-- Export JSON, CSV, GeoJSON
+Der Garten-Chat erzeugt jetzt eigenständig Objekte aus Texteingaben:
 
-## Richtige GitHub-Struktur
+- Spielbereiche
+- Rasenflächen
+- pflegeleichte Pflanzflächen
+- mediterrane Pflanzkonzepte
+- Sitzbereiche
+- Wege
+- Poolbereiche
+- Beleuchtung
+- Bewässerung
+- Regenwasser / Retention
+- Geländeerhebungen / Mulden
+- Kostenpositionen als Objekte/Attribute
+- Optimierungen nach Budget, Pflege, Kindern, Biodiversität, Wasserverbrauch und Schatten
 
-Direkt im Ordner liegen nur:
+## Beispiele
+
+„Ich habe zwei Kinder und wenig Zeit.“
+→ Spielbereich, Rasen, Schattenbaum, robuste pflegeleichte Pflanzen, sichere Bereiche.
+
+„Mediterraner Garten mit Pool, 400 m², wenig Pflege.“
+→ Naturstein, Kiesweg, Lavendel, Salbei, Rosmarin, Sitzplatz, Licht, Tropfbewässerung.
+
+„Budget 5000 Euro, Halbschatten in Wien.“
+→ reduzierte Planung, standortgerechte Pflanzen, Kostenrahmen.
+
+## Saubere Struktur
 
 - .gitignore
 - app/
