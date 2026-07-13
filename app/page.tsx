@@ -4,11 +4,12 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.9 CAD</p>
+        <p>AL Green Design · Entwicklungsstand V0.10</p>
         <h1>Garden Studio 3D</h1>
         <div>
-          CAD-Ausbaustufe mit PDF-Maßstab, 2D/3D, Wänden, Türen/Fenstern,
-          Vorschaubild-Speicher und DXF-Export.
+          Verbesserte CAD-/SketchUp-Version mit detaillierten Objekten,
+          3D-Zeichnen, bewegbaren Bodenflächen, 3D-Bild/PDF-Hintergrund
+          und neuem Maßstab-Werkzeug.
         </div>
       </section>
       <GardenStudio />

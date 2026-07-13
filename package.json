@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-garden-studio-3d-v09",
-  "version": "0.9.0",
+  "name": "al-green-design-garden-studio-3d-v010",
+  "version": "0.10.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,14 +1,15 @@
-# AL Green Design – Garden Studio 3D V0.9 CAD
+# AL Green Design – Garden Studio 3D V0.10
 
-## Neu in V0.9
+## Hauptverbesserungen gegenüber V0.9
 
-1. PDF-Plan hochladen und Maßstab setzen
-2. bessere 3D-Objekte
-3. Mauern/Wände als eigenes Werkzeug
-4. Türen/Fenster/Tore als Bauteile
-5. DXF-Export nutzbar, DWG-Hinweis enthalten
-6. Projekt speichern mit Vorschaubild
-7. bessere Oberfläche Richtung CAD/SketchUp
+- Detaillierte Objekte statt nur Flächen
+- Türen, Fenster, Tore, Durchgänge als sichtbare Bauteile
+- Maßstab neu: PDF/Bild hochladen, Länge eingeben, zwei Punkte setzen
+- Zeichnen und Platzieren auch in 3D
+- Bodenflächen/Oberflächen in 3D anklickbar und verschiebbar
+- Bild/PDF wird auch in der 3D-Ansicht als Bodenplan angezeigt
+- 3D-Auswahl und 3D-Verschieben für Flächen, Objekte, Wände und Bauteile
+- DXF-, PDF-, Bild-, CSV-, JSON- und .algreen-Export
 
 ## Upload
 
@@ -33,14 +34,3 @@
 - JSON
 - TXT
 - DXF
-
-## Struktur
-
-- .gitignore
-- app/
-- components/
-- next.config.mjs
-- next-env.d.ts
-- package.json
-- README.md
-- tsconfig.json
