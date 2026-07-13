@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – Landscape Architecture V0.12.2',
-  description: 'Bereinigte Prototyp-Plattform für Landschaftsarchitektur mit 2D, 3D, Pflanzen, Gelände, Kosten und KI-Design und eigenständigem Garten-Chat.',
+  title: 'AL Green Design – Landscape Architecture V0.13 IMAGE AI',
+  description: 'MVP mit KI-Chat, Bild-Upload, Geländeanalyse, 2D, 3D, Datenbanken, Kosten und SaaS-Modulen.',
   robots: { index: false, follow: false }
 };
 
