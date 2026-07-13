@@ -1,8 +1,17 @@
-# AL Green Design – Garden Studio 3D V0.8.2.2
+# AL Green Design – Garden Studio 3D V0.9 CAD
 
-V0.8.2 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
+## Neu in V0.9
+
+1. PDF-Plan hochladen und Maßstab setzen
+2. bessere 3D-Objekte
+3. Mauern/Wände als eigenes Werkzeug
+4. Türen/Fenster/Tore als Bauteile
+5. DXF-Export nutzbar, DWG-Hinweis enthalten
+6. Projekt speichern mit Vorschaubild
+7. bessere Oberfläche Richtung CAD/SketchUp
 
 ## Upload
+
 - .algreen
 - PDF
 - JPG / JPEG
@@ -13,6 +22,7 @@ V0.8.2 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
 - SVG
 
 ## Download
+
 - .algreen
 - PDF
 - PNG
@@ -22,21 +32,15 @@ V0.8.2 erweitert V0.7 um mehr Datei-Formate für Upload und Download.
 - CSV
 - JSON
 - TXT
+- DXF
 
-## Zusätzlich
-- 2D-Draufsicht
-- 3D-Ansicht mit Three.js
-- Zoom / Pan / Rotation
-- Flächen und Objekte
-- Eigenschaften rechts
-- Browser-Speicherung
+## Struktur
 
-## Lokal starten
-
-npm install
-npm run dev
-
-
-## Fix V0.8.2
-- PDF-Upload-Buildfehler für Vercel abgesichert.
-- TypeScript-Build wird wegen pdfjs-Render-Typen nicht mehr blockiert.
+- .gitignore
+- app/
+- components/
+- next.config.mjs
+- next-env.d.ts
+- package.json
+- README.md
+- tsconfig.json

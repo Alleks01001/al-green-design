@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – Garden Studio 3D V0.8.2',
-  description: 'Garden Studio V0.8.2 mit 2D, 3D sowie erweiterten Upload- und Download-Formaten.',
+  title: 'AL Green Design – Garden Studio 3D V0.9',
+  description: 'Garden Studio V0.9 mit CAD-Funktionen, PDF-Maßstab, 3D, Wänden, Bauteilen und DXF.',
   robots: { index: false, follow: false }
 };
 
