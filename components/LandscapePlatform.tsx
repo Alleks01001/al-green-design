@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 type Tab = 'cad'|'gis'|'bim'|'plants'|'terrain'|'water'|'drainage'|'costs'|'analysis'|'project'|'exports';
 type Tool = 'select'|'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'irrigation'|'drainage'|'light';
@@ -125,6 +127,7 @@ function objectLength(o:CadObject){if(o.kind==='line'&&o.points.length>=2)return
 export default function LandscapePlatform(){
   const svgRef=useRef<SVGSVGElement|null>(null);
   const [tab,setTab]=useState<Tab>('cad');
+  const [view,setView]=useState<'2d'|'3d'>('2d');
   const [tool,setTool]=useState<Tool>('rect');
   const [layer,setLayer]=useState('Entwurf');
   const [selected,setSelected]=useState<number|null>(null);
@@ -475,19 +478,30 @@ export default function LandscapePlatform(){
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.11 Landschaftsarchitektur</span>
+          <span className="pill">V0.11.1 Landschaftsarchitektur</span>
           <span className="pill">Modul: {tab.toUpperCase()}</span>
           <span className="pill">Tool: {tool}</span>
           <span className="pill">Layer: {layer}</span>
+          <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D-Plan</button>
+          <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D-Modell</button>
         </div>
-        <svg ref={svgRef} className="canvas" viewBox={`${cam.x*SCALE} ${cam.y*SCALE} ${cam.width*SCALE} ${cam.height*SCALE}`} onClick={handleCanvasClick}>
-          <Grid/>
-          {objects.map(o=><Drawable key={o.id} object={o} selected={selected===o.id} onSelect={(e:any)=>{e.stopPropagation();setSelected(o.id);setStatus(`${o.name} ausgewählt.`)}} />)}
-          {draft.map((p,i)=><circle key={i} cx={p.x*SCALE} cy={p.y*SCALE} r={5} fill="#f97316"/>)}
-        </svg>
+        {view==='2d' ? (
+          <svg ref={svgRef} className="canvas" viewBox={`${cam.x*SCALE} ${cam.y*SCALE} ${cam.width*SCALE} ${cam.height*SCALE}`} onClick={handleCanvasClick}>
+            <Grid/>
+            {objects.map(o=><Drawable key={o.id} object={o} selected={selected===o.id} onSelect={(e:any)=>{e.stopPropagation();setSelected(o.id);setStatus(`${o.name} ausgewählt.`)}} />)}
+            {draft.map((p,i)=><circle key={i} cx={p.x*SCALE} cy={p.y*SCALE} r={5} fill="#f97316"/>)}
+          </svg>
+        ) : (
+          <ThreeLandscapeView
+            objects={objects}
+            selected={selected}
+            setSelected={setSelected}
+            setStatus={setStatus}
+          />
+        )}
         <div className="status">
           <span>{status}</span>
-          <span className="badge">{objects.length} Objekte</span>
+          <span className="badge">{view==='2d'?'2D':'3D'} · {objects.length} Objekte</span>
         </div>
       </div>
 
@@ -541,6 +555,258 @@ export default function LandscapePlatform(){
     </section>
   );
 }
+
+
+function ThreeLandscapeView({
+  objects,
+  selected,
+  setSelected,
+  setStatus
+}:{
+  objects:CadObject[];
+  selected:number|null;
+  setSelected:(id:number|null)=>void;
+  setStatus:(s:string)=>void;
+}){
+  const mountRef=useRef<HTMLDivElement|null>(null);
+  const contentRef=useRef<THREE.Group|null>(null);
+  const cameraRef=useRef<THREE.PerspectiveCamera|null>(null);
+  const raycasterRef=useRef(new THREE.Raycaster());
+  const mouseRef=useRef(new THREE.Vector2());
+
+  useEffect(()=>{
+    const mount=mountRef.current;
+    if(!mount)return;
+
+    const scene=new THREE.Scene();
+    scene.background=new THREE.Color(0xdbeafe);
+
+    const camera=new THREE.PerspectiveCamera(55,mount.clientWidth/mount.clientHeight,0.1,1000);
+    camera.position.set(14,13,18);
+    cameraRef.current=camera;
+
+    const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+    renderer.setSize(mount.clientWidth,mount.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;
+    mount.appendChild(renderer.domElement);
+
+    const controls=new OrbitControls(camera,renderer.domElement);
+    controls.enableDamping=true;
+    controls.target.set(0,0,0);
+
+    scene.add(new THREE.AmbientLight(0xffffff,.82));
+    const sun=new THREE.DirectionalLight(0xffffff,1.25);
+    sun.position.set(9,16,10);
+    sun.castShadow=true;
+    scene.add(sun);
+
+    const grid=new THREE.GridHelper(60,60,0x64748b,0xcbd5e1);
+    scene.add(grid);
+
+    const ground=new THREE.Mesh(
+      new THREE.PlaneGeometry(60,60),
+      new THREE.MeshStandardMaterial({color:0xf8fafc,roughness:.95,metalness:0})
+    );
+    ground.rotation.x=-Math.PI/2;
+    ground.position.y=-0.015;
+    ground.receiveShadow=true;
+    scene.add(ground);
+
+    const content=new THREE.Group();
+    contentRef.current=content;
+    scene.add(content);
+
+    const onPointerDown=(event:PointerEvent)=>{
+      const rect=renderer.domElement.getBoundingClientRect();
+      mouseRef.current.x=((event.clientX-rect.left)/rect.width)*2-1;
+      mouseRef.current.y=-((event.clientY-rect.top)/rect.height)*2+1;
+      raycasterRef.current.setFromCamera(mouseRef.current,camera);
+      const hits=raycasterRef.current.intersectObjects(content.children,true);
+      for(const hit of hits){
+        let obj:any=hit.object;
+        while(obj && !obj.userData?.id)obj=obj.parent;
+        if(obj?.userData?.id){
+          setSelected(obj.userData.id);
+          setStatus(`${obj.userData.name} in 3D ausgewählt.`);
+          return;
+        }
+      }
+      setSelected(null);
+    };
+    renderer.domElement.addEventListener('pointerdown',onPointerDown);
+
+    let frame=0;
+    const loop=()=>{
+      controls.update();
+      renderer.render(scene,camera);
+      frame=requestAnimationFrame(loop);
+    };
+    loop();
+
+    const resize=()=>{
+      if(!mountRef.current)return;
+      renderer.setSize(mountRef.current.clientWidth,mountRef.current.clientHeight);
+      camera.aspect=mountRef.current.clientWidth/mountRef.current.clientHeight;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize',resize);
+
+    return()=>{
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize',resize);
+      renderer.domElement.removeEventListener('pointerdown',onPointerDown);
+      controls.dispose();
+      renderer.dispose();
+      if(mount.contains(renderer.domElement))mount.removeChild(renderer.domElement);
+    };
+  },[setSelected,setStatus]);
+
+  useEffect(()=>{
+    const content=contentRef.current;
+    if(!content)return;
+    while(content.children.length)content.remove(content.children[0]);
+
+    objects.forEach((object)=>{
+      const mesh=create3DLandscapeObject(object,object.id===selected);
+      content.add(mesh);
+    });
+  },[objects,selected]);
+
+  return <div ref={mountRef} className="canvas three-canvas"/>;
+}
+
+function createTextSprite(text:string){
+  const canvas=document.createElement('canvas');
+  canvas.width=512;
+  canvas.height=128;
+  const ctx=canvas.getContext('2d');
+  if(ctx){
+    ctx.fillStyle='rgba(255,255,255,.90)';
+    ctx.fillRect(0,0,512,128);
+    ctx.fillStyle='#0f172a';
+    ctx.font='bold 32px Arial';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(text.slice(0,28),256,64);
+  }
+  const tex=new THREE.CanvasTexture(canvas);
+  const mat=new THREE.SpriteMaterial({map:tex,transparent:true});
+  const sprite=new THREE.Sprite(mat);
+  sprite.scale.set(2.6,.65,1);
+  return sprite;
+}
+
+function makeMaterial(color:string,opacity:number){
+  return new THREE.MeshStandardMaterial({
+    color:new THREE.Color(color),
+    transparent:opacity<1,
+    opacity,
+    roughness:.72,
+    metalness:.04
+  });
+}
+
+function create3DLandscapeObject(object:CadObject, selected:boolean){
+  const group=new THREE.Group();
+  group.userData={id:object.id,name:object.name};
+  const opacity=Math.max(.18,Math.min(1,1-(object.transparency||0)));
+  const mat=makeMaterial(object.color,opacity);
+  const strokeMat=new THREE.MeshStandardMaterial({color:selected?0xf59e0b:0x0f172a,roughness:.5});
+  const elevation=Number(object.attributes.height??object.elevation??0);
+
+  if(object.kind==='rect'){
+    const h=Math.max(.06,elevation>0?elevation:.12);
+    const mesh=new THREE.Mesh(new THREE.BoxGeometry(Math.max(object.width,.1),h,Math.max(object.height,.1)),mat);
+    mesh.position.set(object.x,h/2,object.y);
+    mesh.castShadow=true;
+    mesh.receiveShadow=true;
+    group.add(mesh);
+
+    if(selected){
+      const edge=new THREE.Mesh(new THREE.BoxGeometry(Math.max(object.width,.1)+.08,h+.05,Math.max(object.height,.1)+.08),new THREE.MeshBasicMaterial({color:0xf59e0b,wireframe:true}));
+      edge.position.copy(mesh.position);
+      group.add(edge);
+    }
+  }
+
+  if(object.kind==='circle'){
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(object.radius,.1),Math.max(object.radius,.1),.16,48),mat);
+    mesh.position.set(object.x,.08,object.y);
+    mesh.castShadow=true;
+    mesh.receiveShadow=true;
+    group.add(mesh);
+  }
+
+  if(object.kind==='plant'){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,Math.max(.5,object.height*.35),12),makeMaterial('#7c2d12',1));
+    trunk.position.set(object.x,Math.max(.5,object.height*.35)/2,object.y);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.25,object.radius),24,16),makeMaterial('#16a34a',.92));
+    crown.position.set(object.x,Math.max(.8,object.height*.62),object.y);
+    const crown2=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.18,object.radius*.65),18,12),makeMaterial('#22c55e',.9));
+    crown2.position.set(object.x+object.radius*.45,Math.max(.9,object.height*.72),object.y-object.radius*.25);
+    group.add(trunk,crown,crown2);
+  }
+
+  if(object.kind==='terrainPoint'){
+    const point=new THREE.Mesh(new THREE.ConeGeometry(.18,.45,16),makeMaterial('#7c3aed',1));
+    point.position.set(object.x,elevation+.25,object.y);
+    group.add(point);
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,Math.max(.1,elevation),8),makeMaterial('#7c3aed',.7));
+    pole.position.set(object.x,Math.max(.1,elevation)/2,object.y);
+    group.add(pole);
+  }
+
+  if(object.kind==='light'){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,1,10),makeMaterial('#44403c',1));
+    pole.position.set(object.x,.5,object.y);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.18,16,12),makeMaterial('#f59e0b',1));
+    lamp.position.set(object.x,1.1,object.y);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(.8,24,12),makeMaterial('#fde68a',.23));
+    glow.position.set(object.x,1.05,object.y);
+    group.add(pole,lamp,glow);
+  }
+
+  if(object.kind==='line'||object.kind==='polyline'||object.kind==='irrigation'||object.kind==='drainage'){
+    const pts=object.points;
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i],b=pts[i+1];
+      const length=distance(a,b);
+      const thickness=object.kind==='irrigation'||object.kind==='drainage'?.08:.045;
+      const tube=new THREE.Mesh(new THREE.CylinderGeometry(thickness,thickness,length,12),mat);
+      tube.position.set((a.x+b.x)/2,.08,(a.y+b.y)/2);
+      tube.rotation.z=Math.PI/2;
+      tube.rotation.y=-Math.atan2(b.y-a.y,b.x-a.x);
+      group.add(tube);
+    }
+
+    if(object.kind==='polyline'&&pts.length>=3){
+      const shape=new THREE.Shape();
+      shape.moveTo(pts[0].x,-pts[0].y);
+      pts.slice(1).forEach(p=>shape.lineTo(p.x,-p.y));
+      shape.lineTo(pts[0].x,-pts[0].y);
+      const geo=new THREE.ExtrudeGeometry(shape,{depth:.08,bevelEnabled:false});
+      geo.rotateX(-Math.PI/2);
+      const surface=new THREE.Mesh(geo,mat);
+      surface.position.y=.02;
+      surface.receiveShadow=true;
+      group.add(surface);
+    }
+  }
+
+  if(selected){
+    const marker=new THREE.Mesh(new THREE.SphereGeometry(.16,16,10),strokeMat);
+    marker.position.set(object.x||0,1.6,object.y||0);
+    group.add(marker);
+  }
+
+  const label=createTextSprite(object.name);
+  label.position.set(object.x||object.points?.[0]?.x||0,1.25+(elevation||0),object.y||object.points?.[0]?.y||0);
+  group.add(label);
+
+  return group;
+}
+
 
 function Grid(){
   const lines=[];

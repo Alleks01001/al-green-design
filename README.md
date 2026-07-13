@@ -1,4 +1,4 @@
-# AL Green Design – Landscape Architecture Platform V0.11
+# AL Green Design – Landscape Architecture Platform V0.11.1 3D
 
 Diese Version erweitert das Garden Studio zu einer Landschaftsarchitektur-Plattform.
 
@@ -23,3 +23,11 @@ Diese Version erweitert das Garden Studio zu einer Landschaftsarchitektur-Plattf
 V0.11 ist die Plattform-Basis. Professionelle Spezialformate wie DWG, IFC, LAS/LAZ, LandXML,
 GAEB und echte Punktwolken benötigen eigene Import-/Exportmodule und können in weiteren Versionen
 schrittweise ergänzt werden.
+
+
+## Fix V0.11.1
+
+- 3D-Ansicht eingebaut
+- Umschaltung 2D / 3D im Arbeitsbereich
+- CAD-, GIS-, Pflanzen-, Gelände-, Bewässerungs- und Lichtobjekte werden als 3D-Modell angezeigt
+- 3D-Objekte sind anklickbar und zeigen den Namen/Status
