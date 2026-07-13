@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-type Tab = 'cad'|'gis'|'bim'|'plants'|'terrain'|'water'|'drainage'|'costs'|'analysis'|'project'|'exports';
+type Tab = 'cad'|'gis'|'bim'|'plants'|'ai'|'terrain'|'water'|'drainage'|'lighting'|'costs'|'analysis'|'growth'|'chat'|'saas'|'roadmap'|'project'|'exports';
 type Tool = 'select'|'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'terrainMound'|'terrainDepression'|'terrainSmooth'|'terrainSlope'|'irrigation'|'drainage'|'light';
 type Point = {x:number;y:number};
 
@@ -35,10 +35,19 @@ type Plant = {
   type:string;
   height:number;
   width:number;
+  finalHeight:number;
+  finalWidth:number;
   sun:string;
   soil:string;
   waterNeed:number;
   hardy:string;
+  hardinessZone:string;
+  growthRate:string;
+  bloomTime:string;
+  flowerColor:string;
+  pruningTolerance:string;
+  maintenance:string;
+  insectFriendly:boolean;
   bee:boolean;
   bird:boolean;
   co2:number;
@@ -102,11 +111,14 @@ type DrainageSystem = {
 const SCALE=45;
 
 const plantDbSeed:Plant[]=[
-  {id:1,german:'Felsenbirne',botanical:'Amelanchier lamarckii',family:'Rosaceae',type:'Baum/Strauch',height:5,width:4,sun:'Sonne/Halbschatten',soil:'normal/frisch',waterNeed:2,hardy:'sehr winterhart',bee:true,bird:true,co2:42,biodiversity:88,price:68,supplier:'Baumschule Standard'},
-  {id:2,german:'Lavendel',botanical:'Lavandula angustifolia',family:'Lamiaceae',type:'Staude',height:.6,width:.5,sun:'Sonne',soil:'trocken/durchlässig',waterNeed:1,hardy:'winterhart',bee:true,bird:false,co2:2,biodiversity:80,price:4.8,supplier:'Staudengärtnerei'},
-  {id:3,german:'Hainbuche',botanical:'Carpinus betulus',family:'Betulaceae',type:'Hecke/Baum',height:12,width:7,sun:'Sonne/Halbschatten/Schatten',soil:'normal',waterNeed:2,hardy:'sehr winterhart',bee:false,bird:true,co2:95,biodiversity:82,price:18,supplier:'Heckenpflanzen'},
-  {id:4,german:'Ziergras',botanical:'Calamagrostis x acutiflora',family:'Poaceae',type:'Gras',height:1.3,width:.6,sun:'Sonne',soil:'normal/trocken',waterNeed:1,hardy:'winterhart',bee:false,bird:true,co2:5,biodiversity:55,price:7.5,supplier:'Staudengärtnerei'},
-  {id:5,german:'Japanischer Ahorn',botanical:'Acer palmatum',family:'Sapindaceae',type:'Baum',height:4,width:4,sun:'Halbschatten',soil:'frisch/humos',waterNeed:3,hardy:'winterhart',bee:false,bird:false,co2:31,biodiversity:45,price:120,supplier:'Solitärpflanzen'}
+  {id:1,german:'Felsenbirne',botanical:'Amelanchier lamarckii',family:'Rosaceae',type:'Baum/Strauch',height:3,width:2,finalHeight:6,finalWidth:4.5,sun:'Sonne/Halbschatten',soil:'normal/frisch',waterNeed:2,hardy:'sehr winterhart',hardinessZone:'5-8',growthRate:'mittel',bloomTime:'April',flowerColor:'weiß',pruningTolerance:'gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:true,co2:42,biodiversity:88,price:68,supplier:'Baumschule Standard'},
+  {id:2,german:'Lavendel',botanical:'Lavandula angustifolia',family:'Lamiaceae',type:'Staude',height:.45,width:.45,finalHeight:.65,finalWidth:.55,sun:'Sonne',soil:'trocken/durchlässig',waterNeed:1,hardy:'winterhart',hardinessZone:'6-9',growthRate:'mittel',bloomTime:'Juni-August',flowerColor:'violett',pruningTolerance:'sehr gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:false,co2:2,biodiversity:80,price:4.8,supplier:'Staudengärtnerei'},
+  {id:3,german:'Hainbuche',botanical:'Carpinus betulus',family:'Betulaceae',type:'Hecke/Baum',height:1.5,width:.7,finalHeight:12,finalWidth:7,sun:'Sonne/Halbschatten/Schatten',soil:'normal',waterNeed:2,hardy:'sehr winterhart',hardinessZone:'4-8',growthRate:'schnell',bloomTime:'April-Mai',flowerColor:'gelblich',pruningTolerance:'sehr gut',maintenance:'mittel',insectFriendly:true,bee:false,bird:true,co2:95,biodiversity:82,price:18,supplier:'Heckenpflanzen'},
+  {id:4,german:'Reitgras',botanical:'Calamagrostis x acutiflora',family:'Poaceae',type:'Gras',height:1.0,width:.45,finalHeight:1.5,finalWidth:.65,sun:'Sonne',soil:'normal/trocken',waterNeed:1,hardy:'winterhart',hardinessZone:'5-9',growthRate:'mittel',bloomTime:'Juli-Oktober',flowerColor:'beige',pruningTolerance:'gut',maintenance:'niedrig',insectFriendly:false,bee:false,bird:true,co2:5,biodiversity:55,price:7.5,supplier:'Staudengärtnerei'},
+  {id:5,german:'Japanischer Ahorn',botanical:'Acer palmatum',family:'Sapindaceae',type:'Baum',height:2,width:1.6,finalHeight:4.5,finalWidth:4, sun:'Halbschatten',soil:'frisch/humos',waterNeed:3,hardy:'winterhart',hardinessZone:'6-8',growthRate:'langsam',bloomTime:'Mai',flowerColor:'rot',pruningTolerance:'mittel',maintenance:'mittel',insectFriendly:false,bee:false,bird:false,co2:31,biodiversity:45,price:120,supplier:'Solitärpflanzen'},
+  {id:6,german:'Salbei',botanical:'Salvia nemorosa',family:'Lamiaceae',type:'Staude',height:.35,width:.35,finalHeight:.55,finalWidth:.45,sun:'Sonne',soil:'trocken/normal',waterNeed:1,hardy:'winterhart',hardinessZone:'5-9',growthRate:'mittel',bloomTime:'Juni-September',flowerColor:'blauviolett',pruningTolerance:'sehr gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:false,co2:2,biodiversity:86,price:4.2,supplier:'Staudengärtnerei'},
+  {id:7,german:'Kornelkirsche',botanical:'Cornus mas',family:'Cornaceae',type:'Strauch/Baum',height:2.5,width:2,finalHeight:6,finalWidth:4,sun:'Sonne/Halbschatten',soil:'normal/trocken',waterNeed:2,hardy:'sehr winterhart',hardinessZone:'5-8',growthRate:'langsam',bloomTime:'Februar-März',flowerColor:'gelb',pruningTolerance:'gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:true,co2:40,biodiversity:91,price:54,supplier:'Baumschule Standard'},
+  {id:8,german:'Rosmarin winterhart',botanical:'Salvia rosmarinus',family:'Lamiaceae',type:'Halbstrauch',height:.45,width:.45,finalHeight:1.1,finalWidth:1,sun:'Sonne',soil:'trocken/durchlässig',waterNeed:1,hardy:'bedingt winterhart',hardinessZone:'7-10',growthRate:'langsam',bloomTime:'April-Juni',flowerColor:'blau',pruningTolerance:'gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:false,co2:3,biodiversity:74,price:8.5,supplier:'Mediterran'}
 ];
 
 const materialSeed:Material[]=[
@@ -131,7 +143,7 @@ export default function LandscapePlatform(){
   const [tool,setTool]=useState<Tool>('rect');
   const [layer,setLayer]=useState('Entwurf');
   const [selected,setSelected]=useState<number|null>(null);
-  const [status,setStatus]=useState('Bereit: V0.11.2 Landschaftsarchitektur-Plattform.');
+  const [status,setStatus]=useState('Bereit: V0.12 Landschaftsarchitektur-Plattform.');
   const [cam,setCam]=useState({x:-12,y:-8,width:28,height:18});
   const [objects,setObjects]=useState<CadObject[]>([
     {id:101,kind:'rect',layer:'Bestand',name:'Grundstück / Bearbeitungsfläche',points:[],x:0,y:0,width:12,height:8,radius:0,color:'#dcfce7',transparency:.35,lineType:'durchgezogen',hatch:'Rasen',elevation:0,attributes:{bimClass:'Site',phase:'Bestand'}},
@@ -157,7 +169,14 @@ export default function LandscapePlatform(){
   ]);
   const [plantFilter,setPlantFilter]=useState({sun:'Sonne',soil:'trocken',water:2,goal:'pflegeleicht mediterran biodivers'});
   const [geoJsonInfo,setGeoJsonInfo]=useState('Noch keine GIS-Datei importiert.');
-  const [projectInfo,setProjectInfo]=useState({name:'Neues Landschaftsprojekt',client:'',budget:30000,climate:'Oberösterreich',soil:'normal/trocken',sunHours:6});
+  const [projectInfo,setProjectInfo]=useState({name:'Neues Landschaftsprojekt',client:'',budget:30000,climate:'Oberösterreich',location:'Wien',soil:'normal/trocken',sunHours:6,style:'mediterran',area:400,pool:true,children:false,care:'pflegeleicht'});
+  const [aiPrompt,setAiPrompt]=useState('Mediterraner Garten, 400 m², wenig Pflege, Pool vorhanden');
+  const [gardenChat,setGardenChat]=useState('Ich habe zwei Kinder und wenig Zeit.');
+  const [season,setSeason]=useState<'Frühling'|'Sommer'|'Herbst'|'Winter'>('Sommer');
+  const [growthYear,setGrowthYear]=useState<0|3|10|20>(0);
+  const [nightMode,setNightMode]=useState(false);
+  const [walkMode,setWalkMode]=useState(false);
+  const [optimization,setOptimization]=useState({cost:true,biodiversity:true,water:true,shade:true,care:true});
 
   const selectedObject=objects.find(o=>o.id===selected)||null;
 
@@ -301,11 +320,16 @@ export default function LandscapePlatform(){
   }
 
   function smartPlantSuggestions(){
+    const locationBoost=projectInfo.location.toLowerCase().includes('wien') ? 1 : 0;
     return plants
       .filter(p=>p.sun.toLowerCase().includes(plantFilter.sun.toLowerCase().split('/')[0]) || plantFilter.sun==='egal')
       .filter(p=>p.soil.toLowerCase().includes(plantFilter.soil.toLowerCase()) || plantFilter.soil==='egal')
       .filter(p=>p.waterNeed<=plantFilter.water)
-      .sort((a,b)=>b.biodiversity-a.biodiversity);
+      .sort((a,b)=>
+        (b.biodiversity + (b.maintenance==='niedrig'?12:0) + (b.waterNeed===1?8:0) + locationBoost)
+        -
+        (a.biodiversity + (a.maintenance==='niedrig'?12:0) + (a.waterNeed===1?8:0) + locationBoost)
+      );
   }
 
   function autoPlantBed(){
@@ -335,6 +359,77 @@ export default function LandscapePlatform(){
     });
     setObjects(v=>[...v,...newObjs]);
     setStatus('Automatische Pflanzplanung erstellt: Arten, Stückzahlen und Wachstumssimulation als Attribute.');
+  }
+
+
+  function generateAIDesign(){
+    const lower=aiPrompt.toLowerCase();
+    const mediterran=lower.includes('mediterran');
+    const children=lower.includes('kinder') || projectInfo.children;
+    const lowCare=lower.includes('wenig pflege') || lower.includes('pflegeleicht') || projectInfo.care.includes('pflege');
+    const hasPool=lower.includes('pool') || projectInfo.pool;
+    const baseId=Date.now();
+
+    const newObjects:CadObject[]=[
+      {id:baseId+1,kind:'rect',layer:'Belag',name:'Sitzbereich / Terrasse',points:[],x:-3,y:1.5,width:4.5,height:2.8,radius:0,color:'#a8a29e',transparency:.12,lineType:'durchgezogen',hatch:'Naturstein',elevation:.05,attributes:{bimClass:'Hardscape',material:mediterran?'Naturstein hell':'Pflaster',costCode:'BEL-KI'}},
+      {id:baseId+2,kind:'polyline',layer:'Belag',name:'geschwungener Weg',points:[{x:-5,y:-2},{x:-2,y:-1},{x:1,y:-.5},{x:4,y:1.2}],x:0,y:0,width:0,height:0,radius:0,color:'#d6d3d1',transparency:.15,lineType:'Weg',hatch:'Kiesweg',elevation:.03,attributes:{bimClass:'Path',material:mediterran?'Kies hell':'Pflaster'}},
+      {id:baseId+3,kind:'rect',layer:'Pflanzen',name:'pflegeleichte Pflanzfläche',points:[],x:2,y:-2.2,width:6,height:2.4,radius:0,color:'#bbf7d0',transparency:.25,lineType:'Pflanzfläche',hatch:'Stauden/Gräser',elevation:0,attributes:{bimClass:'PlantingArea',maintenance:lowCare?'niedrig':'mittel'}},
+      {id:baseId+4,kind:'light',layer:'Beleuchtung',name:'Akzentlicht Sitzbereich',points:[],x:-4.6,y:.2,width:0,height:0,radius:.3,color:'#f59e0b',transparency:.1,lineType:'Symbol',hatch:'Licht',elevation:0,attributes:{lux:180,powerW:8,nightScene:true}},
+      {id:baseId+5,kind:'irrigation',layer:'Bewässerung',name:'automatische Tropfleitung',points:[{x:-1,y:-3},{x:2,y:-3},{x:5,y:-2.2}],x:0,y:0,width:0,height:0,radius:0,color:'#2563eb',transparency:0,lineType:'Rohr',hatch:'',elevation:0,attributes:{diameter:16,flow:2.2,pressure:2.1,auto:true}}
+    ];
+
+    if(hasPool){
+      newObjects.push({id:baseId+6,kind:'rect',layer:'Wasser',name:'Pool Bestand / Wasserfläche',points:[],x:3.5,y:2,width:3.5,height:2.2,radius:0,color:'#38bdf8',transparency:.18,lineType:'Pool',hatch:'Wasser',elevation:.02,attributes:{bimClass:'Pool',safety:children?'Kindersicherung empfohlen':'standard'}});
+    }
+    if(children){
+      newObjects.push({id:baseId+7,kind:'circle',layer:'Entwurf',name:'Spielbereich Rasen',points:[],x:-4,y:-2.2,width:0,height:0,radius:1.4,color:'#86efac',transparency:.2,lineType:'Spielbereich',hatch:'Rasen',elevation:0,attributes:{bimClass:'PlayArea',poisonousPlants:'vermeiden',shade:'mittel'}});
+    }
+
+    const suggestions=smartPlantSuggestions().slice(0, mediterran?4:5);
+    suggestions.forEach((p,idx)=>{
+      const count=idx===0?2:idx===1?8:idx===2?12:5;
+      for(let i=0;i<count;i++){
+        newObjects.push({id:baseId+100+idx*30+i,kind:'plant',layer:'Pflanzen',name:p.german,points:[],x:1+idx*1.2+(i%4)*.45,y:-3.1+Math.floor(i/4)*.45,width:p.width,height:p.height,radius:Math.max(.18,p.width/4),color:idx<2?'#16a34a':'#65a30d',transparency:.05,lineType:'Symbol',hatch:'Pflanze',elevation:0,attributes:{plantId:p.id,botanical:p.botanical,waterNeed:p.waterNeed,biodiversity:p.biodiversity,maintenance:p.maintenance,finalHeight:p.finalHeight,finalWidth:p.finalWidth,year3:p.height*1.25,year10:p.finalHeight*.75,year20:p.finalHeight}} as CadObject);
+      }
+    });
+
+    setObjects(v=>[...v,...newObjects]);
+    setCostItems(v=>[
+      ...v,
+      {id:baseId+800,title:'KI-Design: Beläge und Sitzbereich',category:'Belag',quantity:13,unit:'m²',unitPrice:115,laborHours:9,machineHours:2},
+      {id:baseId+801,title:'KI-Design: Pflanzflächen und Pflanzen',category:'Pflanzen',quantity:suggestions.length?35:15,unit:'Stk',unitPrice:18,laborHours:10,machineHours:0},
+      {id:baseId+802,title:'KI-Design: Bewässerung automatisch',category:'Bewässerung',quantity:1,unit:'Psch',unitPrice:950,laborHours:7,machineHours:1}
+    ]);
+    setIrrigation(v=>[...v,{id:baseId+900,name:'KI-Zone pflegeleicht',plantType:'Stauden/Gräser',area:42,emitters:84,flowPerEmitter:2,pipeLength:65,pressureBar:2.2}]);
+    setStatus('KI-Design erzeugt: Layout, Pflanzen, Weg, Licht, Bewässerung und Kostenpositionen.');
+  }
+
+  function applyGardenChat(){
+    const text=gardenChat.toLowerCase();
+    if(text.includes('kinder')){
+      setProjectInfo({...projectInfo,children:true,care:'pflegeleicht'});
+      setOptimization({...optimization,shade:true,care:true});
+      setStatus('Garten-Chat: Kinder erkannt. Spielbereich, ungiftige Pflanzen und Schatten werden priorisiert.');
+    } else if(text.includes('wenig zeit') || text.includes('pflege')){
+      setProjectInfo({...projectInfo,care:'pflegeleicht'});
+      setPlantFilter({...plantFilter,water:2,goal:'pflegeleicht trockenheitsresistent'});
+      setStatus('Garten-Chat: Pflegeaufwand wird reduziert, trockenheitsresistente Pflanzen bevorzugt.');
+    } else {
+      setStatus('Garten-Chat ausgewertet. Regeln können erweitert werden.');
+    }
+  }
+
+  function advancedCostTotal(){
+    const plantObjects=objects.filter(o=>o.kind==='plant'||o.attributes.plantId);
+    const plantCosts=plantObjects.reduce((sum,o)=>{
+      const p=plants.find(p=>p.id===Number(o.attributes.plantId));
+      return sum+(p?.price??18);
+    },0);
+    const earthworks=objects.filter(o=>['terrainMound','terrainDepression','terrainSlope','terrainSmooth'].includes(o.kind)).reduce((sum,o)=>sum+Number(o.attributes.earthVolume??0)*Number(o.attributes.costPerM3??45),0);
+    const irrigationCost=irrigation.reduce((sum,z)=>sum+z.pipeLength*1.9+z.emitters*1.1+180,0);
+    const paving=objects.filter(o=>o.layer==='Belag'||o.hatch.toLowerCase().includes('pflaster')||o.hatch.toLowerCase().includes('naturstein')).reduce((sum,o)=>sum+objectArea(o)*95,0);
+    const labor=costItems.reduce((sum,i)=>sum+i.laborHours*58,0);
+    return {plantCosts,earthworks,irrigationCost,paving,labor,total:plantCosts+earthworks+irrigationCost+paving+labor+costs.machine+costs.material};
   }
 
   function terrainStats(){
@@ -398,7 +493,7 @@ export default function LandscapePlatform(){
     setStatus('Kostenpositionen aus Zeichnung erzeugt.');
   }
 
-  function exportProject(){download('al-green-design-v011-landscape.algreen',JSON.stringify({projectInfo,objects,plants,materials,costItems,irrigation,drainage,tasks},null,2),'application/json')}
+  function exportProject(){download('al-green-design-v011-landscape.algreen',JSON.stringify({version:'0.12.0',projectInfo,objects,plants,materials,costItems,irrigation,drainage,tasks,aiPrompt,gardenChat,season,growthYear,optimization},null,2),'application/json')}
   function exportLV(){download('leistungsverzeichnis-v011.csv',csv([['Pos','Kategorie','Leistung','Menge','Einheit','EP','Material','Lohn','Maschine','Gesamt'],...costItems.map((i,idx)=>[idx+1,i.category,i.title,i.quantity,i.unit,i.unitPrice,(i.quantity*i.unitPrice).toFixed(2),(i.laborHours*58).toFixed(2),(i.machineHours*72).toFixed(2),(i.quantity*i.unitPrice+i.laborHours*58+i.machineHours*72).toFixed(2)])]),'text/csv;charset=utf-8')}
   function exportPlants(){download('pflanzenliste-v011.csv',csv([['Deutsch','Botanisch','Typ','Sonne','Boden','Wasserbedarf','Bienen','Vögel','CO2','Biodiversität','Preis'],...plants.map(p=>[p.german,p.botanical,p.type,p.sun,p.soil,p.waterNeed,p.bee?'ja':'nein',p.bird?'ja':'nein',p.co2,p.biodiversity,p.price])]),'text/csv;charset=utf-8')}
   function exportGeoJson(){
@@ -407,6 +502,7 @@ export default function LandscapePlatform(){
   }
 
   const terrain=terrainStats();
+  const proCost=advancedCostTotal();
 
   return (
     <section className="platform">
@@ -414,7 +510,7 @@ export default function LandscapePlatform(){
         <h2>Module</h2>
         <div className="tabs">
           {[
-            ['cad','CAD'],['gis','GIS'],['bim','BIM'],['plants','Pflanzen'],['terrain','Gelände'],['water','Bewässerung'],['drainage','Entwässerung'],['costs','Kosten/LV'],['analysis','Analyse'],['project','Projekt'],['exports','Export']
+            ['cad','CAD'],['gis','GIS'],['bim','BIM'],['plants','Pflanzen'],['ai','KI-Design'],['terrain','Gelände'],['water','Bewässerung'],['drainage','Regenwasser'],['lighting','Licht'],['costs','Kosten/LV'],['analysis','Analyse'],['growth','Wachstum'],['chat','Garten-Chat'],['saas','SaaS'],['roadmap','Technik'],['project','Projekt'],['exports','Export']
           ].map(([id,label])=><button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id as Tab)}>{label}</button>)}
         </div>
 
@@ -461,8 +557,22 @@ export default function LandscapePlatform(){
           </div>
           <button className="btn primary" style={{marginTop:8}} onClick={autoPlantBed}>Automatisch Pflanzbeet erzeugen</button>
           <div className="list" style={{marginTop:8}}>
-            {smartPlantSuggestions().map(p=><div className="item" key={p.id}><strong>{p.german}</strong><span>{p.botanical} · {p.sun} · {p.soil} · Biodiversität {p.biodiversity}</span></div>)}
+            {smartPlantSuggestions().map(p=><div className="item" key={p.id}><strong>{p.german}</strong><span>{p.botanical} · Zone {p.hardinessZone} · {p.sun} · {p.soil} · Wasser {p.waterNeed}/5 · Endgröße {p.finalHeight}×{p.finalWidth} m · Blüte {p.bloomTime} {p.flowerColor} · CO₂ {p.co2} · Bio {p.biodiversity}</span></div>)}
           </div>
+        </div>}
+
+        {tab==='ai'&&<div>
+          <h2>KI-Designgenerator</h2>
+          <div className="form">
+            <label>Standort<input value={projectInfo.location} onChange={e=>setProjectInfo({...projectInfo,location:e.target.value})}/></label>
+            <label>Budget €<input type="number" value={projectInfo.budget} onChange={e=>setProjectInfo({...projectInfo,budget:Number(e.target.value)})}/></label>
+            <label>Fläche m²<input type="number" value={projectInfo.area} onChange={e=>setProjectInfo({...projectInfo,area:Number(e.target.value)})}/></label>
+            <label>Stil<input value={projectInfo.style} onChange={e=>setProjectInfo({...projectInfo,style:e.target.value})}/></label>
+          </div>
+          <label className="small">Prompt</label>
+          <textarea style={{width:'100%',marginTop:6,border:'1px solid #dbe4ee',borderRadius:10,padding:8}} value={aiPrompt} onChange={e=>setAiPrompt(e.target.value)} />
+          <button className="btn primary" style={{marginTop:8}} onClick={generateAIDesign}>KI-Design erzeugen</button>
+          <div className="hint">Erzeugt Layout, Pflanzen, Wege, Sitzbereiche, Beleuchtung, Bewässerung und Kostenpositionen regelbasiert.</div>
         </div>}
 
         {tab==='terrain'&&<div>
@@ -478,14 +588,61 @@ export default function LandscapePlatform(){
           <div className="hint">Über CAD-Werkzeuge kannst du Erhebung, Mulde, Glättung und Böschung einzeichnen. Rechts beim Objekt Höhe, Tiefe, Radius und Erdmasse ändern.</div>
         </div>}
 
+        {tab==='lighting'&&<div>
+          <h2>Lichtplanung</h2>
+          <div className="form">
+            <label>Modus<select value={nightMode?'Nacht':'Tag'} onChange={e=>setNightMode(e.target.value==='Nacht')}><option>Tag</option><option>Nacht</option></select></label>
+            <label>Lichtobjekt<button className="btn" onClick={()=>setTool('light')}>Leuchte setzen</button></label>
+          </div>
+          <div className="hint">Lux-Schätzung je Leuchte über Attribute. Nachtansicht in 3D ist als Option vorbereitet.</div>
+        </div>}
+
+        {tab==='growth'&&<div>
+          <h2>Wachstumsprognose</h2>
+          <div className="grid2">
+            {[0,3,10,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y as 0|3|10|20)}>{y===0?'heute':`${y} Jahre`}</button>)}
+          </div>
+          <div className="hint">Pflanzenattribute enthalten Endhöhe/Endbreite und Jahresprognose. Überfüllung nach 10/20 Jahren kann damit beurteilt werden.</div>
+        </div>}
+
+        {tab==='chat'&&<div>
+          <h2>Garten-Chat</h2>
+          <textarea style={{width:'100%',border:'1px solid #dbe4ee',borderRadius:10,padding:8}} value={gardenChat} onChange={e=>setGardenChat(e.target.value)} />
+          <button className="btn primary" style={{marginTop:8}} onClick={applyGardenChat}>Chat auswerten</button>
+          <div className="form" style={{marginTop:8}}>
+            <label><input type="checkbox" checked={optimization.cost} onChange={e=>setOptimization({...optimization,cost:e.target.checked})}/> minimale Kosten</label>
+            <label><input type="checkbox" checked={optimization.biodiversity} onChange={e=>setOptimization({...optimization,biodiversity:e.target.checked})}/> Biodiversität</label>
+            <label><input type="checkbox" checked={optimization.water} onChange={e=>setOptimization({...optimization,water:e.target.checked})}/> Wasser sparen</label>
+            <label><input type="checkbox" checked={optimization.shade} onChange={e=>setOptimization({...optimization,shade:e.target.checked})}/> Beschattung</label>
+          </div>
+        </div>}
+
+        {tab==='saas'&&<div>
+          <h2>SaaS-Modell</h2>
+          <div className="list">
+            <div className="item"><strong>Free</strong><span>2D-Gartenplanung, einfache Pflanzbibliothek</span></div>
+            <div className="item"><strong>Pro</strong><span>KI-Design, 3D, Kostenberechnung, Export</span></div>
+            <div className="item"><strong>Enterprise</strong><span>CAD, BIM, GIS, Teamarbeit, Ausschreibungen</span></div>
+          </div>
+        </div>}
+
+        {tab==='roadmap'&&<div>
+          <h2>Technik / Must Have</h2>
+          <div className="list">
+            {['React + TypeScript','Three.js','PostgreSQL + PostGIS','OpenStreetMap Integration','AI Design Agent','Plant Database API','DXF Import/Export','IFC Support','SaaS Backend + Benutzer/Rollen'].map(x=><div className="item" key={x}><strong>{x}</strong></div>)}
+          </div>
+        </div>}
+
         {tab==='costs'&&<div>
           <h2>Kosten / LV</h2>
           <button className="btn primary" onClick={addCostFromObjects}>Mengen aus Zeichnung übernehmen</button>
           <div className="kpis" style={{marginTop:8}}>
-            <div className="kpi"><small>Material</small><strong>{costs.material.toFixed(0)} €</strong></div>
-            <div className="kpi"><small>Lohn</small><strong>{costs.labor.toFixed(0)} €</strong></div>
-            <div className="kpi"><small>Maschinen</small><strong>{costs.machine.toFixed(0)} €</strong></div>
-            <div className="kpi"><small>Gesamt</small><strong>{costs.total.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Pflanzen</small><strong>{proCost.plantCosts.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Erdarbeiten</small><strong>{proCost.earthworks.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Bewässerung</small><strong>{proCost.irrigationCost.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Pflaster/Belag</small><strong>{proCost.paving.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Arbeitsstunden</small><strong>{proCost.labor.toFixed(0)} €</strong></div>
+            <div className="kpi"><small>Projektkosten</small><strong>{proCost.total.toFixed(0)} €</strong></div>
           </div>
         </div>}
 
@@ -511,10 +668,12 @@ export default function LandscapePlatform(){
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.11.2 Gelände</span>
+          <span className="pill">V0.12 Pro</span>
           <span className="pill">Modul: {tab.toUpperCase()}</span>
           <span className="pill">Tool: {tool}</span>
           <span className="pill">Layer: {layer}</span>
+          <span className="pill">{season}</span>
+          <span className="pill">{growthYear===0?'heute':growthYear+' Jahre'}</span>
           <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D-Plan</button>
           <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D-Modell</button>
         </div>
@@ -530,6 +689,10 @@ export default function LandscapePlatform(){
             selected={selected}
             setSelected={setSelected}
             setStatus={setStatus}
+            season={season}
+            growthYear={growthYear}
+            nightMode={nightMode}
+            walkMode={walkMode}
           />
         )}
         <div className="status">
@@ -586,7 +749,13 @@ export default function LandscapePlatform(){
         {tab==='gis'&&<GisPanel objects={objects}/>}
         {tab==='cad'&&<LayerPanel objects={objects}/>}
         {tab==='terrain'&&<TerrainPanel objects={objects}/>}
-        {tab==='analysis'&&<AnalysisPanel eco={eco}/>}
+        {tab==='analysis'&&<AnalysisPanel eco={eco}/>} 
+        {tab==='ai'&&<AiPanel proCost={proCost} projectInfo={projectInfo}/>} 
+        {tab==='growth'&&<GrowthPanel objects={objects} plants={plants} growthYear={growthYear}/>} 
+        {tab==='chat'&&<ChatPanel optimization={optimization}/>} 
+        {tab==='lighting'&&<LightingPanel objects={objects} nightMode={nightMode}/>} 
+        {tab==='saas'&&<SaasPanel/>} 
+        {tab==='roadmap'&&<RoadmapPanel/>}}
         {tab==='exports'&&<ExportInfo/>}
       </aside>
     </section>
@@ -598,12 +767,20 @@ function ThreeLandscapeView({
   objects,
   selected,
   setSelected,
-  setStatus
+  setStatus,
+  season,
+  growthYear,
+  nightMode,
+  walkMode
 }:{
   objects:CadObject[];
   selected:number|null;
   setSelected:(id:number|null)=>void;
   setStatus:(s:string)=>void;
+  season:string;
+  growthYear:number;
+  nightMode:boolean;
+  walkMode:boolean;
 }){
   const mountRef=useRef<HTMLDivElement|null>(null);
   const contentRef=useRef<THREE.Group|null>(null);
@@ -616,10 +793,10 @@ function ThreeLandscapeView({
     if(!mount)return;
 
     const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0xdbeafe);
+    scene.background=new THREE.Color(nightMode?0x0f172a:0xdbeafe);
 
     const camera=new THREE.PerspectiveCamera(55,mount.clientWidth/mount.clientHeight,0.1,1000);
-    camera.position.set(14,13,18);
+    camera.position.set(walkMode?6:14,walkMode?2.1:13,walkMode?9:18);
     cameraRef.current=camera;
 
     const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -632,8 +809,8 @@ function ThreeLandscapeView({
     controls.enableDamping=true;
     controls.target.set(0,0,0);
 
-    scene.add(new THREE.AmbientLight(0xffffff,.82));
-    const sun=new THREE.DirectionalLight(0xffffff,1.25);
+    scene.add(new THREE.AmbientLight(nightMode?0x9db4ff:0xffffff,nightMode?.35:.82));
+    const sun=new THREE.DirectionalLight(nightMode?0x94a3b8:0xffffff,nightMode?.35:1.25);
     sun.position.set(9,16,10);
     sun.castShadow=true;
     scene.add(sun);
@@ -705,7 +882,7 @@ function ThreeLandscapeView({
     while(content.children.length)content.remove(content.children[0]);
 
     objects.forEach((object)=>{
-      const mesh=create3DLandscapeObject(object,object.id===selected);
+      const mesh=create3DLandscapeObject(object,object.id===selected,season,growthYear);
       content.add(mesh);
     });
   },[objects,selected]);
@@ -744,7 +921,7 @@ function makeMaterial(color:string,opacity:number){
   });
 }
 
-function create3DLandscapeObject(object:CadObject, selected:boolean){
+function create3DLandscapeObject(object:CadObject, selected:boolean, season:string='Sommer', growthYear:number=0){
   const group=new THREE.Group();
   group.userData={id:object.id,name:object.name};
   const opacity=Math.max(.18,Math.min(1,1-(object.transparency||0)));
@@ -815,12 +992,17 @@ function create3DLandscapeObject(object:CadObject, selected:boolean){
   }
 
   if(object.kind==='plant'){
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,Math.max(.5,object.height*.35),12),makeMaterial('#7c2d12',1));
-    trunk.position.set(object.x,Math.max(.5,object.height*.35)/2,object.y);
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.25,object.radius),24,16),makeMaterial('#16a34a',.92));
-    crown.position.set(object.x,Math.max(.8,object.height*.62),object.y);
-    const crown2=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.18,object.radius*.65),18,12),makeMaterial('#22c55e',.9));
-    crown2.position.set(object.x+object.radius*.45,Math.max(.9,object.height*.72),object.y-object.radius*.25);
+    const finalHeight=Number(object.attributes.finalHeight??object.attributes.year20??object.height);
+    const growthFactor=growthYear===0?1:growthYear===3?1.25:growthYear===10?Math.min(2,finalHeight/Math.max(object.height,.1)*.75):Math.min(3,finalHeight/Math.max(object.height,.1));
+    const h=Math.max(.35,object.height*growthFactor);
+    const r=Math.max(.18,object.radius*(growthYear===0?1:growthYear===3?1.2:growthYear===10?1.65:2.1));
+    const leafColor=season==='Herbst'?'#d97706':season==='Winter'?'#94a3b8':season==='Frühling'?'#22c55e':'#16a34a';
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.14,Math.max(.5,h*.35),12),makeMaterial('#7c2d12',1));
+    trunk.position.set(object.x,Math.max(.5,h*.35)/2,object.y);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(r,24,16),makeMaterial(leafColor,season==='Winter'?.45:.92));
+    crown.position.set(object.x,Math.max(.8,h*.62),object.y);
+    const crown2=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.18,r*.65),18,12),makeMaterial(season==='Herbst'?'#f59e0b':'#22c55e',season==='Winter'?.25:.9));
+    crown2.position.set(object.x+r*.45,Math.max(.9,h*.72),object.y-r*.25);
     group.add(trunk,crown,crown2);
   }
 
@@ -848,7 +1030,7 @@ function create3DLandscapeObject(object:CadObject, selected:boolean){
     for(let i=0;i<pts.length-1;i++){
       const a=pts[i],b=pts[i+1];
       const length=distance(a,b);
-      const thickness=object.kind==='irrigation'||object.kind==='drainage'?.08:.045;
+      const thickness=(object.kind==='irrigation'||object.kind==='drainage') ? .08 : .045;
       const tube=new THREE.Mesh(new THREE.CylinderGeometry(thickness,thickness,length,12),mat);
       tube.position.set((a.x+b.x)/2,.08,(a.y+b.y)/2);
       tube.rotation.z=Math.PI/2;
@@ -940,10 +1122,10 @@ function DrainagePanel({drainage,setDrainage}:any){
   return <div><h2>Entwässerung</h2><div className="kpis"><div className="kpi"><small>Regenereignis</small><strong>{volume.toFixed(2)} m³</strong></div><div className="kpi"><small>Speicher</small><strong>{storage.toFixed(2)} m³</strong></div></div><div className="list" style={{marginTop:8}}>{drainage.map((d:any)=><div className="item" key={d.id}><strong>{d.name}</strong><span>{d.type} · {d.catchmentArea} m² · {d.rainfallMm} mm</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setDrainage((v:any[])=>[...v,{id:Date.now(),name:'Neue Mulde/Rigole',type:'Mulde',catchmentArea:25,rainfallMm:35,infiltrationRate:10,storageVolume:1}])}>System hinzufügen</button></div>
 }
 function ProjectPanel({projectInfo,setProjectInfo,tasks,setTasks}:any){
-  return <div><h2>Projektmanagement</h2><div className="form"><label>Projekt<input value={projectInfo.name} onChange={e=>setProjectInfo({...projectInfo,name:e.target.value})}/></label><label>Budget €<input type="number" value={projectInfo.budget} onChange={e=>setProjectInfo({...projectInfo,budget:Number(e.target.value)})}/></label><label>Klima<input value={projectInfo.climate} onChange={e=>setProjectInfo({...projectInfo,climate:e.target.value})}/></label><label>Sonnenstunden<input type="number" value={projectInfo.sunHours} onChange={e=>setProjectInfo({...projectInfo,sunHours:Number(e.target.value)})}/></label></div><h3>Aufgaben</h3><div className="list">{tasks.map((t:any)=><div className="item" key={t.id}><strong>{t.title}</strong><span>{t.status} · {t.owner} · {t.note}</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setTasks((v:any[])=>[...v,{id:Date.now(),title:'Neue Aufgabe',status:'offen',owner:'',due:'',note:''}])}>Aufgabe hinzufügen</button></div>
+  return <div><h2>Projektmanagement</h2><div className="form"><label>Projekt<input value={projectInfo.name} onChange={e=>setProjectInfo({...projectInfo,name:e.target.value})}/></label><label>Standort<input value={projectInfo.location} onChange={e=>setProjectInfo({...projectInfo,location:e.target.value})}/></label><label>Budget €<input type="number" value={projectInfo.budget} onChange={e=>setProjectInfo({...projectInfo,budget:Number(e.target.value)})}/></label><label>Fläche m²<input type="number" value={projectInfo.area} onChange={e=>setProjectInfo({...projectInfo,area:Number(e.target.value)})}/></label><label>Klima<input value={projectInfo.climate} onChange={e=>setProjectInfo({...projectInfo,climate:e.target.value})}/></label><label>Sonnenstunden<input type="number" value={projectInfo.sunHours} onChange={e=>setProjectInfo({...projectInfo,sunHours:Number(e.target.value)})}/></label></div><h3>Aufgaben</h3><div className="list">{tasks.map((t:any)=><div className="item" key={t.id}><strong>{t.title}</strong><span>{t.status} · {t.owner} · {t.note}</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setTasks((v:any[])=>[...v,{id:Date.now(),title:'Neue Aufgabe',status:'offen',owner:'',due:'',note:''}])}>Aufgabe hinzufügen</button></div>
 }
 function PlantDbPanel({plants,setPlants}:any){
-  return <div><h2>Pflanzendatenbank</h2><div className="list">{plants.map((p:any)=><div className="item" key={p.id}><strong>{p.german}</strong><span>{p.botanical} · {p.type} · {p.price} € · Bio {p.biodiversity}</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setPlants((v:any[])=>[...v,{id:Date.now(),german:'Neue Pflanze',botanical:'Botanischer Name',family:'',type:'Staude',height:1,width:1,sun:'Sonne',soil:'normal',waterNeed:2,hardy:'winterhart',bee:true,bird:false,co2:3,biodiversity:50,price:5,supplier:''}])}>Pflanze hinzufügen</button></div>
+  return <div><h2>Pflanzendatenbank</h2><div className="list">{plants.map((p:any)=><div className="item" key={p.id}><strong>{p.german}</strong><span>{p.botanical} · Zone {p.hardinessZone} · {p.type} · {p.bloomTime} · {p.flowerColor} · Pflege {p.maintenance} · {p.price} € · Bio {p.biodiversity}</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setPlants((v:any[])=>[...v,{id:Date.now(),german:'Neue Pflanze',botanical:'Botanischer Name',family:'',type:'Staude',height:1,width:1,finalHeight:1.5,finalWidth:1.2,sun:'Sonne',soil:'normal',waterNeed:2,hardy:'winterhart',hardinessZone:'6-8',growthRate:'mittel',bloomTime:'Juni',flowerColor:'weiß',pruningTolerance:'gut',maintenance:'niedrig',insectFriendly:true,bee:true,bird:false,co2:3,biodiversity:50,price:5,supplier:''}])}>Pflanze hinzufügen</button></div>
 }
 function CostPanel({costItems,setCostItems}:any){
   return <div><h2>LV-Positionen</h2><div className="list">{costItems.map((i:any)=><div className="item" key={i.id}><strong>{i.title}</strong><span>{i.quantity} {i.unit} × {i.unitPrice} € + Lohn/Maschine</span></div>)}</div><button className="btn primary" style={{marginTop:8}} onClick={()=>setCostItems((v:any[])=>[...v,{id:Date.now(),title:'Neue LV-Position',category:'Allgemein',quantity:1,unit:'Stk',unitPrice:100,laborHours:1,machineHours:0}])}>Position hinzufügen</button></div>
@@ -963,4 +1145,27 @@ function TerrainPanel({objects}:any){
   </div>
 }
 function AnalysisPanel({eco}:any){return <div><h2>Premium-Analyse</h2><p className="small">Digital Twin, KI-Generatives Design, 20 Varianten, Wasser-/Pflege-/Kostenoptimierung sind als nächste Module vorbereitet.</p><div className="hint">Aktueller Score: {eco.score}/100 · CO₂: {eco.co2} kg/Jahr · Regenrückhalt: {eco.rainRetention}/100</div></div>}
+
+function AiPanel({proCost,projectInfo}:any){
+  return <div><h2>KI-Ergebnis</h2><div className="kpis"><div className="kpi"><small>Budget</small><strong>{projectInfo.budget.toFixed(0)} €</strong></div><div className="kpi"><small>Schätzung</small><strong>{proCost.total.toFixed(0)} €</strong></div><div className="kpi"><small>Budgetstatus</small><strong>{proCost.total<=projectInfo.budget?'OK':'zu hoch'}</strong></div><div className="kpi"><small>Stil</small><strong>{projectInfo.style}</strong></div></div><div className="hint">Nächster Schritt: echter AI Design Agent mit Varianten, Ranking und Prompt-Historie.</div></div>
+}
+function GrowthPanel({objects,plants,growthYear}:any){
+  const plantObjects=objects.filter((o:any)=>o.kind==='plant'||o.attributes.plantId);
+  return <div><h2>Wachstum {growthYear===0?'heute':growthYear+' Jahre'}</h2><div className="list">{plantObjects.slice(0,10).map((o:any)=>{const p=plants.find((p:any)=>p.id===Number(o.attributes.plantId));const h=growthYear===0?(p?.height??o.height):growthYear===3?(p?.height??o.height)*1.25:growthYear===10?(p?.finalHeight??o.height)*.75:(p?.finalHeight??o.height);return <div className="item" key={o.id}><strong>{o.name}</strong><span>Prognosehöhe {Number(h).toFixed(1)} m · Endbreite {p?.finalWidth??'-'} m</span></div>})}</div></div>
+}
+function ChatPanel({optimization}:any){
+  return <div><h2>Optimierungsziele</h2><div className="list">{Object.entries(optimization).map(([k,v])=><div className="item" key={k}><strong>{k}</strong><span>{v?'aktiv':'aus'}</span></div>)}</div></div>
+}
+function LightingPanel({objects,nightMode}:any){
+  const lights=objects.filter((o:any)=>o.kind==='light');
+  const lux=lights.reduce((s:any,o:any)=>s+Number(o.attributes.lux??120),0);
+  return <div><h2>Licht / Nacht</h2><div className="kpis"><div className="kpi"><small>Leuchten</small><strong>{lights.length}</strong></div><div className="kpi"><small>Lux grob</small><strong>{lux}</strong></div><div className="kpi"><small>Nachtmodus</small><strong>{nightMode?'AN':'AUS'}</strong></div></div></div>
+}
+function SaasPanel(){
+  return <div><h2>Produktpakete</h2><div className="list"><div className="item"><strong>Free</strong><span>2D, einfache Pflanzen, einfache Exporte</span></div><div className="item"><strong>Pro</strong><span>KI-Design, 3D, Kosten, Export, Wachstum</span></div><div className="item"><strong>Enterprise</strong><span>CAD/BIM/GIS, Teams, API, AVA, IFC/DXF</span></div></div></div>
+}
+function RoadmapPanel(){
+  return <div><h2>Technische Architektur</h2><div className="list">{['React','TypeScript','Three.js','PostgreSQL + PostGIS','OpenStreetMap','AI Design Agent','Plant Database API','DXF Import/Export','IFC Support'].map(x=><div className="item" key={x}><strong>{x}</strong></div>)}</div></div>
+}
+
 function ExportInfo(){return <div><h2>Schnittstellen</h2><p className="small">Aktiv: JSON, CSV, GeoJSON, .algreen. Nächste technische Module: DXF/DWG, IFC, LandXML, SHP, GAEB, OBJ/FBX/STL, API.</p></div>}

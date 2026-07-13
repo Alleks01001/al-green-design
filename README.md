@@ -1,45 +1,65 @@
-# AL Green Design – Landscape Architecture Platform V0.11.2 Gelände
+# AL Green Design – Landscape Architecture Platform V0.12 Pro
 
-Diese Version erweitert das Garden Studio zu einer Landschaftsarchitektur-Plattform.
+Diese Version erweitert die Landschaftsarchitektur-Plattform um Pro-/SaaS-Funktionen.
 
-## Neue Module in V0.11
+## Neu in V0.12
 
-- CAD-Grundlagen mit Layern, Formen, Linien, Flächen und Symbolen
-- GIS-Modul mit GeoJSON-Import
-- BIM-Daten je Objekt
-- Pflanzendatenbank
-- Intelligente Pflanzplanung mit Standortparametern
-- Geländemodell mit Höhenpunkten, Gefälle und grober Abtrag/Auftrag-Berechnung
-- Bewässerungsplanung mit Zonen, Wasserbedarf und Rohrlängen
-- Entwässerung / Regenwasserrückhaltung
-- Kostenkalkulation und LV-Export
-- Materialbibliothek
-- Öko-Score: Biodiversität, CO₂, Versiegelung, Regenrückhalt, Hitzeschutz
-- Projektmanagement: Aufgaben, Kommentare, Versionen
-- Export JSON, CSV, LV, GeoJSON
+### Pflanzendatenbank Pro
+- Winterhärtezone
+- Wasserbedarf
+- Lichtbedarf
+- Bodenansprüche
+- Wuchsgeschwindigkeit
+- Endhöhe
+- Endbreite
+- Blütezeit
+- Blütenfarbe
+- Schnittverträglichkeit
+- Insektenfreundlichkeit
+- CO₂-Bindung
+- Biodiversitätswert
+- Pflegeaufwand
+- Preis
+
+### Automatische Pflanzvorschläge
+User gibt Standort, Licht, Pflegeziel, Boden, Budget ein.
+Das System erzeugt automatisch Pflanzvorschläge, Stückzahlen und Kosten.
+
+### KI-Designgenerator
+Beispiel: „Mediterraner Garten, 400 m², wenig Pflege, Pool vorhanden“
+Die Plattform erzeugt Layout, Pflanzen, Wege, Sitzbereiche, Beleuchtung und Kosten.
+
+### 3D-Gartenansicht
+- Orbit-Kamera
+- Walk-Modus als Bedienoption
+- Schattenoption
+- Nachtansicht
+- Jahreszeiten
+- Wachstumsprognose heute / 3 / 10 / 20 Jahre
+
+### Kostenrechner
+- Pflanzenkosten
+- Erdarbeiten
+- Bewässerung
+- Pflasterflächen
+- Arbeitsstunden
+- Maschinenstunden
+- Gesamtkosten
+
+### Profi-Module
+- DGM / TIN als Modulbasis
+- Höhenlinien
+- Gefälleanalyse
+- Volumenberechnung
+- Bewässerung mit Druckverlust
+- Lichtplanung mit Lux-Schätzung
+- Regenwasser / Zisterne / Retention
+- Garten-Chat
+- Optimierungsziele
+- SaaS-Modell Free / Pro / Enterprise
+- Technische Roadmap: React, TypeScript, Three.js, PostgreSQL/PostGIS, OSM, AI Agent, DXF, IFC
 
 ## Hinweis
 
-V0.11 ist die Plattform-Basis. Professionelle Spezialformate wie DWG, IFC, LAS/LAZ, LandXML,
-GAEB und echte Punktwolken benötigen eigene Import-/Exportmodule und können in weiteren Versionen
-schrittweise ergänzt werden.
-
-
-## Fix V0.11.1
-
-- 3D-Ansicht eingebaut
-- Umschaltung 2D / 3D im Arbeitsbereich
-- CAD-, GIS-, Pflanzen-, Gelände-, Bewässerungs- und Lichtobjekte werden als 3D-Modell angezeigt
-- 3D-Objekte sind anklickbar und zeigen den Namen/Status
-
-
-## Neu V0.11.2 – Geländebearbeitung
-
-- Runde Erhebungen / Hügel einzeichnen
-- Mulden / Senken einzeichnen
-- Sanfte Geländekuppen
-- Böschungen / Rampen
-- Glättungsbereiche
-- Grobe Abtrag-/Auftrag-Berechnung je Geländeform
-- 3D-Darstellung der Geländeformen
-- Attribute für Höhe, Tiefe, Radius, Böschung, Material und Erdmasse
+V0.12 ist eine funktionsfähige Prototyp-Plattform. Vollständige professionelle Datenbanken, echte KI-Agenten,
+PostGIS, IFC, DXF-Import und SaaS-Backend sind als Roadmap vorbereitet und können schrittweise ergänzt werden.
