@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v0111-3d",
-  "version": "0.11.1",
+  "name": "al-green-design-landscape-architecture-v0112-terrain",
+  "version": "0.11.2",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,4 +1,4 @@
-# AL Green Design – Landscape Architecture Platform V0.11.1 3D
+# AL Green Design – Landscape Architecture Platform V0.11.2 Gelände
 
 Diese Version erweitert das Garden Studio zu einer Landschaftsarchitektur-Plattform.
 
@@ -31,3 +31,15 @@ schrittweise ergänzt werden.
 - Umschaltung 2D / 3D im Arbeitsbereich
 - CAD-, GIS-, Pflanzen-, Gelände-, Bewässerungs- und Lichtobjekte werden als 3D-Modell angezeigt
 - 3D-Objekte sind anklickbar und zeigen den Namen/Status
+
+
+## Neu V0.11.2 – Geländebearbeitung
+
+- Runde Erhebungen / Hügel einzeichnen
+- Mulden / Senken einzeichnen
+- Sanfte Geländekuppen
+- Böschungen / Rampen
+- Glättungsbereiche
+- Grobe Abtrag-/Auftrag-Berechnung je Geländeform
+- 3D-Darstellung der Geländeformen
+- Attribute für Höhe, Tiefe, Radius, Böschung, Material und Erdmasse

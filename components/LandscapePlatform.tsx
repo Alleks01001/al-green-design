@@ -5,12 +5,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 type Tab = 'cad'|'gis'|'bim'|'plants'|'terrain'|'water'|'drainage'|'costs'|'analysis'|'project'|'exports';
-type Tool = 'select'|'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'irrigation'|'drainage'|'light';
+type Tool = 'select'|'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'terrainMound'|'terrainDepression'|'terrainSmooth'|'terrainSlope'|'irrigation'|'drainage'|'light';
 type Point = {x:number;y:number};
 
 type CadObject = {
   id:number;
-  kind:'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'irrigation'|'drainage'|'light';
+  kind:'line'|'polyline'|'rect'|'circle'|'plant'|'terrainPoint'|'terrainMound'|'terrainDepression'|'terrainSmooth'|'terrainSlope'|'irrigation'|'drainage'|'light';
   layer:string;
   name:string;
   points:Point[];
@@ -121,7 +121,7 @@ function distance(a:Point,b:Point){return Math.hypot(a.x-b.x,a.y-b.y)}
 function polygonArea(points:Point[]){if(points.length<3)return 0;let s=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length];s+=a.x*b.y-b.x*a.y}return Math.abs(s/2)}
 function download(name:string,content:string,type:string){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url)}
 function csv(rows:any[][]){return rows.map(r=>r.map(c=>`"${String(c??'').replaceAll('"','""')}"`).join(';')).join('\n')}
-function objectArea(o:CadObject){if(o.kind==='rect')return Math.abs(o.width*o.height);if(o.kind==='circle')return Math.PI*o.radius*o.radius;if(o.kind==='polyline')return polygonArea(o.points);return 0}
+function objectArea(o:CadObject){if(o.kind==='rect'||o.kind==='terrainSlope')return Math.abs(o.width*o.height);if(o.kind==='circle'||o.kind==='terrainMound'||o.kind==='terrainDepression'||o.kind==='terrainSmooth')return Math.PI*o.radius*o.radius;if(o.kind==='polyline')return polygonArea(o.points);return 0}
 function objectLength(o:CadObject){if(o.kind==='line'&&o.points.length>=2)return distance(o.points[0],o.points[1]);if(o.kind==='polyline')return o.points.slice(1).reduce((s,p,i)=>s+distance(o.points[i],p),0);return 0}
 
 export default function LandscapePlatform(){
@@ -131,7 +131,7 @@ export default function LandscapePlatform(){
   const [tool,setTool]=useState<Tool>('rect');
   const [layer,setLayer]=useState('Entwurf');
   const [selected,setSelected]=useState<number|null>(null);
-  const [status,setStatus]=useState('Bereit: V0.11 Landschaftsarchitektur-Plattform.');
+  const [status,setStatus]=useState('Bereit: V0.11.2 Landschaftsarchitektur-Plattform.');
   const [cam,setCam]=useState({x:-12,y:-8,width:28,height:18});
   const [objects,setObjects]=useState<CadObject[]>([
     {id:101,kind:'rect',layer:'Bestand',name:'Grundstück / Bearbeitungsfläche',points:[],x:0,y:0,width:12,height:8,radius:0,color:'#dcfce7',transparency:.35,lineType:'durchgezogen',hatch:'Rasen',elevation:0,attributes:{bimClass:'Site',phase:'Bestand'}},
@@ -219,6 +219,30 @@ export default function LandscapePlatform(){
     if(tool==='terrainPoint'){
       setObjects(v=>[...v,{id,kind:'terrainPoint',layer:'Gelände',name:'Höhenpunkt',points:[],x:p.x,y:p.y,width:0,height:0,radius:.15,color:'#7c3aed',transparency:0,lineType:'Punkt',hatch:'Höhe',elevation:1,attributes:{height:1,breakline:false}}]);
       setSelected(id);
+      return;
+    }
+    if(tool==='terrainMound'){
+      setObjects(v=>[...v,{id,kind:'terrainMound',layer:'Gelände',name:'Runde Erhebung / Hügel',points:[],x:p.x,y:p.y,width:0,height:0,radius:1.6,color:'#a3e635',transparency:.18,lineType:'Gelände',hatch:'Erhebung',elevation:0,attributes:{terrainType:'Auftrag',height:0.8,slope:'gleitend',earthVolume:3.2,costPerM3:42}}]);
+      setSelected(id);
+      setStatus('Runde Erhebung gesetzt. Höhe/Radius rechts bearbeiten.');
+      return;
+    }
+    if(tool==='terrainDepression'){
+      setObjects(v=>[...v,{id,kind:'terrainDepression',layer:'Gelände',name:'Mulde / Senke',points:[],x:p.x,y:p.y,width:0,height:0,radius:1.5,color:'#60a5fa',transparency:.28,lineType:'Gelände',hatch:'Senke',elevation:0,attributes:{terrainType:'Abtrag',height:-0.55,slope:'gleitend',earthVolume:2.4,costPerM3:48}}]);
+      setSelected(id);
+      setStatus('Mulde/Senke gesetzt. Tiefe/Radius rechts bearbeiten.');
+      return;
+    }
+    if(tool==='terrainSmooth'){
+      setObjects(v=>[...v,{id,kind:'terrainSmooth',layer:'Gelände',name:'Gelände glätten / Übergang',points:[],x:p.x,y:p.y,width:0,height:0,radius:2.0,color:'#bbf7d0',transparency:.36,lineType:'Gelände',hatch:'Glättung',elevation:0,attributes:{terrainType:'Glättung',height:0.25,slope:'sehr weich',earthVolume:1.1,costPerM3:35}}]);
+      setSelected(id);
+      setStatus('Glättungsbereich gesetzt.');
+      return;
+    }
+    if(tool==='terrainSlope'){
+      setObjects(v=>[...v,{id,kind:'terrainSlope',layer:'Gelände',name:'Böschung / Rampe',points:[],x:p.x,y:p.y,width:4,height:2,radius:0,color:'#d9a441',transparency:.22,lineType:'Gelände',hatch:'Böschung',elevation:0,attributes:{terrainType:'Böschung',startHeight:0,endHeight:0.9,slopePercent:22.5,earthVolume:3.6,costPerM3:46}}]);
+      setSelected(id);
+      setStatus('Böschung/Rampe gesetzt. Start-/Endhöhe rechts bearbeiten.');
       return;
     }
     if(tool==='irrigation'){
@@ -315,14 +339,21 @@ export default function LandscapePlatform(){
 
   function terrainStats(){
     const pts=objects.filter(o=>o.kind==='terrainPoint');
-    if(pts.length<2)return {min:0,max:0,slope:0,cut:0,fill:0};
-    const h=pts.map(p=>Number(p.attributes.height??p.elevation??0));
-    const min=Math.min(...h),max=Math.max(...h);
+    const shapes=objects.filter(o=>['terrainMound','terrainDepression','terrainSmooth','terrainSlope'].includes(o.kind));
+    const heights=[
+      ...pts.map(p=>Number(p.attributes.height??p.elevation??0)),
+      ...shapes.map(s=>Number(s.attributes.height??s.attributes.endHeight??0))
+    ];
+    if(!heights.length)return {min:0,max:0,slope:0,cut:0,fill:0,shapes:0,cost:0};
+    const min=Math.min(...heights),max=Math.max(...heights);
     const slope=((max-min)/Math.max(1,Math.sqrt(totals.area)))*100;
-    const target=h.reduce((a,b)=>a+b,0)/h.length;
-    const cut=h.filter(x=>x>target).reduce((s,x)=>s+(x-target)*4,0);
-    const fill=h.filter(x=>x<target).reduce((s,x)=>s+(target-x)*4,0);
-    return {min,max,slope,cut,fill};
+    const target=heights.reduce((a,b)=>a+b,0)/heights.length;
+    const cutPts=heights.filter(x=>x>target).reduce((s,x)=>s+(x-target)*4,0);
+    const fillPts=heights.filter(x=>x<target).reduce((s,x)=>s+(target-x)*4,0);
+    const cutShapes=shapes.filter(s=>s.kind==='terrainDepression').reduce((sum,s)=>sum+Number(s.attributes.earthVolume??objectArea(s)*Math.abs(Number(s.attributes.height??0))*0.45),0);
+    const fillShapes=shapes.filter(s=>s.kind!=='terrainDepression').reduce((sum,s)=>sum+Number(s.attributes.earthVolume??objectArea(s)*Math.abs(Number(s.attributes.height??s.attributes.endHeight??0))*0.45),0);
+    const cost=shapes.reduce((sum,s)=>sum+Number(s.attributes.earthVolume??0)*Number(s.attributes.costPerM3??45),0);
+    return {min,max,slope,cut:cutPts+cutShapes,fill:fillPts+fillShapes,shapes:shapes.length,cost};
   }
 
   function importGeoJson(file:File|null){
@@ -393,7 +424,7 @@ export default function LandscapePlatform(){
           <h2>CAD-Werkzeuge</h2>
           <div className="grid2">
             {[
-              ['select','Auswählen'],['line','Linie'],['polyline','Polyline'],['rect','Rechteck'],['circle','Kreis'],['plant','Pflanze'],['terrainPoint','Höhenpunkt'],['irrigation','Bewässerung'],['drainage','Drainage'],['light','Licht']
+              ['select','Auswählen'],['line','Linie'],['polyline','Polyline'],['rect','Rechteck'],['circle','Kreis'],['plant','Pflanze'],['terrainPoint','Höhenpunkt'],['terrainMound','Erhebung rund'],['terrainDepression','Mulde/Senke'],['terrainSmooth','Gelände glätten'],['terrainSlope','Böschung/Rampe'],['irrigation','Bewässerung'],['drainage','Drainage'],['light','Licht']
             ].map(([id,label])=><button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id as Tool)}>{label}</button>)}
           </div>
           <div className="form" style={{marginTop:8}}>
@@ -441,8 +472,10 @@ export default function LandscapePlatform(){
             <div className="kpi"><small>max. Höhe</small><strong>{terrain.max.toFixed(2)} m</strong></div>
             <div className="kpi"><small>Gefälle</small><strong>{terrain.slope.toFixed(1)} %</strong></div>
             <div className="kpi"><small>Abtrag/Auftrag</small><strong>{terrain.cut.toFixed(1)} / {terrain.fill.toFixed(1)} m³</strong></div>
+            <div className="kpi"><small>Geländeformen</small><strong>{terrain.shapes}</strong></div>
+            <div className="kpi"><small>Erdkosten grob</small><strong>{terrain.cost.toFixed(0)} €</strong></div>
           </div>
-          <div className="hint">Höhenpunkte setzen über CAD → Höhenpunkt. Rechts beim Objekt die Höhe ändern.</div>
+          <div className="hint">Über CAD-Werkzeuge kannst du Erhebung, Mulde, Glättung und Böschung einzeichnen. Rechts beim Objekt Höhe, Tiefe, Radius und Erdmasse ändern.</div>
         </div>}
 
         {tab==='costs'&&<div>
@@ -478,7 +511,7 @@ export default function LandscapePlatform(){
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.11.1 Landschaftsarchitektur</span>
+          <span className="pill">V0.11.2 Gelände</span>
           <span className="pill">Modul: {tab.toUpperCase()}</span>
           <span className="pill">Tool: {tool}</span>
           <span className="pill">Layer: {layer}</span>
@@ -529,7 +562,11 @@ export default function LandscapePlatform(){
             <label>Breite<input type="number" step=".1" value={selectedObject.width} onChange={e=>updateSelected({width:Number(e.target.value)})}/></label>
             <label>Höhe/Tiefe<input type="number" step=".1" value={selectedObject.height} onChange={e=>updateSelected({height:Number(e.target.value)})}/></label>
             <label>Radius<input type="number" step=".1" value={selectedObject.radius} onChange={e=>updateSelected({radius:Number(e.target.value)})}/></label>
-            <label>Höhe Gelände<input type="number" step=".1" value={Number(selectedObject.attributes.height??selectedObject.elevation)} onChange={e=>updateAttr('height',Number(e.target.value))}/></label>
+            <label>Höhe/Tiefe Gelände<input type="number" step=".1" value={Number(selectedObject.attributes.height??selectedObject.elevation)} onChange={e=>updateAttr('height',Number(e.target.value))}/></label>
+            <label>Start-Höhe<input type="number" step=".1" value={Number(selectedObject.attributes.startHeight??0)} onChange={e=>updateAttr('startHeight',Number(e.target.value))}/></label>
+            <label>End-Höhe<input type="number" step=".1" value={Number(selectedObject.attributes.endHeight??0)} onChange={e=>updateAttr('endHeight',Number(e.target.value))}/></label>
+            <label>Erdmasse m³<input type="number" step=".1" value={Number(selectedObject.attributes.earthVolume??0)} onChange={e=>updateAttr('earthVolume',Number(e.target.value))}/></label>
+            <label>Kosten €/m³<input type="number" step="1" value={Number(selectedObject.attributes.costPerM3??45)} onChange={e=>updateAttr('costPerM3',Number(e.target.value))}/></label>
           </div>
           <div className="hint">BIM-Attribute: {JSON.stringify(selectedObject.attributes)}</div>
           <div className="grid2">
@@ -730,6 +767,45 @@ function create3DLandscapeObject(object:CadObject, selected:boolean){
     }
   }
 
+  if(object.kind==='terrainMound'||object.kind==='terrainDepression'||object.kind==='terrainSmooth'){
+    const terrainHeight=Number(object.attributes.height??0.5);
+    const absHeight=Math.max(.08,Math.abs(terrainHeight));
+    const radius=Math.max(object.radius,.2);
+    const geo=object.kind==='terrainMound'
+      ? new THREE.SphereGeometry(radius,32,16,0,Math.PI*2,0,Math.PI/2)
+      : object.kind==='terrainDepression'
+        ? new THREE.SphereGeometry(radius,32,16,0,Math.PI*2,Math.PI/2,Math.PI/2)
+        : new THREE.SphereGeometry(radius,32,12,0,Math.PI*2,0,Math.PI/2);
+    const terrainMat=makeMaterial(object.color,Math.max(.35,opacity));
+    const mesh=new THREE.Mesh(geo,terrainMat);
+    mesh.scale.y=object.kind==='terrainSmooth'?absHeight*.35:absHeight;
+    mesh.position.set(object.x,object.kind==='terrainDepression'?.03:0,object.y);
+    mesh.castShadow=true;
+    mesh.receiveShadow=true;
+    group.add(mesh);
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,.035,48),makeMaterial(object.color,.22));
+    base.position.set(object.x,.018,object.y);
+    group.add(base);
+  }
+
+  if(object.kind==='terrainSlope'){
+    const startH=Number(object.attributes.startHeight??0);
+    const endH=Number(object.attributes.endHeight??.8);
+    const avgH=Math.max(.06,(Math.abs(startH)+Math.abs(endH))/2);
+    const geo=new THREE.BoxGeometry(Math.max(object.width,.1),.12,Math.max(object.height,.1));
+    const slopeMesh=new THREE.Mesh(geo,makeMaterial(object.color,opacity));
+    slopeMesh.position.set(object.x,avgH/2,object.y);
+    slopeMesh.rotation.z=(endH-startH)*0.08;
+    slopeMesh.castShadow=true;
+    slopeMesh.receiveShadow=true;
+    group.add(slopeMesh);
+    const arrow=new THREE.Mesh(new THREE.ConeGeometry(.18,.45,18),makeMaterial('#78350f',1));
+    arrow.position.set(object.x+object.width*.32,avgH+.25,object.y-object.height*.32);
+    arrow.rotation.z=-Math.PI/2;
+    group.add(arrow);
+  }
+
+
   if(object.kind==='circle'){
     const mesh=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(object.radius,.1),Math.max(object.radius,.1),.16,48),mat);
     mesh.position.set(object.x,.08,object.y);
@@ -829,9 +905,26 @@ function Drawable({object,selected,onSelect}:any){
   if(object.kind==='rect'){
     return <g onClick={onSelect}><rect x={(object.x-object.width/2)*SCALE} y={(object.y-object.height/2)*SCALE} width={object.width*SCALE} height={object.height*SCALE} fill={object.color} fillOpacity={1-object.transparency} stroke={stroke} strokeWidth={sw}/><text x={object.x*SCALE} y={object.y*SCALE} fontSize={13} fontWeight="700" textAnchor="middle" fill="#0f172a" paintOrder="stroke" stroke="#fff" strokeWidth={3}>{object.name}</text></g>
   }
-  if(object.kind==='circle'||object.kind==='plant'||object.kind==='terrainPoint'||object.kind==='light'){
+  if(object.kind==='circle'||object.kind==='plant'||object.kind==='terrainPoint'||object.kind==='terrainMound'||object.kind==='terrainDepression'||object.kind==='terrainSmooth'||object.kind==='light'){
     const r=Math.max(object.radius,.15)*SCALE;
-    return <g onClick={onSelect}><circle cx={object.x*SCALE} cy={object.y*SCALE} r={r} fill={object.color} fillOpacity={1-object.transparency} stroke={stroke} strokeWidth={sw}/>{object.kind==='plant'&&<><circle cx={(object.x+.18)*SCALE} cy={(object.y-.15)*SCALE} r={r*.45} fill="#22c55e" fillOpacity=".85"/><circle cx={(object.x-.16)*SCALE} cy={(object.y+.12)*SCALE} r={r*.35} fill="#15803d" fillOpacity=".85"/></>}{object.kind==='terrainPoint'&&<text x={object.x*SCALE} y={(object.y-.25)*SCALE} fontSize={12} textAnchor="middle" fill="#581c87" paintOrder="stroke" stroke="#fff" strokeWidth={3}>H {object.attributes.height??object.elevation}</text>}{object.kind==='light'&&<circle cx={object.x*SCALE} cy={object.y*SCALE} r={r*2.2} fill="#fde68a" fillOpacity=".25"/>}<text x={object.x*SCALE} y={(object.y+object.radius+.25)*SCALE} fontSize={12} textAnchor="middle" fill="#0f172a" paintOrder="stroke" stroke="#fff" strokeWidth={3}>{object.name}</text></g>
+    const isTerrain=['terrainMound','terrainDepression','terrainSmooth'].includes(object.kind);
+    return <g onClick={onSelect}>
+      <circle cx={object.x*SCALE} cy={object.y*SCALE} r={r} fill={object.color} fillOpacity={1-object.transparency} stroke={stroke} strokeWidth={sw} strokeDasharray={isTerrain?'10 5':''}/>
+      {object.kind==='terrainMound'&&<><circle cx={object.x*SCALE} cy={object.y*SCALE} r={r*.65} fill="#bef264" fillOpacity=".45"/><text x={object.x*SCALE} y={object.y*SCALE} fontSize={13} textAnchor="middle" fontWeight="700" fill="#365314" paintOrder="stroke" stroke="#fff" strokeWidth={3}>+{object.attributes.height} m</text></>}
+      {object.kind==='terrainDepression'&&<><circle cx={object.x*SCALE} cy={object.y*SCALE} r={r*.65} fill="#bfdbfe" fillOpacity=".55"/><text x={object.x*SCALE} y={object.y*SCALE} fontSize={13} textAnchor="middle" fontWeight="700" fill="#1e3a8a" paintOrder="stroke" stroke="#fff" strokeWidth={3}>{object.attributes.height} m</text></>}
+      {object.kind==='terrainSmooth'&&<><circle cx={object.x*SCALE} cy={object.y*SCALE} r={r*.72} fill="#dcfce7" fillOpacity=".5"/><text x={object.x*SCALE} y={object.y*SCALE} fontSize={12} textAnchor="middle" fill="#166534" paintOrder="stroke" stroke="#fff" strokeWidth={3}>glätten</text></>}
+      {object.kind==='plant'&&<><circle cx={(object.x+.18)*SCALE} cy={(object.y-.15)*SCALE} r={r*.45} fill="#22c55e" fillOpacity=".85"/><circle cx={(object.x-.16)*SCALE} cy={(object.y+.12)*SCALE} r={r*.35} fill="#15803d" fillOpacity=".85"/></>}
+      {object.kind==='terrainPoint'&&<text x={object.x*SCALE} y={(object.y-.25)*SCALE} fontSize={12} textAnchor="middle" fill="#581c87" paintOrder="stroke" stroke="#fff" strokeWidth={3}>H {object.attributes.height??object.elevation}</text>}
+      {object.kind==='light'&&<circle cx={object.x*SCALE} cy={object.y*SCALE} r={r*2.2} fill="#fde68a" fillOpacity=".25"/>}
+      <text x={object.x*SCALE} y={(object.y+object.radius+.25)*SCALE} fontSize={12} textAnchor="middle" fill="#0f172a" paintOrder="stroke" stroke="#fff" strokeWidth={3}>{object.name}</text>
+    </g>
+  }
+  if(object.kind==='terrainSlope'){
+    return <g onClick={onSelect}>
+      <rect x={(object.x-object.width/2)*SCALE} y={(object.y-object.height/2)*SCALE} width={object.width*SCALE} height={object.height*SCALE} fill={object.color} fillOpacity={1-object.transparency} stroke={stroke} strokeWidth={sw} strokeDasharray="10 5"/>
+      <line x1={(object.x-object.width/2)*SCALE} y1={(object.y+object.height/2)*SCALE} x2={(object.x+object.width/2)*SCALE} y2={(object.y-object.height/2)*SCALE} stroke="#78350f" strokeWidth={3}/>
+      <text x={object.x*SCALE} y={object.y*SCALE} fontSize={13} fontWeight="700" textAnchor="middle" fill="#78350f" paintOrder="stroke" stroke="#fff" strokeWidth={3}>{object.attributes.startHeight} → {object.attributes.endHeight} m</text>
+    </g>
   }
   return null;
 }
@@ -858,6 +951,16 @@ function CostPanel({costItems,setCostItems}:any){
 function BimPanel({objects}:any){return <div><h2>BIM-Übersicht</h2><table className="table"><tbody>{objects.slice(0,8).map((o:any)=><tr key={o.id}><td>{o.name}</td><td>{o.layer}</td><td>{o.attributes.bimClass||o.kind}</td></tr>)}</tbody></table></div>}
 function GisPanel({objects}:any){const count=objects.filter((o:any)=>o.layer==='GIS'||o.attributes.source==='GeoJSON').length;return <div><h2>GIS-Objekte</h2><div className="kpi"><small>Importierte Geodaten</small><strong>{count}</strong></div></div>}
 function LayerPanel({objects}:any){const layers=Array.from(new Set(objects.map((o:any)=>o.layer)));return <div><h2>Layer-System</h2><div className="list">{layers.map((l:any)=><div className="item" key={l}><strong>{l}</strong><span>{objects.filter((o:any)=>o.layer===l).length} Objekt(e)</span></div>)}</div></div>}
-function TerrainPanel({objects}:any){const pts=objects.filter((o:any)=>o.kind==='terrainPoint');return <div><h2>Höhenpunkte</h2><div className="list">{pts.map((p:any)=><div className="item" key={p.id}><strong>{p.name}</strong><span>X {p.x}, Y {p.y}, H {p.attributes.height??p.elevation} m</span></div>)}</div></div>}
+function TerrainPanel({objects}:any){
+  const pts=objects.filter((o:any)=>o.kind==='terrainPoint');
+  const shapes=objects.filter((o:any)=>['terrainMound','terrainDepression','terrainSmooth','terrainSlope'].includes(o.kind));
+  return <div>
+    <h2>Geländeobjekte</h2>
+    <div className="list">
+      {shapes.map((s:any)=><div className="item" key={s.id}><strong>{s.name}</strong><span>{s.attributes.terrainType} · Höhe/Tiefe {s.attributes.height??s.attributes.endHeight} m · Erdmasse {s.attributes.earthVolume??0} m³</span></div>)}
+      {pts.map((p:any)=><div className="item" key={p.id}><strong>{p.name}</strong><span>X {p.x}, Y {p.y}, H {p.attributes.height??p.elevation} m</span></div>)}
+    </div>
+  </div>
+}
 function AnalysisPanel({eco}:any){return <div><h2>Premium-Analyse</h2><p className="small">Digital Twin, KI-Generatives Design, 20 Varianten, Wasser-/Pflege-/Kostenoptimierung sind als nächste Module vorbereitet.</p><div className="hint">Aktueller Score: {eco.score}/100 · CO₂: {eco.co2} kg/Jahr · Regenrückhalt: {eco.rainRetention}/100</div></div>}
 function ExportInfo(){return <div><h2>Schnittstellen</h2><p className="small">Aktiv: JSON, CSV, GeoJSON, .algreen. Nächste technische Module: DXF/DWG, IFC, LandXML, SHP, GAEB, OBJ/FBX/STL, API.</p></div>}
