@@ -1,19 +1,15 @@
-# AL Green Design – Landscape Architecture V0.13 IMAGE AI
 
-## Neu in V0.13
+# AL Green Design – V0.13.1 Soft Terrain
 
-- Bild-Upload funktioniert
-- KI-Bildanalyse als Browser-Prototyp
-- Gelände wird anhand des hochgeladenen Bildes automatisch angepasst
-- Helle/dunkle Bildbereiche erzeugen Geländeformen, Pflanzzonen, Beläge und Drainage-Hinweise
-- 2D-Editor und 3D-Viewer
-- KI-Chat generiert Objekte
-- Login-Mock, Projektverwaltung, Rollen, Memory
-- Datenbank-Mock: Pflanzen, Material, Hersteller, Kosten, Bewässerung
-- OpenStreetMap/GIS/RAG/API/SaaS-Roadmap als Module
-- Export: JSON, CSV, GeoJSON, PDF
+Diese Version erzeugt echte weiche 3D-Geländeformen.
 
-## Hinweis
-
-Diese Version ist ein MVP-Prototyp. Echte Cloud-Datenbank, GPT-API, PostGIS, Auth,
-Zahlungsintegration, DWG/IFC und echte Satelliten-/OSM-Daten brauchen Backend/API-Module.
+## Neu
+- weiches 3D-Höhenmodell statt nur Flächen
+- Erhebungen und Senken verlaufen ineinander
+- Terrain-Blobs mit Position, Radius, Höhe/Tiefe und Weichheit
+- Bild-Upload
+- KI-Bildanalyse erzeugt weiche Terrain-Formen
+- KI-Chat erzeugt grobe Terrain-Vorschläge
+- 2D-Planeditor
+- 3D-Viewer mit echtem Terrain-Mesh
+- Nachbearbeitung aller Terrain-Parameter

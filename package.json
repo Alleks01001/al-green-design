@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v013-image-ai",
-  "version": "0.13.0",
+  "name": "al-green-design-landscape-architecture-v0131-soft-terrain",
+  "version": "0.13.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,8 +11,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "three": "latest",
-    "jspdf": "latest"
+    "three": "latest"
   },
   "devDependencies": {
     "typescript": "latest",
