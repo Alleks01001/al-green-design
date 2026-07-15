@@ -9,7 +9,7 @@ import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importe
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
 type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
 type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
-type SelectedKind = 'terrain' | 'zone' | 'object' | null;
+type SelectedKind = 'terrain' | 'zone' | 'object' | 'room' | null;
 type MoveStart = { id: number; x: number; y: number };
 type Drag2D =
   | { mode: 'move'; kind: Exclude<SelectedKind, null>; id: number; pointerId: number; offsetX: number; offsetY: number; startPointerX: number; startPointerY: number; groupStart: MoveStart[] }
@@ -21,6 +21,9 @@ type EditorSnapshot = {
   terrainBlobs: TerrainBlob[];
   zones: Zone[];
   objects: GardenObject[];
+  rooms: Room[];
+  levels: BuildingLevel[];
+  activeLevel: number;
   importedModels: ImportedReliefModel[];
   projectInfo: ProjectInfo;
   createdAt: string;
@@ -35,6 +38,31 @@ type ContextMenuState = {
   targetKind: SelectedKind;
   targetId: number | null;
 } | null;
+
+type ProjectInfo = {
+  name: string;
+  location: string;
+  budget: number;
+  area: number;
+};
+
+type BuildingLevel = {
+  id: number;
+  name: string;
+  elevation: number;
+  height: number;
+  visible: boolean;
+};
+
+type Room = {
+  id: number;
+  name: string;
+  level: number;
+  points: { x: number; y: number }[];
+  area: number;
+  color: string;
+  source: 'auto' | 'manual';
+};
 
 type ChatEngine = 'local' | 'openai';
 
@@ -169,6 +197,137 @@ function distance2D(a: {x:number;y:number}, b: {x:number;y:number}) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function polygonArea(points: {x:number;y:number}[]) {
+  if (points.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+function polygonCentroid(points: {x:number;y:number}[]) {
+  if (!points.length) return { x: 0, y: 0 };
+  let signed = 0;
+  let cx = 0;
+  let cy = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const cross = a.x * b.y - b.x * a.y;
+    signed += cross;
+    cx += (a.x + b.x) * cross;
+    cy += (a.y + b.y) * cross;
+  }
+
+  if (Math.abs(signed) < 0.000001) {
+    return {
+      x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+      y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+    };
+  }
+
+  return { x: cx / (3 * signed), y: cy / (3 * signed) };
+}
+
+function levelElevationFor(levels: BuildingLevel[], levelId: number) {
+  return levels.find(level => level.id === levelId)?.elevation ?? levelId * 3;
+}
+
+function isLevelBoundObject(obj: GardenObject) {
+  return ['floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(obj.type);
+}
+
+function roomCycleKey(points: {x:number;y:number}[]) {
+  const tokens = points.map(p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`);
+  const variants: string[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    variants.push([...tokens.slice(i), ...tokens.slice(0, i)].join('|'));
+  }
+
+  const reversed = [...tokens].reverse();
+  for (let i = 0; i < reversed.length; i++) {
+    variants.push([...reversed.slice(i), ...reversed.slice(0, i)].join('|'));
+  }
+
+  return variants.sort()[0] || '';
+}
+
+function detectClosedRoomPolygons(walls: GardenObject[], tolerance = 0.16) {
+  type Node = { key: string; x: number; y: number };
+  type Edge = { id: number; a: string; b: string };
+
+  const nodeMap = new Map<string, Node>();
+  const edges: Edge[] = [];
+
+  const nodeFor = (point: {x:number;y:number}) => {
+    const qx = Math.round(point.x / tolerance) * tolerance;
+    const qy = Math.round(point.y / tolerance) * tolerance;
+    const key = `${qx.toFixed(4)},${qy.toFixed(4)}`;
+    if (!nodeMap.has(key)) nodeMap.set(key, { key, x: qx, y: qy });
+    return key;
+  };
+
+  walls.forEach(wall => {
+    const [start, end] = wallEndpoints(wall);
+    const a = nodeFor(start);
+    const b = nodeFor(end);
+    if (a !== b) edges.push({ id: wall.id, a, b });
+  });
+
+  const adjacency = new Map<string, { node: string; edgeId: number }[]>();
+  edges.forEach(edge => {
+    adjacency.set(edge.a, [...(adjacency.get(edge.a) || []), { node: edge.b, edgeId: edge.id }]);
+    adjacency.set(edge.b, [...(adjacency.get(edge.b) || []), { node: edge.a, edgeId: edge.id }]);
+  });
+
+  const found = new Map<string, {x:number;y:number}[]>();
+  const maxDepth = Math.min(18, Math.max(6, edges.length + 1));
+
+  const dfs = (
+    start: string,
+    current: string,
+    pathNodes: string[],
+    usedEdges: Set<number>
+  ) => {
+    if (pathNodes.length > maxDepth) return;
+
+    for (const next of adjacency.get(current) || []) {
+      if (usedEdges.has(next.edgeId)) continue;
+
+      if (next.node === start && pathNodes.length >= 3) {
+        const points = pathNodes
+          .map(key => nodeMap.get(key))
+          .filter(Boolean)
+          .map(node => ({ x: node!.x, y: node!.y }));
+
+        const area = polygonArea(points);
+        if (area >= 1 && area <= 1500) {
+          const key = roomCycleKey(points);
+          if (key && !found.has(key)) found.set(key, points);
+        }
+        continue;
+      }
+
+      if (pathNodes.includes(next.node)) continue;
+
+      const nextUsed = new Set(usedEdges);
+      nextUsed.add(next.edgeId);
+      dfs(start, next.node, [...pathNodes, next.node], nextUsed);
+    }
+  };
+
+  [...nodeMap.keys()].forEach(start => dfs(start, start, [start], new Set()));
+
+  return [...found.values()]
+    .sort((a, b) => polygonArea(a) - polygonArea(b))
+    .slice(0, 40);
+}
+
 function isWallObject(obj: GardenObject) {
   return obj.type === 'wall' || obj.type === 'interiorWall';
 }
@@ -216,7 +375,8 @@ function buildWallWithOpenings3D(
   group: THREE.Group,
   wall: GardenObject,
   openings: GardenObject[],
-  selected: boolean
+  selected: boolean,
+  baseElevation = 0
 ) {
   const material = new THREE.MeshStandardMaterial({
     color: wall.color,
@@ -224,7 +384,7 @@ function buildWallWithOpenings3D(
     metalness: 0
   });
   const edgeColor = selected ? 0xf59e0b : (wall.type === 'interiorWall' ? 0x94a3b8 : 0x475569);
-  const baseY = (wall.level || 0) * 3;
+  const baseY = baseElevation;
   const wallHeight = Math.max(0.2, wall.height);
   const half = wall.width / 2;
 
@@ -285,7 +445,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.20 ARCHITECTURE CORE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.21 FLOORS + ROOMS – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -297,7 +457,16 @@ export default function LandscapePlatform() {
   const [imageFit, setImageFit] = useState<'stretch' | 'contain'>('contain');
   const [importedModels, setImportedModels] = useState<ImportedReliefModel[]>([]);
   const [selectedImportedModelId, setSelectedImportedModelId] = useState<string | null>(null);
-  const [projectInfo, setProjectInfo] = useState({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
+  const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
+  const [levels, setLevels] = useState<BuildingLevel[]>([
+    { id: 0, name: 'EG', elevation: 0, height: 2.8, visible: true },
+    { id: 1, name: '1. OG', elevation: 3.0, height: 2.8, visible: true },
+    { id: 2, name: 'Dach', elevation: 6.0, height: 1.5, visible: true }
+  ]);
+  const [activeLevel, setActiveLevel] = useState(0);
+  const [showAllLevels, setShowAllLevels] = useState(false);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [gridSize, setGridSize] = useState(0.5);
   const [nightMode, setNightMode] = useState(false);
@@ -371,6 +540,20 @@ export default function LandscapePlatform() {
   const selectedObject = selectedKind === 'object' ? objects.find(o => o.id === selectedId) || null : null;
   const selectedObjects = objects.filter(o => selectedObjectIds.includes(o.id));
   const selectedImportedModel = importedModels.find(model => model.id === selectedImportedModelId) || null;
+  const selectedRoom = rooms.find(room => room.id === selectedRoomId) || null;
+
+  const visibleObjectsForPlan = objects.filter(obj => {
+    if (!isLevelBoundObject(obj)) return true;
+    const levelId = obj.level ?? 0;
+    if (showAllLevels) return levels.find(level => level.id === levelId)?.visible !== false;
+    return levelId === activeLevel;
+  });
+
+  const visibleRoomsForPlan = rooms.filter(room => {
+    if (showAllLevels) return levels.find(level => level.id === room.level)?.visible !== false;
+    return room.level === activeLevel;
+  });
+
   const architectureStats = useMemo(() => {
     const walls = objects.filter(isWallObject);
     const openings = objects.filter(isOpeningObject);
@@ -470,6 +653,9 @@ export default function LandscapePlatform() {
           terrainBlobs,
           zones,
           objects,
+          rooms,
+          levels,
+          activeLevel,
           importedModels,
           layers,
           gridSize,
@@ -483,7 +669,7 @@ export default function LandscapePlatform() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [autosaveEnabled, projectInfo, terrainBlobs, zones, objects, importedModels, layers, gridSize, snapEnabled]);
+  }, [autosaveEnabled, projectInfo, terrainBlobs, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled]);
 
   function restoreAutosave() {
     try {
@@ -495,6 +681,9 @@ export default function LandscapePlatform() {
       if (Array.isArray(data.terrainBlobs)) setTerrainBlobs(data.terrainBlobs);
       if (Array.isArray(data.zones)) setZones(data.zones);
       if (Array.isArray(data.objects)) setObjects(data.objects);
+      if (Array.isArray(data.rooms)) setRooms(data.rooms);
+      if (Array.isArray(data.levels) && data.levels.length) setLevels(data.levels);
+      if (typeof data.activeLevel === 'number') setActiveLevel(data.activeLevel);
       if (Array.isArray(data.importedModels)) setImportedModels(data.importedModels);
       if (data.layers) setLayers(data.layers);
       if (typeof data.gridSize === 'number') setGridSize(data.gridSize);
@@ -556,6 +745,9 @@ export default function LandscapePlatform() {
       terrainBlobs: structuredClone(terrainBlobs),
       zones: structuredClone(zones),
       objects: structuredClone(objects),
+      rooms: structuredClone(rooms),
+      levels: structuredClone(levels),
+      activeLevel,
       importedModels: structuredClone(importedModels),
       projectInfo: structuredClone(projectInfo),
       createdAt: new Date().toISOString(),
@@ -572,6 +764,9 @@ export default function LandscapePlatform() {
     setTerrainBlobs(data.terrainBlobs || []);
     setZones(data.zones || []);
     setObjects(data.objects || []);
+    setRooms(data.rooms || []);
+    if (data.levels?.length) setLevels(data.levels);
+    if (typeof data.activeLevel === 'number') setActiveLevel(data.activeLevel);
     setImportedModels(data.importedModels || []);
     if (data.projectInfo) setProjectInfo(data.projectInfo);
   }
@@ -721,12 +916,12 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v0192-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, importedModels, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v021-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
+    const raw = localStorage.getItem('al-green-v021-project') || localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
@@ -735,6 +930,9 @@ export default function LandscapePlatform() {
       if (data.terrainBlobs) setTerrainBlobs(data.terrainBlobs);
       if (data.zones) setZones(data.zones);
       if (data.objects) setObjects(data.objects);
+      if (Array.isArray(data.rooms)) setRooms(data.rooms);
+      if (Array.isArray(data.levels) && data.levels.length) setLevels(data.levels);
+      if (typeof data.activeLevel === 'number') setActiveLevel(data.activeLevel);
       if (Array.isArray(data.importedModels)) setImportedModels(data.importedModels);
       if (data.layers) setLayers(data.layers);
       if (data.gridSize) setGridSize(data.gridSize);
@@ -748,6 +946,10 @@ export default function LandscapePlatform() {
     snapshot();
     if (selectedKind === 'terrain') setTerrainBlobs(v => v.filter(b => b.id !== selectedId));
     if (selectedKind === 'zone') setZones(v => v.filter(z => z.id !== selectedId));
+    if (selectedKind === 'room') {
+      setRooms(v => v.filter(room => room.id !== selectedId));
+      setSelectedRoomId(null);
+    }
     if (selectedKind === 'object') {
       const ids = selectedObjectIds.length ? selectedObjectIds : [selectedId];
       setObjects(v => v.filter(o => !ids.includes(o.id)));
@@ -760,6 +962,8 @@ export default function LandscapePlatform() {
     setSelectedKind(kind);
     setSelectedId(id);
     if (kind !== 'object') setSelectedObjectIds([]);
+    if (kind !== 'room') setSelectedRoomId(null);
+    if (kind === 'room' && id !== null) setSelectedRoomId(id);
     if (kind === 'object' && id !== null) setSelectedObjectIds([id]);
     if (message) setStatus(message);
   }
@@ -1020,7 +1224,7 @@ export default function LandscapePlatform() {
       color: exterior ? '#f8fafc' : '#e5e7eb',
       material: exterior ? 'Mauerwerk / Putz' : 'Innenwand',
       unitCost: exterior ? 260 : 120,
-      level: 0,
+      level: activeLevel,
       note: '',
       wallNodeStart: `node-${Math.round(start.x*1000)}-${Math.round(start.y*1000)}`,
       wallNodeEnd: `node-${Math.round(end.x*1000)}-${Math.round(end.y*1000)}`
@@ -1106,6 +1310,142 @@ export default function LandscapePlatform() {
     });
   }
 
+  function addBuildingLevel() {
+    snapshot();
+    const sorted = [...levels].sort((a,b)=>a.elevation-b.elevation);
+    const highest = sorted[sorted.length - 1];
+    const id = Math.max(...levels.map(level=>level.id), -1) + 1;
+    const elevation = highest ? highest.elevation + highest.height + 0.2 : 0;
+
+    const level: BuildingLevel = {
+      id,
+      name: `${id}. OG`,
+      elevation: Number(elevation.toFixed(2)),
+      height: 2.8,
+      visible: true
+    };
+
+    setLevels(current => [...current, level].sort((a,b)=>a.elevation-b.elevation));
+    setActiveLevel(id);
+    setStatus(`${level.name} angelegt.`);
+  }
+
+  function updateBuildingLevel(id: number, patch: Partial<BuildingLevel>) {
+    setLevels(current => current.map(level => level.id===id ? {...level,...patch} : level));
+  }
+
+  function deleteBuildingLevel(id: number) {
+    if (id === 0) {
+      setStatus('Das Erdgeschoss kann nicht gelöscht werden.');
+      return;
+    }
+
+    snapshot();
+    setObjects(current => current.filter(obj => (obj.level ?? 0) !== id));
+    setRooms(current => current.filter(room => room.level !== id));
+    setLevels(current => current.filter(level => level.id !== id));
+
+    if (activeLevel === id) setActiveLevel(0);
+    setStatus('Geschoss samt zugehörigen Bauteilen gelöscht.');
+  }
+
+  function duplicateActiveBuildingLevel() {
+    const sourceLevel = levels.find(level => level.id===activeLevel);
+    if (!sourceLevel) return;
+
+    snapshot();
+
+    const newId = Math.max(...levels.map(level=>level.id), -1) + 1;
+    const newElevation = Math.max(...levels.map(level=>level.elevation + level.height)) + 0.2;
+    const sourceObjects = objects.filter(obj => isLevelBoundObject(obj) && (obj.level ?? 0)===activeLevel);
+    const idMap = new Map<number,number>();
+    const base = Date.now();
+
+    sourceObjects.forEach((obj,index)=>idMap.set(obj.id,base+index+1));
+
+    const copies = sourceObjects.map(obj => ({
+      ...structuredClone(obj),
+      id: idMap.get(obj.id)!,
+      name: `${obj.name} · Kopie`,
+      level: newId,
+      parentId: obj.parentId && idMap.has(obj.parentId) ? idMap.get(obj.parentId) : obj.parentId
+    }));
+
+    const roomCopies = rooms
+      .filter(room=>room.level===activeLevel)
+      .map((room,index)=>({
+        ...structuredClone(room),
+        id: base + sourceObjects.length + index + 1,
+        level: newId,
+        name: `${room.name} · Kopie`
+      }));
+
+    setLevels(current => [...current,{
+      id:newId,
+      name:`${sourceLevel.name} Kopie`,
+      elevation:Number(newElevation.toFixed(2)),
+      height:sourceLevel.height,
+      visible:true
+    }].sort((a,b)=>a.elevation-b.elevation));
+
+    setObjects(current=>[...current,...copies]);
+    setRooms(current=>[...current,...roomCopies]);
+    setActiveLevel(newId);
+    setStatus(`${sourceLevel.name} mit ${copies.length} Bauteilen dupliziert.`);
+  }
+
+  function detectRoomsOnActiveLevel() {
+    const walls = objects.filter(obj => isWallObject(obj) && (obj.level ?? 0)===activeLevel);
+    if (walls.length < 3) {
+      setStatus('Für die Raumerkennung werden mindestens drei Wände benötigt.');
+      return;
+    }
+
+    const polygons = detectClosedRoomPolygons(walls);
+    if (!polygons.length) {
+      setStatus('Kein geschlossener Raum erkannt. Prüfe die Wand-Endpunkte.');
+      return;
+    }
+
+    snapshot();
+
+    const existingNames = rooms.filter(room=>room.level===activeLevel).map(room=>room.name);
+    const now = Date.now();
+
+    const detected = polygons.map((points,index): Room => ({
+      id: now + index + 1,
+      name: existingNames[index] || `Raum ${index + 1}`,
+      level: activeLevel,
+      points,
+      area: Number(polygonArea(points).toFixed(2)),
+      color: ['#dbeafe','#dcfce7','#fef3c7','#fce7f3','#ede9fe'][index % 5],
+      source: 'auto'
+    }));
+
+    setRooms(current => [
+      ...current.filter(room => !(room.level===activeLevel && room.source==='auto')),
+      ...detected
+    ]);
+    setSelectedRoomId(detected[0]?.id ?? null);
+    if (detected[0]) setSelection('room', detected[0].id, `${detected.length} Raum/Räume erkannt.`);
+    setStatus(`${detected.length} geschlossene Raumfläche(n) erkannt.`);
+  }
+
+  function renameRoom(id: number, name: string) {
+    setRooms(current=>current.map(room=>room.id===id?{...room,name}:room));
+  }
+
+  function deleteRoom(id: number) {
+    snapshot();
+    setRooms(current=>current.filter(room=>room.id!==id));
+    if (selectedRoomId===id) {
+      setSelectedRoomId(null);
+      setSelectedKind(null);
+      setSelectedId(null);
+    }
+    setStatus('Raum gelöscht.');
+  }
+
   function addObject(type: GardenObjectType, x: number, y: number) {
     snapshot();
     const id = Date.now();
@@ -1141,7 +1481,12 @@ export default function LandscapePlatform() {
       carport: { name: 'Carport', width: 5.5, depth: 3.2, height: 2.7, color: '#a16207', material: 'Holz/Stahl', unitCost: 520, level: 0 },
       winterGarden: { name: 'Wintergarten', width: 4.0, depth: 3.0, height: 2.8, color: '#dbeafe', material: 'Glas/Aluminium', unitCost: 1100, level: 0 }
     };
-    const obj: GardenObject = { id, type, x, y, rotation: 0, note: '', ...(presets[type] as any) };
+    const preset = presets[type] as any;
+    const draftObject = { id, type, x, y, rotation: 0, note: '', ...preset } as GardenObject;
+    const obj: GardenObject = {
+      ...draftObject,
+      level: isLevelBoundObject(draftObject) ? activeLevel : preset.level
+    };
     setObjects(v => [...v, obj]);
     setSelection('object', id, `${obj.name} gesetzt.`);
   }
@@ -1525,7 +1870,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.20.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.21.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -1741,14 +2086,74 @@ export default function LandscapePlatform() {
 
         {tab === 'building' && (
           <>
-            <h2>Detaillierte Gebäude-Bauteile</h2>
+            <h2>Geschosse, Räume und Gebäudestruktur</h2>
+
+            <div className="buildingLevelToolbar">
+              <div className="grid2">
+                <button className="btn primary" onClick={addBuildingLevel}>Geschoss hinzufügen</button>
+                <button className="btn blue" onClick={duplicateActiveBuildingLevel}>Aktives Geschoss duplizieren</button>
+                <button className="btn" onClick={detectRoomsOnActiveLevel}>Räume automatisch erkennen</button>
+              </div>
+
+              <label style={{marginTop:8}}>
+                <input type="checkbox" checked={showAllLevels} onChange={e=>setShowAllLevels(e.target.checked)}/>
+                Alle sichtbaren Geschosse im 2D-Plan zeigen
+              </label>
+            </div>
+
+            <div className="levelTree" style={{marginTop:10}}>
+              {[...levels].sort((a,b)=>a.elevation-b.elevation).map(level => {
+                const levelObjects = objects.filter(obj=>isLevelBoundObject(obj) && (obj.level ?? 0)===level.id);
+                const levelRooms = rooms.filter(room=>room.level===level.id);
+
+                return (
+                  <div key={level.id} className={`levelCard ${activeLevel===level.id?'active':''}`}>
+                    <button className="levelCardHeader" onClick={()=>setActiveLevel(level.id)}>
+                      <strong>{level.name}</strong>
+                      <span>{level.elevation.toFixed(2)} m · {levelObjects.length} Bauteile · {levelRooms.length} Räume</span>
+                    </button>
+
+                    <div className="grid2">
+                      <label>Name<input value={level.name} onChange={e=>updateBuildingLevel(level.id,{name:e.target.value})}/></label>
+                      <label>Höhe ab 0,00<input type="number" step="0.05" value={level.elevation} onChange={e=>updateBuildingLevel(level.id,{elevation:Number(e.target.value)})}/></label>
+                      <label>Geschosshöhe<input type="number" step="0.05" min="0.5" value={level.height} onChange={e=>updateBuildingLevel(level.id,{height:Number(e.target.value)})}/></label>
+                      <label><input type="checkbox" checked={level.visible} onChange={e=>updateBuildingLevel(level.id,{visible:e.target.checked})}/> Sichtbar in 3D</label>
+                    </div>
+
+                    {level.id!==0 && (
+                      <button className="btn danger" onClick={()=>deleteBuildingLevel(level.id)}>Geschoss löschen</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <h2 style={{marginTop:14}}>Bauteile auf aktivem Geschoss</h2>
             <div className="grid3">
               {([
                 ['floor','Bodenplatte'],['wall','Außenwand'],['interiorWall','Innenwand'],['roof','Dach'],['window','Fenster'],['door','Tür'],['slidingDoor','Schiebetür'],['balcony','Balkon'],['railing','Geländer'],['column','Stütze'],['carport','Carport'],['winterGarden','Wintergarten'],['select','Auswählen']
               ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
             </div>
+
             <div className="hint" style={{marginTop:10}}>
-              Bauteil wählen und im 2D-Plan platzieren. Danach Position, Größe, Höhe, Ebene, Dicke, Material und Dachtyp rechts bearbeiten.
+              Aktives Geschoss: <strong>{levels.find(level=>level.id===activeLevel)?.name || activeLevel}</strong>. Neue Architektur-Bauteile werden automatisch diesem Geschoss zugeordnet.
+            </div>
+
+            <h2 style={{marginTop:14}}>Erkannte Räume</h2>
+            <div className="roomList">
+              {rooms.filter(room=>room.level===activeLevel).map(room=>(
+                <button
+                  key={room.id}
+                  className={`item roomListItem ${selectedRoomId===room.id?'active':''}`}
+                  onClick={()=>setSelection('room',room.id,`${room.name} ausgewählt.`)}
+                >
+                  <strong>{room.name}</strong>
+                  <span>{room.area.toFixed(2)} m²</span>
+                </button>
+              ))}
+              {!rooms.some(room=>room.level===activeLevel) && (
+                <div className="hint">Noch keine Räume erkannt. Geschlossene Wandzüge erstellen und „Räume automatisch erkennen“ wählen.</div>
+              )}
             </div>
           </>
         )}
@@ -1905,12 +2310,13 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.20 ARCHITECTURE CORE</span>
+          <span className="pill">V0.21 FLOORS + ROOMS</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
           <label className="compactControl">Raster <select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value={0.01}>1 cm</option><option value={0.05}>5 cm</option><option value={0.1}>10 cm</option><option value={0.25}>25 cm</option><option value={0.5}>50 cm</option><option value={1}>1 m</option></select></label>
           <button className={`pill ${snapEnabled?'active':''}`} onClick={()=>setSnapEnabled(v=>!v)}>Fang {snapEnabled?'AN':'AUS'}</button>
+          <label className="compactControl">Geschoss <select value={activeLevel} onChange={e=>setActiveLevel(Number(e.target.value))}>{[...levels].sort((a,b)=>a.elevation-b.elevation).map(level=><option key={level.id} value={level.id}>{level.name}</option>)}</select></label>
           <span className="pill">Auswahl {selectedObjectIds.length}</span>
           <button className={`pill ${autosaveEnabled?'active':''}`} onClick={()=>setAutosaveEnabled(v=>!v)}>Autosave {autosaveEnabled?'AN':'AUS'}</button>
           <span className="pill">Speicher {autosaveState==='saving'?'…':autosaveState==='saved'?'✓':autosaveState==='error'?'!':'bereit'}</span>
@@ -1980,7 +2386,25 @@ export default function LandscapePlatform() {
                 </g>
               ))}
 
-              {objects.filter(obj => (layers as any)[objectLayer(obj)]).map(obj => (
+              {visibleRoomsForPlan.map(room => {
+                const center = polygonCentroid(room.points);
+                return (
+                  <g key={`room-${room.id}`} onClick={(e)=>{e.stopPropagation();setSelection('room',room.id,`${room.name} ausgewählt.`);}}>
+                    <polygon
+                      points={room.points.map(point=>`${point.x*SCALE},${point.y*SCALE}`).join(' ')}
+                      fill={room.color}
+                      fillOpacity={selectedRoomId===room.id?0.5:0.24}
+                      stroke={selectedRoomId===room.id?'#f59e0b':'#64748b'}
+                      strokeWidth={selectedRoomId===room.id?3:1.3}
+                    />
+                    <text x={center.x*SCALE} y={center.y*SCALE} textAnchor="middle" fontSize="12" fill="#0f172a" paintOrder="stroke" stroke="#ffffff" strokeWidth="4">
+                      {room.name} · {room.area.toFixed(1)} m²
+                    </text>
+                  </g>
+                );
+              })}
+
+              {visibleObjectsForPlan.filter(obj => (layers as any)[objectLayer(obj)]).map(obj => (
                 <GardenObject2D
                   key={obj.id}
                   obj={obj}
@@ -1995,7 +2419,7 @@ export default function LandscapePlatform() {
               {selectedObject && selectedObjectIds.length===1 && <ObjectTransformHandles obj={selectedObject} onScaleStart={startScaleObject} onRotateStart={startRotateObject}/>}
             </svg>
           ) : view === '3d' ? (
-            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
               setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -2013,10 +2437,10 @@ export default function LandscapePlatform() {
           ) : (
             <div className={`splitWorkspace ${view==='splitHorizontal'?'horizontal':''}`}>
               <div className="splitPane">
-                <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} />
+                <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={visibleObjectsForPlan} rooms={visibleRoomsForPlan} selectedRoomId={selectedRoomId} selectedId={selectedId} selectedKind={selectedKind} />
               </div>
               <div className="splitPane">
-                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
                   setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
                 }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -2072,6 +2496,18 @@ export default function LandscapePlatform() {
             <button className="btn danger" onClick={()=>{ setZones(v=>v.filter(z=>z.id!==selectedZone.id)); setSelection(null,null,'Zone gelöscht.'); }}>Zone löschen</button>
           </div>
         )}
+        {selectedRoom && (
+          <div className="form roomProperties">
+            <h2>Raum</h2>
+            <label>Name<input value={selectedRoom.name} onChange={e=>renameRoom(selectedRoom.id,e.target.value)}/></label>
+            <label>Geschoss<select value={selectedRoom.level} onChange={e=>setRooms(current=>current.map(room=>room.id===selectedRoom.id?{...room,level:Number(e.target.value)}:room))}>{levels.map(level=><option key={level.id} value={level.id}>{level.name}</option>)}</select></label>
+            <label>Fläche<input value={`${selectedRoom.area.toFixed(2)} m²`} readOnly/></label>
+            <label>Farbe<input type="color" value={selectedRoom.color} onChange={e=>setRooms(current=>current.map(room=>room.id===selectedRoom.id?{...room,color:e.target.value}:room))}/></label>
+            <div className="hint">Quelle: {selectedRoom.source==='auto'?'automatisch aus geschlossenen Wandzügen':'manuell'}</div>
+            <button className="btn danger" onClick={()=>deleteRoom(selectedRoom.id)}>Raum löschen</button>
+          </div>
+        )}
+
         {selectedObjectIds.length > 1 && (
           <div className="cadSelectionPanel">
             <h2>Mehrfachauswahl</h2>
@@ -2127,7 +2563,7 @@ export default function LandscapePlatform() {
             <label>Drehung °<input type="number" step="1" value={selectedObject.rotation} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,rotation:Number(e.target.value)}:o))} /></label>
             <label>Material<input value={selectedObject.material||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,material:e.target.value}:o))} /></label>
             {['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(selectedObject.type) && <>
-              <label>Ebene / Geschoss<input type="number" step="1" value={Number(selectedObject.level||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,level:Number(e.target.value)}:o))}/></label>
+              <label>Ebene / Geschoss<select value={Number(selectedObject.level||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,level:Number(e.target.value)}:o))}>{levels.map(level=><option key={level.id} value={level.id}>{level.name} · {level.elevation.toFixed(2)} m</option>)}</select></label>
               <label>Dicke / Stärke<input type="number" step="0.01" value={Number(selectedObject.thickness||selectedObject.depth||0.2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,thickness:Number(e.target.value)}:o))}/></label>
               <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
             </>}
@@ -2275,12 +2711,16 @@ function PlanOverview2D({
   terrainBlobs,
   zones,
   objects,
+  rooms,
+  selectedRoomId,
   selectedId,
   selectedKind
 }: {
   terrainBlobs: TerrainBlob[];
   zones: Zone[];
   objects: GardenObject[];
+  rooms: Room[];
+  selectedRoomId: number | null;
   selectedId: number | null;
   selectedKind: SelectedKind;
 }) {
@@ -2295,6 +2735,15 @@ function PlanOverview2D({
         ))}
       </defs>
       <Grid/>
+      {rooms.map(room => {
+        const center = polygonCentroid(room.points);
+        return (
+          <g key={`split-room-${room.id}`}>
+            <polygon points={room.points.map(point=>`${point.x*SCALE},${point.y*SCALE}`).join(' ')} fill={room.color} fillOpacity={selectedRoomId===room.id?0.48:0.20} stroke={selectedRoomId===room.id?'#f59e0b':'#64748b'} strokeWidth={selectedRoomId===room.id?2.5:1}/>
+            <text x={center.x*SCALE} y={center.y*SCALE} textAnchor="middle" fontSize="10" fill="#0f172a">{room.name} · {room.area.toFixed(1)} m²</text>
+          </g>
+        );
+      })}
       {zones.map(zone => (
         <rect key={zone.id} x={(zone.x-zone.width/2)*SCALE} y={(zone.y-zone.depth/2)*SCALE} width={zone.width*SCALE} height={zone.depth*SCALE} fill={zone.color} fillOpacity="0.35" stroke={selectedKind==='zone'&&selectedId===zone.id?'#f59e0b':'#475569'} strokeWidth="1.5"/>
       ))}
@@ -2316,6 +2765,8 @@ function Terrain3D({
   terrainBlobs,
   zones,
   objects,
+  levels,
+  rooms,
   importedModels,
   selectedImportedModelId,
   selectedId,
@@ -2336,6 +2787,8 @@ function Terrain3D({
   terrainBlobs: TerrainBlob[];
   zones: Zone[];
   objects: GardenObject[];
+  levels: BuildingLevel[];
+  rooms: Room[];
   importedModels: ImportedReliefModel[];
   selectedImportedModelId: string | null;
   selectedId: number | null;
@@ -2490,8 +2943,40 @@ function Terrain3D({
       mesh.add(edges);
     };
 
-    objects.forEach(obj => {
+    rooms
+      .filter(room => levels.find(level=>level.id===room.level)?.visible !== false)
+      .forEach(room => {
+        if (room.points.length < 3) return;
+        const shape = new THREE.Shape();
+        room.points.forEach((point,index)=>{
+          if (index===0) shape.moveTo(point.x, point.y);
+          else shape.lineTo(point.x, point.y);
+        });
+        shape.closePath();
+
+        const geometry = new THREE.ShapeGeometry(shape);
+        const material = new THREE.MeshStandardMaterial({
+          color: room.color,
+          transparent: true,
+          opacity: 0.38,
+          side: THREE.DoubleSide,
+          roughness: 0.92
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.y = levelElevationFor(levels, room.level) + 0.025;
+        scene.add(mesh);
+      });
+
+    const sceneObjects = objects.filter(obj => {
+      if (!isLevelBoundObject(obj)) return true;
+      return levels.find(level=>level.id===(obj.level ?? 0))?.visible !== false;
+    });
+
+    sceneObjects.forEach(obj => {
       const baseH = terrainHeightAt(obj.x, obj.y, terrainBlobs);
+      const levelBase = isLevelBoundObject(obj) ? levelElevationFor(levels, obj.level ?? 0) : 0;
       const group = new THREE.Group();
       group.position.set(obj.x, baseH, obj.y);
       group.rotation.y = -degToRad(obj.rotation);
@@ -2501,51 +2986,51 @@ function Terrain3D({
 
       if (obj.type === 'floor') {
         const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.08), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color, roughness: 0.85 }));
-        slab.position.y = Math.max(obj.height,0.08)/2 + (obj.level||0)*3;
+        slab.position.y = Math.max(obj.height,0.08)/2 + levelBase;
         group.add(slab); addEdge(slab, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x475569);
       }
 
       if (obj.type === 'roof') {
         if ((obj.subtype||'gable') === 'flat') {
           const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.18), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
-          roof.position.y = (obj.level||1)*3 + obj.height/2;
+          roof.position.y = levelBase + obj.height/2;
           group.add(roof); addEdge(roof);
         } else {
           const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(obj.width,obj.depth)*0.72, Math.max(obj.height,0.6), 4), new THREE.MeshStandardMaterial({ color: obj.color }));
           roof.scale.z = obj.depth/Math.max(obj.width,obj.depth);
           roof.rotation.y = Math.PI/4;
-          roof.position.y = (obj.level||1)*3 + obj.height/2;
+          roof.position.y = levelBase + obj.height/2;
           group.add(roof);
         }
       }
 
       if (obj.type === 'window' || obj.type === 'slidingDoor') {
         const panel = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.06)), new THREE.MeshStandardMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.48, metalness: 0.15, roughness: 0.2 }));
-        panel.position.y = (obj.level||0)*3 + openingSill(obj) + obj.height/2;
+        panel.position.y = levelBase + openingSill(obj) + obj.height/2;
         group.add(panel); addEdge(panel, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x0ea5e9);
       }
 
       if (obj.type === 'door') {
         const door = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
-        door.position.y = (obj.level||0)*3 + openingSill(obj) + obj.height/2;
+        door.position.y = levelBase + openingSill(obj) + obj.height/2;
         group.add(door); addEdge(door);
       }
 
       if (obj.type === 'balcony') {
         const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.14), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
-        slab.position.y = (obj.level||1)*3;
+        slab.position.y = levelBase;
         group.add(slab); addEdge(slab);
       }
 
       if (obj.type === 'railing') {
         const rail = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.06)), new THREE.MeshStandardMaterial({ color: obj.color, transparent: true, opacity: 0.72 }));
-        rail.position.y = (obj.level||1)*3 + obj.height/2;
+        rail.position.y = levelBase + obj.height/2;
         group.add(rail); addEdge(rail);
       }
 
       if (obj.type === 'column') {
         const column = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(obj.width,0.12)/2, Math.max(obj.width,0.12)/2, obj.height, 16), new THREE.MeshStandardMaterial({ color: obj.color }));
-        column.position.y = (obj.level||0)*3 + obj.height/2;
+        column.position.y = levelBase + obj.height/2;
         group.add(column);
       }
 
@@ -2596,7 +3081,7 @@ function Terrain3D({
       }
       if (obj.type === 'wall' || obj.type === 'interiorWall') {
         const openings = objects.filter(opening => opening.parentId === obj.id && isOpeningObject(opening));
-        buildWallWithOpenings3D(group, obj, openings, selectedKind === 'object' && selectedId === obj.id);
+        buildWallWithOpenings3D(group, obj, openings, selectedKind === 'object' && selectedId === obj.id, levelBase);
       }
       if (obj.type === 'stairs') {
         const steps = 4;
@@ -2767,7 +3252,7 @@ function Terrain3D({
       controls.dispose(); renderer.dispose(); geometry.dispose(); terrainMat.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [terrainBlobs, zones, objects, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
+  }, [terrainBlobs, zones, objects, levels, rooms, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
 
   return <div ref={mountRef} className="three" />;
 }

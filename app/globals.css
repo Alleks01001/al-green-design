@@ -113,3 +113,14 @@ input[type=range]{padding:0;height:28px}
 .architectureDraftInfo{margin-top:10px;border:1px solid #38bdf8;background:#f0f9ff}
 .architectureOpeningPanel{margin-top:10px;padding:10px;border:1px solid #7dd3fc;border-radius:12px;background:#f0f9ff}
 .architectureOpeningPanel h3{margin:0 0 8px;font-size:14px}
+
+.buildingLevelToolbar{padding:10px;border:1px solid #cbd5e1;border-radius:14px;background:#f8fafc}
+.levelTree{display:grid;gap:10px;max-height:430px;overflow:auto}
+.levelCard{padding:10px;border:1px solid #cbd5e1;border-radius:14px;background:#fff}
+.levelCard.active{border-color:#0ea5e9;box-shadow:0 0 0 2px rgba(14,165,233,.16)}
+.levelCardHeader{width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border:0;background:transparent;padding:0 0 8px;cursor:pointer;text-align:left}
+.levelCardHeader span{font-size:11px;color:#64748b}
+.roomList{display:grid;gap:8px}
+.roomListItem{width:100%;text-align:left;cursor:pointer;border:1px solid #cbd5e1}
+.roomListItem.active{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.14)}
+.roomProperties{border:1px solid #c4b5fd;background:#faf5ff;border-radius:14px;padding:10px;margin-bottom:12px}

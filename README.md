@@ -1,75 +1,74 @@
-# AL Green Design – V0.20 ARCHITECTURE CORE
+# AL Green Design – V0.21 FLOORS + ROOMS
 
-V0.20 führt ein stärkeres Architektur-Grundsystem ein.
+V0.21 erweitert das Architekturmodul um eine echte Geschoss- und Raumstruktur.
 
-## Wände als Linienzug zeichnen
+## Geschosse
+
+Standardmäßig vorhanden:
 
 ```text
-Startpunkt klicken
-→ Endpunkt klicken
-→ Wand entsteht
+EG      0,00 m
+1. OG   3,00 m
+Dach    6,00 m
 ```
 
-Im Kettenmodus wird der Endpunkt automatisch zum Startpunkt der nächsten Wand.
+Jedes Geschoss besitzt:
 
-Wand-Endpunkte rasten an bestehenden Wand-Endpunkten ein.
+- Name
+- Höhe ab 0,00 m
+- Geschosshöhe
+- Sichtbarkeit
 
-## Fenster und Türen als Wandöffnungen
+## Aktives Geschoss
 
-Unterstützt:
+Neue Architektur-Bauteile werden automatisch dem aktiven Geschoss zugeordnet.
 
-- Fenster
-- Türen
-- Schiebetüren
+## Geschoss duplizieren
 
-Beim Koppeln an eine Wand werden gespeichert:
+Das aktive Geschoss kann komplett kopiert werden, einschließlich Architektur-Bauteilen und erkannten Räumen.
 
-- `parentId`
-- Position entlang der Wand (`hostOffset`)
-- Brüstungshöhe (`sillHeight`)
-- Wanddrehung
+## Räume automatisch erkennen
 
-Wenn die Wand bewegt, gedreht oder in der Länge geändert wird, folgen gekoppelte Öffnungen automatisch.
+Aus geschlossenen Wandzügen werden Raumflächen erkannt.
+
+```text
+Wände schließen
+→ Räume automatisch erkennen
+→ Raumfläche erzeugen
+→ m² berechnen
+```
+
+Räume besitzen:
+
+- Name
+- Geschoss
+- Fläche
+- Farbe
+- Herkunft
 
 ## 2D
 
-Gekoppelte Öffnungen schneiden die Wanddarstellung sichtbar aus.
+Räume werden als farbige Polygone mit Name und m² angezeigt.
+
+Wahlweise:
+
+- nur aktives Geschoss
+- alle sichtbaren Geschosse
 
 ## 3D
 
-Wände werden um Öffnungen herum aus Wandsegmenten aufgebaut:
+Jedes Geschoss wird auf seiner tatsächlichen Höhenlage dargestellt.
 
-```text
-linkes Wandstück
-Brüstungsstück
-oberes Wandstück
-rechtes Wandstück
-```
+Raumflächen erscheinen als transparente Bodenflächen auf dem jeweiligen Geschoss.
 
-Dadurch entsteht eine sichtbare geometrische Öffnung im Wandkörper.
+## Projektstruktur
 
-## Architekturübersicht
+Autosave, Browserprojekt und Undo/Redo speichern jetzt zusätzlich:
 
-- Anzahl Wände
-- gesamte Wandlänge
-- Anzahl Öffnungen
-- Anzahl gekoppelter Öffnungen
-
-## Weiter enthalten
-
-- V0.19.3 Stabilität & UX
-- Autosave
-- Projektversionen
-- Undo / Redo
-- Copy / Cut / Paste
-- stabile Frame-Extraktion
-- Video → 3D → Projekt
-- GLB-/OBJ-Export
-- CAD-Griffe
-- Mehrfachauswahl
-- Gruppierung
-- 2D/3D/Split View
+- Geschosse
+- aktives Geschoss
+- Räume
 
 ## Nächste Version
 
-V0.21: Geschosse, Räume und Gebäudestruktur.
+V0.22: professionelles Gelände mit Höhenpunkten, Interpolation, Höhenlinien und Aushub-/Aufschüttungslogik.
