@@ -1,57 +1,72 @@
-# AL Green Design – V0.30 AI PLANNING + AUDIT
+# AL Green Design – V0.31 COMPLETE STUDIO
 
-V0.30 ergänzt einen strukturierten Planungsworkflow und eine automatische Projektprüfung.
+V0.31 integriert die bisher aufgebauten Module in einen gemeinsamen finalen Studio-Prototyp.
 
-## AI Planning Studio
-
-Ablauf:
+## Kernworkflow
 
 ```text
-Projektbeschreibung
-→ Planungsbrief ableiten
-→ offene Fragen erkennen
-→ Varianten A/B/C erzeugen
-→ Konzept vergleichen
-→ Variante übernehmen
+2D planen
+→ 3D kontrollieren
+→ Gelände bearbeiten
+→ Architektur ergänzen
+→ Wege / Mauern / Treppen
+→ Pflanzen und Wachstum
+→ Sonne / Schatten
+→ Wasser / Entwässerung
+→ Bewässerung
+→ Materialien
+→ KI-Varianten
+→ Projektprüfung
+→ Präsentation
+→ Mengen / Kosten / Bericht
 ```
 
-## Planungsbrief
+## Präsentationsmodus
 
-Enthält:
+Neu:
 
-- Stil
-- Priorität
-- Budget
-- Pool
-- Terrasse
-- Pergola
-- Familien-/Spielfläche
-- Sichtschutz
-- Pflegeaufwand
-- Biodiversität
-- Ziel-Pflanzenanzahl
+- Gesamtübersicht
+- Tagansicht
+- Nachtansicht
+- Vegetationsentwicklung Jahr 10
+- reduzierte Bedienoberfläche für Kundengespräche
+- ESC beendet den Präsentationsmodus
 
-## Varianten
+## Mengen und Kosten
 
-Automatisch erzeugt:
+Automatisch zusammengeführt werden unter anderem:
 
-```text
-A · Ausgewogen
-B · Budget & Pflege
-C · Natur & Erlebnis
-```
+- Wege und Flächen in m²
+- Mauern und lineare Bauteile in lfm
+- Pflanzen und Ausstattung in Stück
+- Technikleitungen in lfm
+- Erdarbeiten in m³
 
-Jede Variante besitzt:
+Ausgabe:
 
-- Konzept
-- Bewertung
-- Objekte
-- Zonen
-- Geländemodellierung
+- Kosten nach Kategorie
+- Gesamtschätzung
+- Budgetauslastung
+- Budgetreserve oder Überschreitung
+- CSV-Export
+
+## Finaler Projektbericht
+
+Enthalten:
+
+- Projektdaten
+- Kostenübersicht
+- Mengenliste
+- Geländebilanz
+- Planungskennzahlen
+- Projektprüfung
+- Empfehlungen
+
+Der HTML-Bericht kann heruntergeladen werden. Die Druckansicht ist für A4 aufbereitet und kann über den Browser-Druckdialog als PDF gespeichert werden.
 
 ## Projektprüfung
 
-Bewertet werden:
+V0.31 übernimmt die V0.30-Prüfung mit:
 
 - Geometrie
 - Gelände
@@ -62,46 +77,31 @@ Bewertet werden:
 - Budget
 - Architektur
 
-Ergebnis:
+## Enthaltene Module aus V0.19–V0.30
+
+- stabilere Video-Frame-Extraktion
+- Video-Relief zu Hauptprojekt
+- CAD-Auswahl / Gruppierung / Ausrichtung
+- Architektur und Geschosse
+- Räume
+- professionelles Gelände
+- Wege / Mauern / Treppen
+- Pflanzenbibliothek
+- Pflanzenwachstum
+- Sonne / Schatten
+- Performance-Modi
+- Abfluss / Tiefpunkte / Retention
+- Smart Irrigation
+- Material- und Oberflächenbibliothek
+- KI-Planungsvarianten
+- Projekt-Audit
+
+## Wichtige technische Grenze
+
+Die schnelle Video-3D-Funktion erzeugt weiterhin ein bildbasiertes Relief. Eine echte hochqualitative Multi-View-Photogrammetrie benötigt einen separaten Rechen-Worker / Backend-Prozess.
+
+## Version
 
 ```text
-0–100 Punkte
-Note A–E
-Kategorie-Scores
-Konflikte
-Stärken
-Empfehlungen
+0.31.0
 ```
-
-## Erkannte Konflikte
-
-Unter anderem:
-
-- starke Objektüberschneidungen
-- Objekte außerhalb der Planfläche
-- fehlende Geländedefinition
-- Tiefpunkte ohne Drainage
-- Pflanzenkonflikte
-- Bewässerungskonflikte
-- unvollständiges Materialkonzept
-- Budgetüberschreitung
-- unvollständige Gebäudeausarbeitung
-- geringe Besonnung
-
-## Sichere Optimierungen
-
-Automatisch möglich:
-
-- Bibliotheksmaterialien ergänzen
-- Objekte in die Planfläche zurückschieben
-- bei erkannten Tiefpunkten einfache Drainagepunkte ergänzen
-
-Bewusst nicht automatisch verändert werden komplexe gestalterische oder sicherheitskritische Entscheidungen.
-
-## Bestehende KI
-
-Der frühere Schnellentwurf bleibt als einklappbarer Bereich erhalten.
-
-## Nächste Version
-
-V0.31: Präsentation, Mengen/Kosten, finaler Bericht und Gesamtintegration.

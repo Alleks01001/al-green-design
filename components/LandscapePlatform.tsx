@@ -201,6 +201,20 @@ type ProjectAudit = {
   categoryScores: Record<string,number>;
 };
 
+type QuantityLine = {
+  id: string;
+  category: string;
+  name: string;
+  unit: 'Stk.' | 'm²' | 'm³' | 'lfm';
+  quantity: number;
+  unitPrice: number;
+  total: number;
+};
+
+type PresentationPreset = 'overview' | 'day' | 'night' | 'growth10';
+type Season = 'Frühling' | 'Sommer' | 'Herbst' | 'Winter';
+
+
 
 
 type SelectedKind = 'terrain' | 'zone' | 'object' | 'room' | null;
@@ -940,6 +954,64 @@ function estimateObjectCost(obj: GardenObject) {
   return unit*Math.max(1,obj.width*obj.depth*0.25);
 }
 
+
+function quantityLineForObject(obj: GardenObject): QuantityLine {
+  const polyline = obj.points?.length ? absolutePolyline(obj) : [];
+  const polylineLengthValue = polyline.length >= 2 ? polylineLength(polyline) : 0;
+  const unitPrice = Math.max(0, Number(obj.unitCost || 0));
+
+  if (['tree','shrub','hedge','bench','light','firepit','rock','planter','pergola','pool','pond','building','carport','winterGarden'].includes(obj.type)) {
+    return {
+      id:`object-${obj.id}`,
+      category: ['tree','shrub','hedge'].includes(obj.type) ? 'Pflanzen' : ['pool','pond'].includes(obj.type) ? 'Wasser' : ['building','carport','winterGarden','pergola'].includes(obj.type) ? 'Baukörper' : 'Ausstattung',
+      name:obj.name,
+      unit:'Stk.',
+      quantity:1,
+      unitPrice,
+      total:estimateObjectCost(obj)
+    };
+  }
+
+  if (obj.type==='path') {
+    const quantity = polylineLengthValue > 0
+      ? polylineLengthValue * Math.max(0.1,obj.pathWidth || obj.width)
+      : Math.max(0.1,obj.width*obj.depth);
+    return {id:`object-${obj.id}`,category:'Wege & Flächen',name:obj.name,unit:'m²',quantity,unitPrice,total:quantity*unitPrice};
+  }
+
+  if (obj.type==='floor') {
+    const quantity=Math.max(0.1,obj.width*obj.depth);
+    return {id:`object-${obj.id}`,category:'Wege & Flächen',name:obj.name,unit:'m²',quantity,unitPrice,total:quantity*unitPrice};
+  }
+
+  if (['wall','interiorWall','gardenWall','fence','gate','railing'].includes(obj.type)) {
+    const quantity=polylineLengthValue > 0 ? polylineLengthValue : Math.max(0.1,obj.width);
+    return {id:`object-${obj.id}`,category:'Mauern & Einfassungen',name:obj.name,unit:'lfm',quantity,unitPrice,total:estimateObjectCost(obj)};
+  }
+
+  if (obj.type==='stairs') {
+    const quantity=Math.max(1,obj.stepCount || 1);
+    return {id:`object-${obj.id}`,category:'Treppen',name:obj.name,unit:'Stk.',quantity,unitPrice,total:estimateObjectCost(obj)};
+  }
+
+  if (obj.type==='irrigation' || obj.type==='drainage') {
+    if (polylineLengthValue > 0) {
+      return {id:`object-${obj.id}`,category:'Technik',name:obj.name,unit:'lfm',quantity:polylineLengthValue,unitPrice,total:polylineLengthValue*unitPrice};
+    }
+    return {id:`object-${obj.id}`,category:'Technik',name:obj.name,unit:'Stk.',quantity:1,unitPrice,total:Math.max(unitPrice,estimateObjectCost(obj))};
+  }
+
+  const quantity=Math.max(0.1,obj.width*obj.depth);
+  return {id:`object-${obj.id}`,category:'Sonstiges',name:obj.name,unit:'m²',quantity,unitPrice,total:estimateObjectCost(obj)};
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? '').replaceAll('"','""')}"`;
+}
+
+function formatEuro(value:number) {
+  return value.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+}
 function auditGrade(score:number):ProjectAudit['grade'] {
   if(score>=90)return 'A';
   if(score>=78)return 'B';
@@ -1734,7 +1806,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.30 AI PLANNING + AUDIT – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.31 COMPLETE STUDIO – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -1764,7 +1836,7 @@ export default function LandscapePlatform() {
   const [growthCompareYearA, setGrowthCompareYearA] = useState(0);
   const [growthCompareYearB, setGrowthCompareYearB] = useState(10);
   const [showMaturePlantOutline, setShowMaturePlantOutline] = useState(true);
-  const [season, setSeason] = useState<'Frühling' | 'Sommer' | 'Herbst' | 'Winter'>('Sommer');
+  const [season, setSeason] = useState<Season>('Sommer');
   const [sunAzimuth, setSunAzimuth] = useState(135);
   const [sunElevation, setSunElevation] = useState(42);
   const [sunAutoPosition, setSunAutoPosition] = useState(true);
@@ -1820,6 +1892,10 @@ export default function LandscapePlatform() {
   const [planningQuestions, setPlanningQuestions] = useState<string[]>([]);
   const [projectAudit, setProjectAudit] = useState<ProjectAudit | null>(null);
   const [auditBusy, setAuditBusy] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [presentationPreset, setPresentationPreset] = useState<PresentationPreset>('overview');
+  const [presentationCaption, setPresentationCaption] = useState('Gesamtübersicht');
+  const presentationReturnRef = useRef<{view:ViewMode;nightMode:boolean;growthYear:number;season:Season} | null>(null);
   const [showContours, setShowContours] = useState(true);
   const [showGrid3D, setShowGrid3D] = useState(true);
   const [cameraMode, setCameraMode] = useState<'orbit' | 'walk' | 'top'>('orbit');
@@ -1827,6 +1903,8 @@ export default function LandscapePlatform() {
   const [lockedLayers, setLockedLayers] = useState({ terrain: false, zones: false, buildings: false, plants: false, water: false, structures: false, lighting: false, utilities: false, furniture: false });
   const [history, setHistory] = useState<any[]>([]);
   const [future, setFuture] = useState<any[]>([]);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
 
   const [drag2D, setDrag2D] = useState<Drag2D>(null);
 
@@ -2127,6 +2205,38 @@ export default function LandscapePlatform() {
 
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
 
+  const quantityLines = useMemo<QuantityLine[]>(() => {
+    const lines=objects.map(quantityLineForObject);
+
+    if(terrainAnalysis.cutVolume>0){
+      lines.push({id:'terrain-cut',category:'Erdarbeiten',name:'Aushub / Abtrag',unit:'m³',quantity:terrainAnalysis.cutVolume,unitPrice:48,total:terrainAnalysis.cutVolume*48});
+    }
+    if(terrainAnalysis.fillVolume>0){
+      lines.push({id:'terrain-fill',category:'Erdarbeiten',name:'Aufschüttung / Auftrag',unit:'m³',quantity:terrainAnalysis.fillVolume,unitPrice:48,total:terrainAnalysis.fillVolume*48});
+    }
+
+    return lines;
+  }, [objects,terrainAnalysis.cutVolume,terrainAnalysis.fillVolume]);
+
+  const costGroups = useMemo(() => {
+    const groups=new Map<string,{category:string;total:number;lines:number}>();
+    quantityLines.forEach(line=>{
+      const current=groups.get(line.category) || {category:line.category,total:0,lines:0};
+      current.total+=line.total;
+      current.lines+=1;
+      groups.set(line.category,current);
+    });
+    return [...groups.values()].sort((a,b)=>b.total-a.total);
+  }, [quantityLines]);
+
+  const projectGrandTotal = useMemo(
+    () => quantityLines.reduce((sum,line)=>sum+line.total,0),
+    [quantityLines]
+  );
+
+  const budgetDifference = projectInfo.budget-projectGrandTotal;
+  const budgetUsagePercent = projectInfo.budget>0 ? projectGrandTotal/projectInfo.budget*100 : 0;
+
   const filteredMaterialLibrary = useMemo(() => {
     const query=materialSearch.trim().toLowerCase();
     return MATERIAL_LIBRARY.filter(material => {
@@ -2244,7 +2354,7 @@ export default function LandscapePlatform() {
       acc[label] = (acc[label] || 0) + 1;
       return acc;
     }, {} as Record<string,number>);
-    const entry = Object.entries(buckets).sort((a,b)=>b[1]-a[1])[0];
+    const entry = (Object.entries(buckets) as [string,number][]).sort((a,b)=>b[1]-a[1])[0];
     return entry?.[0] || '—';
   }, [flowVectors]);
 
@@ -2614,112 +2724,6 @@ export default function LandscapePlatform() {
       for (const target of xTargets) for (const current of ownX) if (Math.abs(current-target)<=tolerance) { x += target-current; guideX=target; }
       for (const target of yTargets) for (const current of ownY) if (Math.abs(current-target)<=tolerance) { y += target-current; guideY=target; }
     }
-
-    if (isWallObject(obj)) {
-    const thickness = Math.max(obj.thickness || obj.depth, 0.08);
-    return (
-      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
-        <rect x={(-obj.width/2)*SCALE} y={(-thickness/2)*SCALE} width={obj.width*SCALE} height={thickness*SCALE} fill={obj.color} fillOpacity={obj.type==='interiorWall'?0.72:0.92} stroke={stroke} strokeWidth={sw}/>
-
-        {openings.map(opening => {
-          const offset = wallOpeningOffset(obj, opening);
-          return (
-            <g key={`opening-cut-${opening.id}`}>
-              <rect x={(offset-opening.width/2)*SCALE} y={(-thickness/2)*SCALE-1} width={opening.width*SCALE} height={thickness*SCALE+2} fill="#ffffff" stroke={selected ? '#f59e0b' : '#0ea5e9'} strokeWidth="1.5"/>
-              <line x1={(offset-opening.width/2)*SCALE} y1={0} x2={(offset+opening.width/2)*SCALE} y2={0} stroke={opening.type==='door'?'#92400e':'#0284c7'} strokeWidth="3"/>
-            </g>
-          );
-        })}
-
-        <circle cx={(-obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
-        <circle cx={(obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
-        <text x="0" y={-thickness*SCALE/2-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name} · {obj.width.toFixed(2)} m</text>
-      </g>
-    );
-  }
-
-  if (obj.type==='irrigation' && obj.emitterType) {
-    return (
-      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
-        <circle cx="0" cy="0" r="8" fill={obj.color} stroke={stroke} strokeWidth={sw}/>
-        {obj.emitterType==='sprinkler' ? (
-          <>
-            <circle cx="0" cy="0" r="3" fill="#fff"/>
-            <line x1="-6" y1="0" x2="6" y2="0" stroke="#fff" strokeWidth="1.5"/>
-            <line x1="0" y1="-6" x2="0" y2="6" stroke="#fff" strokeWidth="1.5"/>
-          </>
-        ) : (
-          <circle cx="0" cy="0" r="3.5" fill="#fff"/>
-        )}
-        <text x="0" y="22" fontSize="10" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
-      </g>
-    );
-  }
-
-  if ((obj.type==='path' || obj.type==='gardenWall') && obj.points?.length) {
-    const localPath = svgPathForPolyline(obj.points,obj.type==='path' && !!obj.curve);
-    const strokeWidth = (obj.type==='path' ? (obj.pathWidth || 1) : (obj.thickness || 0.28))*SCALE;
-
-    return (
-      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
-        {obj.type==='path' ? (
-          <>
-            <path d={localPath} fill="none" stroke={stroke} strokeWidth={strokeWidth+6} strokeLinecap="round" strokeLinejoin="round" opacity={selected?1:0.45}/>
-            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
-            <path d={localPath} fill="none" stroke="#ffffff" strokeOpacity="0.28" strokeWidth="2" strokeDasharray="12 8"/>
-          </>
-        ) : (
-          <>
-            <path d={localPath} fill="none" stroke={stroke} strokeWidth={strokeWidth+5} strokeLinecap="round" strokeLinejoin="round"/>
-            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
-          </>
-        )}
-
-        {selected && obj.points.map((point,index)=>(
-          <circle key={`poly-point-${index}`} cx={point.x*SCALE} cy={point.y*SCALE} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2"/>
-        ))}
-
-        <text x="0" y="-12" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">
-          {obj.name} · {polylineLength(obj.points).toFixed(2)} m
-        </text>
-      </g>
-    );
-  }
-
-  if (obj.type==='stairs' && obj.points?.length===2) {
-    const start=obj.points[0];
-    const end=obj.points[1];
-    const dx=end.x-start.x;
-    const dy=end.y-start.y;
-    const run=Math.hypot(dx,dy);
-    const angle=Math.atan2(dy,dx)*180/Math.PI;
-    const steps=Math.max(1,obj.stepCount || 1);
-
-    return (
-      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
-        <g transform={`rotate(${angle} ${(start.x+end.x)/2*SCALE} ${(start.y+end.y)/2*SCALE})`}>
-          <rect
-            x={(start.x)*SCALE}
-            y={((start.y)-(obj.width/2))*SCALE}
-            width={run*SCALE}
-            height={obj.width*SCALE}
-            fill={obj.color}
-            fillOpacity="0.8"
-            stroke={stroke}
-            strokeWidth={sw}
-          />
-          {Array.from({length:steps+1}).map((_,index)=>{
-            const px=(start.x + (dx/run)*(run*index/steps))*SCALE;
-            const py=(start.y)*SCALE;
-            return <line key={index} x1={px} y1={py-obj.width*SCALE/2} x2={px} y2={py+obj.width*SCALE/2} stroke="#78716c" strokeWidth="1"/>;
-          })}
-        </g>
-        <text x="0" y="-14" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">
-          {steps} Stufen
-        </text>
-      </g>
-    );
-  }
 
   if (['window','door','slidingDoor'].includes(obj.type)) {
       let best: { wall:GardenObject; distance:number; localX:number } | null = null;
@@ -4738,6 +4742,116 @@ export default function LandscapePlatform() {
     setSelection('terrain', generatedBlobs[0]?.id ?? null, `${chatEngine === 'openai' ? `OpenAI ${openAiModel}` : 'Lokale KI'} interpretiert: ${generatedBlobs.length} Terrain-Formen, ${generatedZones.length} Zonen und ${generatedObjects.length} Architektur-/Gartenobjekte.`);
   }
 
+  function exportQuantityCsv() {
+    const rows=[
+      ['Kategorie','Position','Einheit','Menge','Einheitspreis EUR','Gesamt EUR'],
+      ...quantityLines.map(line=>[
+        line.category,
+        line.name,
+        line.unit,
+        line.quantity.toFixed(2),
+        line.unitPrice.toFixed(2),
+        line.total.toFixed(2)
+      ])
+    ];
+    const csv=rows.map(row=>row.map(csvCell).join(';')).join('\n');
+    download('al-green-design-v031-mengen-kosten.csv',csv,'text/csv;charset=utf-8');
+    setStatus('Mengen- und Kostenliste exportiert.');
+  }
+
+  function buildPrintableReportHtml() {
+    const auditHtml=projectAudit
+      ? `<section><h2>Projektprüfung</h2><div class="score"><strong>${projectAudit.score}/100</strong><span>Note ${projectAudit.grade}</span></div><h3>Hinweise</h3><ul>${projectAudit.issues.slice(0,20).map(issue=>`<li><strong>${issue.title}</strong> – ${issue.message}</li>`).join('')}</ul><h3>Empfehlungen</h3><ol>${projectAudit.recommendations.map(item=>`<li>${item}</li>`).join('')}</ol></section>`
+      : '<section><h2>Projektprüfung</h2><p>Noch keine automatische Projektprüfung ausgeführt.</p></section>';
+
+    const quantityRows=quantityLines.map(line=>`
+      <tr>
+        <td>${line.category}</td>
+        <td>${line.name}</td>
+        <td>${line.unit}</td>
+        <td class="num">${line.quantity.toFixed(2)}</td>
+        <td class="num">${formatEuro(line.unitPrice)}</td>
+        <td class="num">${formatEuro(line.total)}</td>
+      </tr>`).join('');
+
+    const costRows=costGroups.map(group=>`<tr><td>${group.category}</td><td class="num">${formatEuro(group.total)}</td></tr>`).join('');
+
+    return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${projectInfo.name} – AL Green Design Bericht</title><style>
+      @page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#32101a;margin:0;background:#fff}header{border-bottom:4px solid #881337;padding-bottom:16px;margin-bottom:24px}.brand{display:flex;align-items:center;gap:14px}.logo{width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,#7f1d1d,#be123c);color:#fff;display:grid;place-items:center;font-weight:900;font-size:22px}.brand h1{margin:0;color:#5f0f22}.brand p{margin:4px 0 0;color:#9f3952}.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.card,.score{padding:12px;border:1px solid #ead7dc;border-radius:12px;background:#fff7f7}.card small{display:block;color:#9f3952}.card strong{display:block;margin-top:4px}h2{margin-top:28px;color:#6b1024;border-bottom:1px solid #ead7dc;padding-bottom:7px}h3{color:#7f1d1d}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border-bottom:1px solid #ead7dc;padding:7px;text-align:left}th{background:#fff1f2;color:#6b1024}.num{text-align:right}.total{font-size:20px;color:#7f1d1d}.footer{margin-top:30px;padding-top:10px;border-top:1px solid #ead7dc;font-size:10px;color:#9f3952}@media print{button{display:none}.card,.score{break-inside:avoid}table{break-inside:auto}tr{break-inside:avoid}}
+    </style></head><body>
+      <header><div class="brand"><div class="logo">AL</div><div><h1>AL Green Design</h1><p>Landscape Architecture Studio · Projektbericht V0.31</p></div></div></header>
+      <section><h2>Projekt</h2><div class="meta"><div class="card"><small>Name</small><strong>${projectInfo.name}</strong></div><div class="card"><small>Standort</small><strong>${projectInfo.location || '—'}</strong></div><div class="card"><small>Projektfläche</small><strong>${projectInfo.area.toFixed(0)} m²</strong></div><div class="card"><small>Budget</small><strong>${formatEuro(projectInfo.budget)}</strong></div></div></section>
+      <section><h2>Kostenübersicht</h2><table><thead><tr><th>Kategorie</th><th class="num">Summe</th></tr></thead><tbody>${costRows}</tbody></table><p class="total"><strong>Gesamtschätzung: ${formatEuro(projectGrandTotal)}</strong></p><p>Budgetdifferenz: <strong>${formatEuro(budgetDifference)}</strong></p></section>
+      <section><h2>Mengen und Positionen</h2><table><thead><tr><th>Kategorie</th><th>Position</th><th>Einheit</th><th class="num">Menge</th><th class="num">EP</th><th class="num">Gesamt</th></tr></thead><tbody>${quantityRows}</tbody></table></section>
+      <section><h2>Gelände</h2><div class="meta"><div class="card"><small>Aushub</small><strong>${terrainAnalysis.cutVolume.toFixed(1)} m³</strong></div><div class="card"><small>Aufschüttung</small><strong>${terrainAnalysis.fillVolume.toFixed(1)} m³</strong></div><div class="card"><small>Bilanz</small><strong>${terrainAnalysis.netVolume.toFixed(1)} m³</strong></div><div class="card"><small>Höhenpunkte</small><strong>${elevationPoints.length}</strong></div></div></section>
+      <section><h2>Planungskennzahlen</h2><div class="meta"><div class="card"><small>Objekte</small><strong>${objects.length}</strong></div><div class="card"><small>Pflanzen</small><strong>${objects.filter(o=>['tree','shrub','hedge'].includes(o.type)).length}</strong></div><div class="card"><small>Materialien verwendet</small><strong>${materialUsageStats.length}</strong></div><div class="card"><small>Bewässerungszonen</small><strong>${irrigationZones.length}</strong></div></div></section>
+      ${auditHtml}
+      <div class="footer">Automatisch erzeugter Planungsbericht. Mengen, Kosten, Pflanzen- und Geländewerte sind Planungsansätze und vor Ausführung fachlich zu prüfen.</div>
+    </body></html>`;
+  }
+
+  function exportHtmlReport() {
+    download('al-green-design-v031-projektbericht.html',buildPrintableReportHtml(),'text/html;charset=utf-8');
+    setStatus('HTML-Projektbericht exportiert.');
+  }
+
+  function openPrintableReport() {
+    const popup=window.open('','_blank','noopener,noreferrer');
+    if(!popup){
+      setStatus('Druckansicht konnte nicht geöffnet werden. Pop-up-Freigabe prüfen.');
+      return;
+    }
+    popup.document.open();
+    popup.document.write(buildPrintableReportHtml());
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(()=>popup.print(),300);
+    setStatus('Druckansicht geöffnet. Im Druckdialog kann als PDF gespeichert werden.');
+  }
+
+  function startPresentation(preset:PresentationPreset='overview') {
+    if(!presentationMode){
+      presentationReturnRef.current={view,nightMode,growthYear,season};
+    }
+
+    setPresentationMode(true);
+    setPresentationPreset(preset);
+    setView('3d');
+    setSelectedKind(null);
+    setSelectedId(null);
+    setSelectedObjectIds([]);
+
+    if(preset==='day'){
+      setNightMode(false);
+      setGrowthYear(3);
+      setSeason('Sommer');
+      setPresentationCaption('Tagansicht · Sommer · Jahr 3');
+    }else if(preset==='night'){
+      setNightMode(true);
+      setPresentationCaption('Nachtansicht mit Beleuchtung');
+    }else if(preset==='growth10'){
+      setNightMode(false);
+      setGrowthYear(10);
+      setSeason('Sommer');
+      setPresentationCaption('Vegetationsentwicklung · Jahr 10');
+    }else{
+      setNightMode(false);
+      setPresentationCaption('Gesamtübersicht');
+    }
+  }
+
+  function exitPresentation() {
+    const previous=presentationReturnRef.current;
+    setPresentationMode(false);
+    if(previous){
+      setView(previous.view);
+      setNightMode(previous.nightMode);
+      setGrowthYear(previous.growthYear);
+      setSeason(previous.season);
+    }
+    presentationReturnRef.current=null;
+  }
+
   function exportCsvReport() {
     const rows = [
       ['Kategorie','Name','Typ','X','Y','Breite','Tiefe','Höhe','Material','Kostenansatz'],
@@ -4746,18 +4860,46 @@ export default function LandscapePlatform() {
       ...terrainBlobs.map(b=>['Gelände',b.name,b.height>=0?'Erhebung':'Senke',b.x,b.y,b.radius*2,b.radius*2,b.height,'Erde',48])
     ];
     const csv = rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n');
-    download('al-green-design-v019-bericht.csv', csv, 'text/csv;charset=utf-8');
+    download('al-green-design-v031-objektbericht.csv', csv, 'text/csv;charset=utf-8');
     setStatus('CSV-Bericht exportiert.');
   }
 
   function exportProject() {
-    download('al-green-design-v030-ai-planning.algreen', JSON.stringify({ version:'0.30.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel, planningBrief, projectAudit }, null, 2), 'application/json');
+    download('al-green-design-v031-complete-studio.algreen', JSON.stringify({
+      version:'0.31.0',
+      projectInfo,
+      terrainBlobs,
+      elevationPoints,
+      irrigationZones,
+      zones,
+      objects,
+      rooms,
+      levels,
+      activeLevel,
+      importedModels,
+      layers,
+      lockedLayers,
+      gridSize,
+      snapEnabled,
+      imageName:image?.name ?? null,
+      chatEngine,
+      openAiModel,
+      planningBrief,
+      projectAudit,
+      quantityLines,
+      projectGrandTotal
+    }, null, 2), 'application/json');
+    setStatus('V0.31-Projekt vollständig exportiert.');
   }
 
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
+      if (e.key === 'Escape' && presentationMode) {
+        exitPresentation();
+        return;
+      }
       if (['INPUT','TEXTAREA','SELECT'].includes(target?.tagName)) return;
       if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
@@ -4768,7 +4910,7 @@ export default function LandscapePlatform() {
   });
 
   return (
-    <section className="platform">
+    <section className={`platform ${presentationMode?'presentationMode':''}`}>
       <aside className="panel">
         <div className="brandBlock">
           <div className="brandLogo" aria-hidden="true">
@@ -5722,14 +5864,55 @@ export default function LandscapePlatform() {
 
         {tab === 'reports' && (
           <>
-            <h2>Berichte und Listen</h2>
-            <div className="list">
-              <div className="item"><strong>Objektliste</strong><span>{objects.length} Objekte im Projekt</span></div>
-              <div className="item"><strong>Pflanzenliste</strong><span>{objects.filter(o=>['tree','shrub','hedge'].includes(o.type)).length} Pflanzenobjekte</span></div>
-              <div className="item"><strong>Wassertechnik</strong><span>{objects.filter(o=>['pool','pond','irrigation','drainage'].includes(o.type)).length} Elemente</span></div>
-              <div className="item"><strong>Geländebericht</strong><span>Auftrag {stats.fill.toFixed(1)} m³ · Abtrag {stats.cut.toFixed(1)} m³</span></div>
+            <h2>Finaler Projektbericht</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Positionen</small><strong>{quantityLines.length}</strong></div>
+              <div className="kpi"><small>Gesamtschätzung</small><strong>{formatEuro(projectGrandTotal)}</strong></div>
+              <div className="kpi"><small>Budget</small><strong>{formatEuro(projectInfo.budget)}</strong></div>
+              <div className="kpi"><small>Qualität</small><strong>{projectAudit?`${projectAudit.score}/100`:'—'}</strong></div>
             </div>
-            <button className="btn blue" style={{marginTop:10}} onClick={exportCsvReport}>CSV-Bericht exportieren</button>
+
+            <div className="budgetProgressPanel">
+              <div className="item"><strong>Budgetauslastung</strong><span>{budgetUsagePercent.toFixed(1)} %</span></div>
+              <div className="budgetTrack"><i style={{width:`${Math.min(100,budgetUsagePercent)}%`}} className={budgetUsagePercent>100?'over':''}/></div>
+              <div className="item"><strong>{budgetDifference>=0?'Budgetreserve':'Überschreitung'}</strong><span>{formatEuro(Math.abs(budgetDifference))}</span></div>
+            </div>
+
+            <div className="grid2" style={{marginTop:10}}>
+              <button className="btn primary" onClick={exportQuantityCsv}>Mengen + Kosten CSV</button>
+              <button className="btn blue" onClick={exportCsvReport}>Objektbericht CSV</button>
+              <button className="btn" onClick={exportHtmlReport}>HTML-Bericht herunterladen</button>
+              <button className="btn primary" onClick={openPrintableReport}>Druckansicht / PDF</button>
+            </div>
+
+            <h2 style={{marginTop:14}}>Kosten nach Kategorie</h2>
+            <div className="finalCostList">
+              {costGroups.map(group=>(
+                <div className="finalCostRow" key={group.category}>
+                  <span>{group.category}<small>{group.lines} Position(en)</small></span>
+                  <strong>{formatEuro(group.total)}</strong>
+                </div>
+              ))}
+            </div>
+
+            <h2 style={{marginTop:14}}>Mengenübersicht</h2>
+            <div className="quantityTableWrap">
+              <table className="quantityTable">
+                <thead><tr><th>Kategorie</th><th>Position</th><th>Einheit</th><th>Menge</th><th>Gesamt</th></tr></thead>
+                <tbody>
+                  {quantityLines.map(line=>(
+                    <tr key={line.id}>
+                      <td>{line.category}</td><td>{line.name}</td><td>{line.unit}</td><td>{line.quantity.toFixed(2)}</td><td>{formatEuro(line.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="hint" style={{marginTop:10}}>
+              Die Druckansicht ist für A4 aufbereitet und kann über den Browser-Druckdialog als PDF gespeichert werden. Mengen und Kosten sind Planungsansätze und vor Ausführung fachlich zu prüfen.
+            </div>
           </>
         )}
 
@@ -5816,15 +5999,24 @@ export default function LandscapePlatform() {
 
         {tab === 'costs' && (
           <>
-            <h2>Kostenübersicht</h2>
+            <h2>Mengen und Kosten</h2>
             <div className="kpis">
-              <div className="kpi"><small>Gebäude</small><strong>{(objects.filter(o=>o.type==='building').reduce((a,o)=>a+o.width*o.depth*Number(o.unitCost||650),0)).toFixed(0)} €</strong></div>
-              <div className="kpi"><small>Wasser</small><strong>{(objects.filter(o=>['pool','pond'].includes(o.type)).reduce((a,o)=>a+o.width*o.depth*Number(o.unitCost||500),0)).toFixed(0)} €</strong></div>
-              <div className="kpi"><small>Pflanzen</small><strong>{(objects.filter(o=>['tree','shrub','hedge'].includes(o.type)).reduce((a,o)=>a+Number(o.unitCost||(o.type==='tree'?320:o.type==='hedge'?180:65)),0)).toFixed(0)} €</strong></div>
-              <div className="kpi"><small>Ausstattung</small><strong>{(objects.filter(o=>['bench','planter','light','firepit','rock'].includes(o.type)).reduce((a,o)=>a+Number(o.unitCost||250),0)).toFixed(0)} €</strong></div>
-              <div className="kpi"><small>Technik</small><strong>{(objects.filter(o=>['irrigation','drainage'].includes(o.type)).reduce((a,o)=>a+o.width*Number(o.unitCost||25),0)).toFixed(0)} €</strong></div>
-              <div className="kpi"><small>Erdarbeiten</small><strong>{((stats.fill+stats.cut)*48).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Gesamtschätzung</small><strong>{formatEuro(projectGrandTotal)}</strong></div>
+              <div className="kpi"><small>Budget</small><strong>{formatEuro(projectInfo.budget)}</strong></div>
+              <div className="kpi"><small>Auslastung</small><strong>{budgetUsagePercent.toFixed(1)} %</strong></div>
+              <div className="kpi"><small>{budgetDifference>=0?'Reserve':'Über Budget'}</small><strong>{formatEuro(Math.abs(budgetDifference))}</strong></div>
             </div>
+
+            <div className="finalCostList" style={{marginTop:10}}>
+              {costGroups.map(group=>(
+                <div className="finalCostRow" key={group.category}>
+                  <span>{group.category}<small>{group.lines} Position(en)</small></span>
+                  <strong>{formatEuro(group.total)}</strong>
+                </div>
+              ))}
+            </div>
+
+            <button className="btn primary" style={{marginTop:10}} onClick={exportQuantityCsv}>Mengen- und Kostenliste exportieren</button>
           </>
         )}
 
@@ -5852,7 +6044,7 @@ export default function LandscapePlatform() {
                 </div>
 
                 <div className="auditCategoryGrid">
-                  {Object.entries(projectAudit.categoryScores).map(([category,score])=>(
+                  {(Object.entries(projectAudit.categoryScores) as [string,number][]).map(([category,score])=>(
                     <div className="auditCategory" key={category}>
                       <span>{category}</span>
                       <strong>{Math.round(score)}</strong>
@@ -5912,12 +6104,22 @@ export default function LandscapePlatform() {
           </>
         )}
 
-        {tab === 'export' && <><h2>Export</h2><button className="btn blue" onClick={exportProject}>Projekt exportieren</button></>}
+        {tab === 'export' && (
+          <>
+            <h2>Export</h2>
+            <div className="grid2">
+              <button className="btn blue" onClick={exportProject}>Projekt .algreen</button>
+              <button className="btn primary" onClick={exportQuantityCsv}>Mengen/Kosten CSV</button>
+              <button className="btn" onClick={exportHtmlReport}>Projektbericht HTML</button>
+              <button className="btn" onClick={openPrintableReport}>Druckansicht / PDF</button>
+            </div>
+          </>
+        )}
       </aside>
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.30 AI PLANNING + AUDIT</span>
+          <span className="pill brandPill">V0.31 COMPLETE STUDIO</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -5934,8 +6136,24 @@ export default function LandscapePlatform() {
           <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D</button>
           <button className={`pill ${view==='splitVertical'?'active':''}`} onClick={()=>setView('splitVertical')}>Split ↔</button>
           <button className={`pill ${view==='splitHorizontal'?'active':''}`} onClick={()=>setView('splitHorizontal')}>Split ↕</button>
+          <button className="pill presentationTrigger" onClick={()=>startPresentation('overview')}>Präsentation</button>
         </div>
         <div className="canvasWrap">
+          {presentationMode && (
+            <div className="presentationToolbar">
+              <div className="presentationBrand">
+                <div className="miniLogo">AL</div>
+                <div><strong>{projectInfo.name}</strong><span>{presentationCaption}</span></div>
+              </div>
+              <div className="presentationActions">
+                <button className={presentationPreset==='overview'?'active':''} onClick={()=>startPresentation('overview')}>Übersicht</button>
+                <button className={presentationPreset==='day'?'active':''} onClick={()=>startPresentation('day')}>Tag</button>
+                <button className={presentationPreset==='night'?'active':''} onClick={()=>startPresentation('night')}>Nacht</button>
+                <button className={presentationPreset==='growth10'?'active':''} onClick={()=>startPresentation('growth10')}>Jahr 10</button>
+                <button className="close" onClick={exitPresentation}>Präsentation beenden</button>
+              </div>
+            </div>
+          )}
           {view === '2d' ? (
             <svg
               ref={svgRef}
@@ -6667,6 +6885,90 @@ function GardenObject2D({ obj, openings = [], selected, growthYear = 0, showMatu
   const tx = obj.x * SCALE;
   const ty = obj.y * SCALE;
   const rot = obj.rotation;
+
+  if (isWallObject(obj)) {
+    const thickness = Math.max(obj.thickness || obj.depth, 0.08);
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <rect x={(-obj.width/2)*SCALE} y={(-thickness/2)*SCALE} width={obj.width*SCALE} height={thickness*SCALE} fill={obj.color} fillOpacity={obj.type==='interiorWall'?0.72:0.92} stroke={stroke} strokeWidth={sw}/>
+        {openings.map(opening => {
+          const offset = wallOpeningOffset(obj, opening);
+          return (
+            <g key={`opening-cut-${opening.id}`}>
+              <rect x={(offset-opening.width/2)*SCALE} y={(-thickness/2)*SCALE-1} width={opening.width*SCALE} height={thickness*SCALE+2} fill="#ffffff" stroke={selected ? '#f59e0b' : '#0ea5e9'} strokeWidth="1.5"/>
+              <line x1={(offset-opening.width/2)*SCALE} y1={0} x2={(offset+opening.width/2)*SCALE} y2={0} stroke={opening.type==='door'?'#92400e':'#0284c7'} strokeWidth="3"/>
+            </g>
+          );
+        })}
+        <circle cx={(-obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
+        <circle cx={(obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
+        <text x="0" y={-thickness*SCALE/2-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name} · {obj.width.toFixed(2)} m</text>
+      </g>
+    );
+  }
+
+  if (obj.type==='irrigation' && obj.emitterType) {
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <circle cx="0" cy="0" r="8" fill={obj.color} stroke={stroke} strokeWidth={sw}/>
+        {obj.emitterType==='sprinkler' ? (
+          <>
+            <circle cx="0" cy="0" r="3" fill="#fff"/>
+            <line x1="-6" y1="0" x2="6" y2="0" stroke="#fff" strokeWidth="1.5"/>
+            <line x1="0" y1="-6" x2="0" y2="6" stroke="#fff" strokeWidth="1.5"/>
+          </>
+        ) : <circle cx="0" cy="0" r="3.5" fill="#fff"/>}
+        <text x="0" y="22" fontSize="10" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+      </g>
+    );
+  }
+
+  if ((obj.type==='path' || obj.type==='gardenWall') && obj.points?.length) {
+    const localPath = svgPathForPolyline(obj.points,obj.type==='path' && !!obj.curve);
+    const pathStrokeWidth = (obj.type==='path' ? (obj.pathWidth || 1) : (obj.thickness || 0.28))*SCALE;
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
+        {obj.type==='path' ? (
+          <>
+            <path d={localPath} fill="none" stroke={stroke} strokeWidth={pathStrokeWidth+6} strokeLinecap="round" strokeLinejoin="round" opacity={selected?1:0.45}/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={localPath} fill="none" stroke="#ffffff" strokeOpacity="0.28" strokeWidth="2" strokeDasharray="12 8"/>
+          </>
+        ) : (
+          <>
+            <path d={localPath} fill="none" stroke={stroke} strokeWidth={pathStrokeWidth+5} strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+          </>
+        )}
+        {selected && obj.points.map((point,index)=><circle key={`poly-point-${index}`} cx={point.x*SCALE} cy={point.y*SCALE} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2"/>)}
+        <text x="0" y="-12" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">{obj.name} · {polylineLength(obj.points).toFixed(2)} m</text>
+      </g>
+    );
+  }
+
+  if (obj.type==='stairs' && obj.points?.length===2) {
+    const start=obj.points[0];
+    const end=obj.points[1];
+    const dx=end.x-start.x;
+    const dy=end.y-start.y;
+    const run=Math.max(0.01,Math.hypot(dx,dy));
+    const angle=Math.atan2(dy,dx)*180/Math.PI;
+    const steps=Math.max(1,obj.stepCount || 1);
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
+        <g transform={`rotate(${angle} ${(start.x+end.x)/2*SCALE} ${(start.y+end.y)/2*SCALE})`}>
+          <rect x={start.x*SCALE} y={(start.y-obj.width/2)*SCALE} width={run*SCALE} height={obj.width*SCALE} fill={obj.color} fillOpacity="0.8" stroke={stroke} strokeWidth={sw}/>
+          {Array.from({length:steps+1}).map((_,index)=>{
+            const px=(start.x + (dx/run)*(run*index/steps))*SCALE;
+            const py=start.y*SCALE;
+            return <line key={index} x1={px} y1={py-obj.width*SCALE/2} x2={px} y2={py+obj.width*SCALE/2} stroke="#78716c" strokeWidth="1"/>;
+          })}
+        </g>
+        <text x="0" y="-14" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">{steps} Stufen</text>
+      </g>
+    );
+  }
+
   if (['window','door','slidingDoor'].includes(obj.type)) {
     return (
       <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
@@ -6719,8 +7021,11 @@ function GardenObject2D({ obj, openings = [], selected, growthYear = 0, showMatu
     const renderWidth=dims?.width || obj.width;
     return (
       <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
-        <circle cx="0" cy="0" r={(obj.width / 2) * SCALE} fill={obj.color} fillOpacity="0.85" stroke={stroke} strokeWidth={sw} />
-        <text x="0" y={(obj.width / 2 + 0.3) * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+        {obj.speciesId && showMaturePlantOutline && (
+          <circle cx="0" cy="0" r={((obj.matureWidth || renderWidth)/2)*SCALE} fill="none" stroke="#16a34a" strokeDasharray="7 6" strokeWidth="1.5" opacity="0.55"/>
+        )}
+        <circle cx="0" cy="0" r={(renderWidth / 2) * SCALE} fill={obj.color} fillOpacity="0.85" stroke={stroke} strokeWidth={sw} />
+        <text x="0" y={(renderWidth / 2 + 0.3) * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
       </g>
     );
   }
