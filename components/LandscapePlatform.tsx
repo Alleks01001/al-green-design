@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importedModel';
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
 type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
@@ -150,7 +151,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.19.1 CAD CONTROLS – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.19.2 MODEL PIPELINE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -160,6 +161,8 @@ export default function LandscapePlatform() {
   const [imageApplied, setImageApplied] = useState(false);
   const [imageOpacity, setImageOpacity] = useState(0.32);
   const [imageFit, setImageFit] = useState<'stretch' | 'contain'>('contain');
+  const [importedModels, setImportedModels] = useState<ImportedReliefModel[]>([]);
+  const [selectedImportedModelId, setSelectedImportedModelId] = useState<string | null>(null);
   const [projectInfo, setProjectInfo] = useState({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [gridSize, setGridSize] = useState(0.5);
@@ -226,12 +229,68 @@ export default function LandscapePlatform() {
   const selectedZone = selectedKind === 'zone' ? zones.find(z => z.id === selectedId) || null : null;
   const selectedObject = selectedKind === 'object' ? objects.find(o => o.id === selectedId) || null : null;
   const selectedObjects = objects.filter(o => selectedObjectIds.includes(o.id));
+  const selectedImportedModel = importedModels.find(model => model.id === selectedImportedModelId) || null;
   const nearestObjectInfo = useMemo(() => {
     if (!selectedObject) return null;
     const others = objects.filter(o => o.id !== selectedObject.id);
     if (!others.length) return null;
     return others.map(o => ({ object:o, distance:Math.hypot(o.x-selectedObject.x,o.y-selectedObject.y) })).sort((a,b)=>a.distance-b.distance)[0] || null;
   }, [objects, selectedObject]);
+
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(IMPORTED_MODEL_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const models = Array.isArray(parsed) ? parsed : [];
+      setImportedModels(models);
+
+      const requestedId = localStorage.getItem('al-green-v0192-open-imported-model');
+      if (requestedId && models.some((model: ImportedReliefModel) => model.id === requestedId)) {
+        setSelectedImportedModelId(requestedId);
+        setView('3d');
+        setTab('scene');
+        setStatus('Das Video-3D-Modell wurde in das Projekt übernommen und ist in der 3D-Szene sichtbar.');
+        localStorage.removeItem('al-green-v0192-open-imported-model');
+      }
+    } catch {
+      setStatus('Importierte 3D-Modelle konnten nicht aus dem Browser-Speicher gelesen werden.');
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(IMPORTED_MODEL_STORAGE_KEY, JSON.stringify(importedModels));
+    } catch {
+      // Browser-Speicher kann bei sehr großen Bildern voll sein.
+    }
+  }, [importedModels]);
+
+  function updateImportedModel(id: string, patch: Partial<ImportedReliefModel>) {
+    setImportedModels(current => current.map(model => model.id === id ? { ...model, ...patch } : model));
+  }
+
+  function deleteImportedModel(id: string) {
+    setImportedModels(current => current.filter(model => model.id !== id));
+    if (selectedImportedModelId === id) setSelectedImportedModelId(null);
+    setStatus('Importiertes 3D-Modell gelöscht.');
+  }
+
+  function duplicateImportedModel(id: string) {
+    const source = importedModels.find(model => model.id === id);
+    if (!source) return;
+    const copy: ImportedReliefModel = {
+      ...source,
+      id: `imported-model-${Date.now()}`,
+      name: `${source.name} Kopie`,
+      x: source.x + 0.5,
+      z: source.z + 0.5,
+      createdAt: new Date().toISOString()
+    };
+    setImportedModels(current => [...current, copy]);
+    setSelectedImportedModelId(copy.id);
+    setStatus('Importiertes 3D-Modell dupliziert.');
+  }
 
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
 
@@ -317,12 +376,12 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v019-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v0192-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, importedModels, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v019-project');
+    const raw = localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
@@ -331,6 +390,7 @@ export default function LandscapePlatform() {
       if (data.terrainBlobs) setTerrainBlobs(data.terrainBlobs);
       if (data.zones) setZones(data.zones);
       if (data.objects) setObjects(data.objects);
+      if (Array.isArray(data.importedModels)) setImportedModels(data.importedModels);
       if (data.layers) setLayers(data.layers);
       if (data.gridSize) setGridSize(data.gridSize);
       if (typeof data.snapEnabled === 'boolean') setSnapEnabled(data.snapEnabled);
@@ -888,7 +948,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.1', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.2', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -1001,8 +1061,9 @@ export default function LandscapePlatform() {
             <h2>VIDEO → 3D</h2>
             <div className="list">
               <div className="item"><strong>Video laden</strong><span>Frames direkt im Browser extrahieren.</span></div>
-              <div className="item"><strong>Schnelle 3D-Vorschau</strong><span>Tiefenrelief aus einem Videoframe.</span></div>
-              <div className="item"><strong>Präzisions-Pipeline</strong><span>Mehrbild-Rekonstruktion für einen separaten 3D-Worker vorbereitet.</span></div>
+              <div className="item"><strong>3D-Modell erzeugen</strong><span>Tiefenrelief aus einem Videoframe.</span></div>
+              <div className="item"><strong>Direkt übernehmen</strong><span>Das erzeugte Modell erscheint anschließend in deiner Haupt-3D-Szene.</span></div>
+              <div className="item"><strong>Export</strong><span>GLB und OBJ direkt herunterladen.</span></div>
             </div>
             <a className="btn primary" style={{display:'block',marginTop:10,textAlign:'center',textDecoration:'none'}} href="/video-to-3d">VIDEO → 3D Studio öffnen</a>
           </>
@@ -1109,6 +1170,24 @@ export default function LandscapePlatform() {
           </>
         )}
 
+        {tab === 'scene' && (
+          <>
+            <h2>3D-Szene und importierte Modelle</h2>
+            <div className="list">
+              <div className="item"><strong>Importierte 3D-Modelle</strong><span>{importedModels.length} Modell(e)</span></div>
+            </div>
+            <a className="btn primary" style={{display:'block',marginTop:10,textAlign:'center',textDecoration:'none'}} href="/video-to-3d">Neues Video-3D-Modell erzeugen</a>
+            <div className="importedModelList" style={{marginTop:10}}>
+              {importedModels.map(model => (
+                <button key={model.id} className={`item importedModelItem ${selectedImportedModelId===model.id?'active':''}`} onClick={()=>{setSelectedImportedModelId(model.id);setView('3d');setStatus(`${model.name} ausgewählt.`);}}>
+                  <strong>{model.name}</strong><span>{model.width.toFixed(2)} × {model.height.toFixed(2)} m</span>
+                </button>
+              ))}
+              {!importedModels.length && <div className="hint">Noch kein Video-3D-Modell übernommen.</div>}
+            </div>
+          </>
+        )}
+
         {tab === 'reports' && (
           <>
             <h2>Berichte und Listen</h2>
@@ -1176,13 +1255,12 @@ export default function LandscapePlatform() {
           </>
         )}
 
-        {tab === 'scene' && <><h2>Szene</h2><div className="hint">Im 3D können Gebäude und Objekte direkt auf dem Gelände verschoben werden.</div></>}
         {tab === 'export' && <><h2>Export</h2><button className="btn blue" onClick={exportProject}>Projekt exportieren</button></>}
       </aside>
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.19.1 CAD CONTROLS</span>
+          <span className="pill">V0.19.2 MODEL PIPELINE</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -1248,11 +1326,20 @@ export default function LandscapePlatform() {
               {selectedObject && selectedObjectIds.length===1 && <ObjectTransformHandles obj={selectedObject} onScaleStart={startScaleObject} onRotateStart={startRotateObject}/>}
             </svg>
           ) : view === '3d' ? (
-            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
               setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
-              if (obj) setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
+              if (obj) {
+                setSelectedImportedModelId(null);
+                setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
+              }
+            }} onImportedModelSelect={(id) => {
+              setSelectedImportedModelId(id);
+              setSelectedObjectIds([]);
+              setSelectedKind(null);
+              setSelectedId(null);
+              setStatus('Importiertes Video-3D-Modell ausgewählt.');
             }} onStatus={setStatus} />
           ) : (
             <div className={`splitWorkspace ${view==='splitHorizontal'?'horizontal':''}`}>
@@ -1260,12 +1347,21 @@ export default function LandscapePlatform() {
                 <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} />
               </div>
               <div className="splitPane">
-                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
                   setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
                 }} onObjectSelect={(id) => {
-                  const obj = objects.find(o => o.id === id);
-                  if (obj) setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
-                }} onStatus={setStatus} />
+              const obj = objects.find(o => o.id === id);
+              if (obj) {
+                setSelectedImportedModelId(null);
+                setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
+              }
+            }} onImportedModelSelect={(id) => {
+              setSelectedImportedModelId(id);
+              setSelectedObjectIds([]);
+              setSelectedKind(null);
+              setSelectedId(null);
+              setStatus('Importiertes Video-3D-Modell ausgewählt.');
+            }} onStatus={setStatus} />
               </div>
             </div>
           )}
@@ -1330,6 +1426,26 @@ export default function LandscapePlatform() {
             </div>
           </div>
         )}
+        {selectedImportedModel && (
+          <div className="form importedModelProperties">
+            <h2>Importiertes 3D-Modell</h2>
+            <label>Name<input value={selectedImportedModel.name} onChange={e=>updateImportedModel(selectedImportedModel.id,{name:e.target.value})}/></label>
+            <label>Position X<input type="number" step="0.1" value={selectedImportedModel.x} onChange={e=>updateImportedModel(selectedImportedModel.id,{x:Number(e.target.value)})}/></label>
+            <label>Höhe Y<input type="number" step="0.1" value={selectedImportedModel.y} onChange={e=>updateImportedModel(selectedImportedModel.id,{y:Number(e.target.value)})}/></label>
+            <label>Position Z<input type="number" step="0.1" value={selectedImportedModel.z} onChange={e=>updateImportedModel(selectedImportedModel.id,{z:Number(e.target.value)})}/></label>
+            <label>Drehung Y°<input type="number" step="1" value={selectedImportedModel.rotationY} onChange={e=>updateImportedModel(selectedImportedModel.id,{rotationY:Number(e.target.value)})}/></label>
+            <label>Maßstab<input type="number" min="0.01" step="0.05" value={selectedImportedModel.scale} onChange={e=>updateImportedModel(selectedImportedModel.id,{scale:Math.max(0.01,Number(e.target.value)||1)})}/></label>
+            <label>Transparenz<input type="range" min="0.1" max="1" step="0.05" value={selectedImportedModel.opacity} onChange={e=>updateImportedModel(selectedImportedModel.id,{opacity:Number(e.target.value)})}/><span>{Math.round(selectedImportedModel.opacity*100)}%</span></label>
+            <label><input type="checkbox" checked={selectedImportedModel.visible} onChange={e=>updateImportedModel(selectedImportedModel.id,{visible:e.target.checked})}/> Sichtbar</label>
+            <div className="grid2">
+              <button className="btn" onClick={()=>updateImportedModel(selectedImportedModel.id,{x:0,y:0,z:0,rotationY:0,scale:1})}>Zurücksetzen</button>
+              <button className="btn blue" onClick={()=>duplicateImportedModel(selectedImportedModel.id)}>Duplizieren</button>
+              <button className="btn danger" onClick={()=>deleteImportedModel(selectedImportedModel.id)}>Löschen</button>
+            </div>
+            <div className="hint">Das Modell ist Bestandteil deiner 3D-Szene. Position, Höhe, Drehung und Maßstab können hier eingestellt werden.</div>
+          </div>
+        )}
+
         {selectedObject && (
           <div className="form">
             <label>Name<input value={selectedObject.name} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,name:e.target.value}:o))} /></label>
@@ -1476,6 +1592,8 @@ function Terrain3D({
   terrainBlobs,
   zones,
   objects,
+  importedModels,
+  selectedImportedModelId,
   selectedId,
   selectedKind,
   nightMode,
@@ -1488,11 +1606,14 @@ function Terrain3D({
   cameraMode,
   onObjectMove,
   onObjectSelect,
+  onImportedModelSelect,
   onStatus
 }: {
   terrainBlobs: TerrainBlob[];
   zones: Zone[];
   objects: GardenObject[];
+  importedModels: ImportedReliefModel[];
+  selectedImportedModelId: string | null;
   selectedId: number | null;
   selectedKind: SelectedKind;
   nightMode: boolean;
@@ -1505,6 +1626,7 @@ function Terrain3D({
   cameraMode: 'orbit' | 'walk' | 'top';
   onObjectMove: (id: number, x: number, y: number) => void;
   onObjectSelect: (id: number) => void;
+  onImportedModelSelect: (id: string) => void;
   onStatus: (msg: string) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -1558,6 +1680,76 @@ function Terrain3D({
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(zone.width, zone.kind === 'hardscape' ? 0.12 : 0.05, zone.depth), new THREE.MeshStandardMaterial({ color: zone.color, transparent: true, opacity: zone.kind === 'hardscape' ? 0.92 : 0.55 }));
       mesh.position.set(zone.x, h + (zone.kind === 'hardscape' ? 0.08 : 0.03), zone.y);
       scene.add(mesh);
+    });
+
+    const importedModelGroups: { id: string; group: THREE.Group }[] = [];
+    let disposed = false;
+
+    importedModels.filter(model => model.visible).forEach(model => {
+      const group = new THREE.Group();
+      group.position.set(model.x, model.y, model.z);
+      group.rotation.set(degToRad(model.rotationX), degToRad(model.rotationY), degToRad(model.rotationZ));
+      group.scale.setScalar(model.scale);
+      group.userData.importedModelId = model.id;
+      scene.add(group);
+      importedModelGroups.push({ id: model.id, group });
+
+      const image = new Image();
+      image.onload = () => {
+        if (disposed) return;
+        const w = 96;
+        const h = Math.max(48, Math.round(w / Math.max(0.1, model.aspect)));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+        ctx.drawImage(image, 0, 0, w, h);
+        const pixels = ctx.getImageData(0, 0, w, h).data;
+
+        const geometry = new THREE.PlaneGeometry(model.width, model.height, w - 1, h - 1);
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          const xIndex = i % w;
+          const yIndex = Math.floor(i / w);
+          const idx = (yIndex * w + xIndex) * 4;
+          const r = pixels[idx] / 255;
+          const g = pixels[idx + 1] / 255;
+          const b = pixels[idx + 2] / 255;
+          const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          const centerBias = 1 - Math.min(1, Math.hypot(xIndex / w - 0.5, yIndex / h - 0.5) * 1.1);
+          positions.setZ(i, (1 - luminance) * model.depthStrength * (0.55 + centerBias * 0.45));
+        }
+        geometry.computeVertexNormals();
+
+        const texture = new THREE.Texture(image);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.9,
+          metalness: 0,
+          side: THREE.DoubleSide,
+          transparent: model.opacity < 1,
+          opacity: model.opacity
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.y = 0.03;
+        mesh.userData.importedModelId = model.id;
+        group.add(mesh);
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geometry, 24),
+          new THREE.LineBasicMaterial({
+            color: selectedImportedModelId === model.id ? 0xf59e0b : 0x475569,
+            transparent: true,
+            opacity: selectedImportedModelId === model.id ? 0.85 : 0.18
+          })
+        );
+        mesh.add(edges);
+      };
+      image.src = model.imageDataUrl;
     });
 
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1777,10 +1969,16 @@ function Terrain3D({
     const handleDown = (event: PointerEvent) => {
       getPointer(event);
       raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(objectGroups.map(o => o.group), true);
+      const allSelectableGroups = [...objectGroups.map(o => o.group), ...importedModelGroups.map(o => o.group)];
+      const intersects = raycaster.intersectObjects(allSelectableGroups, true);
       if (intersects.length) {
         let g: THREE.Object3D | null = intersects[0].object;
-        while (g && !(g instanceof THREE.Group && g.userData.objectId)) g = g.parent;
+        while (g && !(g instanceof THREE.Group && (g.userData.objectId || g.userData.importedModelId))) g = g.parent;
+        if (g && g instanceof THREE.Group && g.userData.importedModelId) {
+          onImportedModelSelect(g.userData.importedModelId as string);
+          onStatus('Importiertes Video-3D-Modell ausgewählt. Position, Drehung und Maßstab rechts einstellen.');
+          return;
+        }
         if (g && g instanceof THREE.Group) {
           draggedId = g.userData.objectId as number;
           onObjectSelect(draggedId);
@@ -1844,6 +2042,7 @@ function Terrain3D({
     };
     window.addEventListener('resize', resize);
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
       window.removeEventListener('pointerup', handleUp);
@@ -1852,7 +2051,7 @@ function Terrain3D({
       controls.dispose(); renderer.dispose(); geometry.dispose(); terrainMat.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [terrainBlobs, zones, objects, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onStatus]);
+  }, [terrainBlobs, zones, objects, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
 
   return <div ref={mountRef} className="three" />;
 }

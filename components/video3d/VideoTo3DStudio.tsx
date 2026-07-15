@@ -3,20 +3,43 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { IMPORTED_MODEL_STORAGE_KEY, ImportedReliefModel } from '@/types/importedModel';
 
 type FrameItem = { time: number; dataUrl: string };
 type Stage = 'idle' | 'video-ready' | 'extracting' | 'frames-ready' | 'preview-ready' | 'prepared';
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function safeBaseName(name: string) {
+  const base = name.replace(/\.[^.]+$/, '').trim() || 'video-model';
+  return base.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '-').replace(/-+/g, '-');
+}
 
 export default function VideoTo3DStudio() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
   const rendererCleanup = useRef<(() => void) | null>(null);
+  const previewMeshRef = useRef<THREE.Mesh | null>(null);
+  const previewSceneRef = useRef<THREE.Scene | null>(null);
+
   const [videoUrl, setVideoUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const [frameTarget, setFrameTarget] = useState(18);
   const [frames, setFrames] = useState<FrameItem[]>([]);
   const [selectedFrame, setSelectedFrame] = useState(0);
   const [depthStrength, setDepthStrength] = useState(1.6);
+  const [modelWidth, setModelWidth] = useState(8);
   const [stage, setStage] = useState<Stage>('idle');
   const [status, setStatus] = useState('Video auswählen.');
   const [jobInfo, setJobInfo] = useState('');
@@ -29,6 +52,8 @@ export default function VideoTo3DStudio() {
   function onVideo(file: File | null) {
     if (!file) return;
     rendererCleanup.current?.();
+    previewMeshRef.current = null;
+    previewSceneRef.current = null;
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const url = URL.createObjectURL(file);
     setVideoUrl(url);
@@ -58,9 +83,10 @@ export default function VideoTo3DStudio() {
       setStatus('Video ist noch nicht bereit.');
       return;
     }
+
     setStage('extracting');
     setFrames([]);
-    setStatus('Geeignete Frames werden extrahiert.');
+    setStatus('Geeignete Frames werden aus dem Video extrahiert.');
 
     const canvas = document.createElement('canvas');
     const maxWidth = 960;
@@ -72,6 +98,7 @@ export default function VideoTo3DStudio() {
 
     const count = Math.max(6, Math.min(48, frameTarget));
     const output: FrameItem[] = [];
+
     for (let i = 0; i < count; i++) {
       const t = video.duration * ((i + 0.5) / count);
       await seek(video, t);
@@ -79,19 +106,23 @@ export default function VideoTo3DStudio() {
       output.push({ time: t, dataUrl: canvas.toDataURL('image/jpeg', 0.86) });
       setStatus(`Frames extrahieren: ${i + 1}/${count}`);
     }
+
     setFrames(output);
     setSelectedFrame(Math.floor(output.length / 2));
     setStage('frames-ready');
-    setStatus(`${output.length} Frames extrahiert. Frame wählen und 3D-Vorschau erzeugen.`);
+    setStatus(`${output.length} Frames extrahiert. Frame wählen und 3D-Modell erzeugen.`);
   }
 
   function buildQuick3D() {
     const mount = previewRef.current;
     const frame = frames[selectedFrame];
     if (!mount || !frame) return;
+
     rendererCleanup.current?.();
+    previewMeshRef.current = null;
+    previewSceneRef.current = null;
     mount.innerHTML = '';
-    setStatus('Schnelle 3D-Reliefvorschau wird aufgebaut.');
+    setStatus('3D-Reliefmodell wird aufgebaut.');
 
     const img = new Image();
     img.onload = () => {
@@ -109,12 +140,14 @@ export default function VideoTo3DStudio() {
       scene.background = new THREE.Color(0xe8eef5);
       const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
       camera.position.set(0, 4.8, 8.5);
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(mount.clientWidth || 800, mount.clientHeight || 560);
       mount.appendChild(renderer.domElement);
 
-      const geometry = new THREE.PlaneGeometry(8, 8 * h / w, w - 1, h - 1);
+      const heightMeters = modelWidth * h / w;
+      const geometry = new THREE.PlaneGeometry(modelWidth, heightMeters, w - 1, h - 1);
       const pos = geometry.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const xIndex = i % w;
@@ -131,10 +164,21 @@ export default function VideoTo3DStudio() {
 
       const texture = new THREE.TextureLoader().load(frame.dataUrl);
       texture.colorSpace = THREE.SRGBColorSpace;
-      const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
+      const material = new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 0.88,
+        metalness: 0,
+        side: THREE.DoubleSide
+      });
+
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.rotation.x = -0.18;
+      mesh.name = safeBaseName(fileName || 'video-model');
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = 0.05;
       scene.add(mesh);
+      previewMeshRef.current = mesh;
+      previewSceneRef.current = scene;
+
       scene.add(new THREE.HemisphereLight(0xffffff, 0x64748b, 1.5));
       const sun = new THREE.DirectionalLight(0xffffff, 1.4);
       sun.position.set(4, 7, 6);
@@ -142,7 +186,8 @@ export default function VideoTo3DStudio() {
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.target.set(0, 0, 0.7);
+      controls.target.set(0, 0.4, 0);
+
       let raf = 0;
       const animate = () => {
         controls.update();
@@ -150,6 +195,7 @@ export default function VideoTo3DStudio() {
         raf = requestAnimationFrame(animate);
       };
       animate();
+
       const resize = () => {
         const width = mount.clientWidth || 800;
         const height = mount.clientHeight || 560;
@@ -164,14 +210,104 @@ export default function VideoTo3DStudio() {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', resize);
         controls.dispose();
-        geometry.dispose();
-        material.dispose();
-        texture.dispose();
         renderer.dispose();
         if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       };
+
       setStage('preview-ready');
-      setStatus('Schnelle 3D-Reliefvorschau erstellt. Das ist eine Tiefenschätzung, noch keine präzise Mehrbild-Photogrammetrie.');
+      setStatus('3D-Modell erstellt. Du kannst es jetzt direkt ins Projekt übernehmen oder als GLB/OBJ exportieren.');
+    };
+    img.src = frame.dataUrl;
+  }
+
+  function exportGLB() {
+    const mesh = previewMeshRef.current;
+    if (!mesh) {
+      setStatus('Bitte zuerst die 3D-Vorschau erzeugen.');
+      return;
+    }
+
+    const exportRoot = new THREE.Group();
+    exportRoot.name = 'ALGreenVideoModel';
+    exportRoot.add(mesh.clone());
+
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      exportRoot,
+      result => {
+        if (result instanceof ArrayBuffer) {
+          downloadBlob(new Blob([result], { type: 'model/gltf-binary' }), `${safeBaseName(fileName)}-algreen.glb`);
+          setStatus('GLB-Datei exportiert.');
+        } else {
+          downloadBlob(new Blob([JSON.stringify(result)], { type: 'model/gltf+json' }), `${safeBaseName(fileName)}-algreen.gltf`);
+          setStatus('GLTF-Datei exportiert.');
+        }
+      },
+      error => setStatus(`GLB-Export fehlgeschlagen: ${String(error)}`),
+      { binary: true }
+    );
+  }
+
+  function exportOBJ() {
+    const mesh = previewMeshRef.current;
+    if (!mesh) {
+      setStatus('Bitte zuerst die 3D-Vorschau erzeugen.');
+      return;
+    }
+
+    const exportRoot = new THREE.Group();
+    exportRoot.name = 'ALGreenVideoModel';
+    exportRoot.add(mesh.clone());
+    const exporter = new OBJExporter();
+    const objText = exporter.parse(exportRoot);
+    downloadBlob(new Blob([objText], { type: 'text/plain' }), `${safeBaseName(fileName)}-algreen.obj`);
+    setStatus('OBJ-Datei exportiert. Hinweis: OBJ enthält die Geometrie; die direkte Projektübernahme behält die Fototextur.');
+  }
+
+  function takeIntoProject() {
+    const frame = frames[selectedFrame];
+    if (!frame || stage !== 'preview-ready') {
+      setStatus('Bitte zuerst eine 3D-Vorschau erzeugen.');
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const model: ImportedReliefModel = {
+        id: `video-model-${Date.now()}`,
+        name: `${safeBaseName(fileName)} · Frame ${selectedFrame + 1}`,
+        source: 'video-frame',
+        imageDataUrl: frame.dataUrl,
+        aspect: img.width / Math.max(1, img.height),
+        depthStrength,
+        width: modelWidth,
+        height: modelWidth / Math.max(0.1, img.width / img.height),
+        x: 0,
+        y: 0,
+        z: 0,
+        rotationX: 0,
+        rotationY: 0,
+        rotationZ: 0,
+        scale: 1,
+        opacity: 1,
+        visible: true,
+        createdAt: new Date().toISOString()
+      };
+
+      let existing: ImportedReliefModel[] = [];
+      try {
+        existing = JSON.parse(localStorage.getItem(IMPORTED_MODEL_STORAGE_KEY) || '[]');
+        if (!Array.isArray(existing)) existing = [];
+      } catch {
+        existing = [];
+      }
+
+      localStorage.setItem(IMPORTED_MODEL_STORAGE_KEY, JSON.stringify([...existing, model]));
+      localStorage.setItem('al-green-v0192-open-imported-model', model.id);
+      setStatus('3D-Modell wurde in dein AL-Green-Projekt übernommen. Hauptprojekt wird geöffnet.');
+      window.setTimeout(() => {
+        window.location.href = '/?imported3d=1';
+      }, 300);
     };
     img.src = frame.dataUrl;
   }
@@ -188,7 +324,7 @@ export default function VideoTo3DStudio() {
     if (data?.ok) {
       setStage('prepared');
       setJobInfo(`${data.job.id} · ${data.job.frameCount} Frames · ${data.job.pipeline.join(' → ')}`);
-      setStatus('Präzisions-Pipeline vorbereitet. Für die echte dichte Rekonstruktion wird als nächster Schritt ein 3D-Worker angeschlossen.');
+      setStatus('Präzisions-Pipeline vorbereitet. Für die echte dichte Rekonstruktion wird weiterhin ein separater 3D-Worker benötigt.');
     } else {
       setStatus(`Fehler: ${data?.error || 'Unbekannt'}`);
     }
@@ -197,33 +333,69 @@ export default function VideoTo3DStudio() {
   return (
     <main className="video3dPage">
       <section className="video3dHero">
-        <p>AL Green Design · V0.19</p>
-        <h1>VIDEO → 3D Studio</h1>
-        <p>Video laden, Frames extrahieren, schnelle 3D-Tiefenvorschau erzeugen und eine präzise Mehrbild-Rekonstruktion vorbereiten.</p>
+        <p>AL Green Design · V0.19.2</p>
+        <h1>VIDEO → 3D → PROJEKT</h1>
+        <p>Video laden, Frames extrahieren, 3D-Modell erzeugen, als GLB/OBJ exportieren oder direkt in dein Hauptprojekt übernehmen.</p>
       </section>
+
       <section className="video3dLayout">
         <aside className="panel">
           <h2>1. Video</h2>
           <label className="file">Video auswählen<input type="file" accept="video/*" onChange={e => onVideo(e.target.files?.[0] ?? null)} /></label>
           <label style={{ marginTop: 10 }}>Anzahl Frames<input type="number" min="6" max="48" value={frameTarget} onChange={e => setFrameTarget(Number(e.target.value))} /></label>
           <button className="btn primary" style={{ width: '100%', marginTop: 10 }} disabled={!videoUrl || stage === 'extracting'} onClick={extractFrames}>Frames extrahieren</button>
-          <h2 style={{ marginTop: 18 }}>2. 3D</h2>
-          <label>Tiefenstärke Vorschau<input type="range" min="0.3" max="3" step="0.1" value={depthStrength} onChange={e => setDepthStrength(Number(e.target.value))} /></label>
-          <button className="btn blue" style={{ width: '100%', marginTop: 10 }} disabled={!frames.length} onClick={buildQuick3D}>Schnelle 3D-Vorschau</button>
+
+          <h2 style={{ marginTop: 18 }}>2. 3D erzeugen</h2>
+          <label>Modellbreite in Metern<input type="number" min="0.5" max="100" step="0.1" value={modelWidth} onChange={e => setModelWidth(Math.max(0.5, Number(e.target.value) || 8))} /></label>
+          <label>Tiefenstärke<input type="range" min="0.1" max="5" step="0.1" value={depthStrength} onChange={e => setDepthStrength(Number(e.target.value))} /><span>{depthStrength.toFixed(1)}</span></label>
+          <button className="btn blue" style={{ width: '100%', marginTop: 10 }} disabled={!frames.length} onClick={buildQuick3D}>3D-Modell erzeugen</button>
+
+          <h2 style={{ marginTop: 18 }}>3. Verwenden</h2>
+          <button className="btn primary" style={{ width: '100%' }} disabled={stage !== 'preview-ready'} onClick={takeIntoProject}>In Projekt übernehmen</button>
+          <div className="grid2" style={{ marginTop: 8 }}>
+            <button className="btn" disabled={stage !== 'preview-ready'} onClick={exportGLB}>GLB exportieren</button>
+            <button className="btn" disabled={stage !== 'preview-ready'} onClick={exportOBJ}>OBJ exportieren</button>
+          </div>
+
           <button className="btn" style={{ width: '100%', marginTop: 8 }} disabled={!frames.length} onClick={preparePrecisionJob}>Präzise Rekonstruktion vorbereiten</button>
+
           <div className="hint" style={{ marginTop: 12 }}>{status}</div>
           {jobInfo && <div className="item" style={{ marginTop: 10 }}><strong>Rekonstruktionsauftrag</strong><span>{jobInfo}</span></div>}
         </aside>
+
         <section className="video3dMain">
           <div className="video3dVideoWrap">
-            {videoUrl ? <video ref={videoRef} src={videoUrl} controls playsInline onLoadedMetadata={e => setStatus(`Video bereit: ${e.currentTarget.duration.toFixed(1)} Sekunden.`)} /> : <div className="scanPlaceholder">Noch kein Video geladen</div>}
+            {videoUrl ? (
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                controls
+                playsInline
+                onLoadedMetadata={e => setStatus(`Video bereit: ${e.currentTarget.duration.toFixed(1)} Sekunden.`)}
+              />
+            ) : <div className="scanPlaceholder">Noch kein Video geladen</div>}
           </div>
           <div ref={previewRef} className="video3dPreview"><div className="scanPlaceholder">3D-Vorschau</div></div>
         </section>
+
         <aside className="panel">
           <h2>Extrahierte Frames</h2>
           <div className="frameGrid">
-            {frames.map((frame, index) => <button key={`${frame.time}-${index}`} className={`frameButton ${selectedFrame === index ? 'active' : ''}`} onClick={() => setSelectedFrame(index)}><img src={frame.dataUrl} alt={`Frame ${index + 1}`} /><span>{frame.time.toFixed(1)} s</span></button>)}
+            {frames.map((frame, index) => (
+              <button
+                key={`${frame.time}-${index}`}
+                className={`frameButton ${selectedFrame === index ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedFrame(index);
+                  setStage('frames-ready');
+                  previewMeshRef.current = null;
+                  setStatus(`Frame ${index + 1} gewählt. 3D-Modell erneut erzeugen.`);
+                }}
+              >
+                <img src={frame.dataUrl} alt={`Frame ${index + 1}`} />
+                <span>{frame.time.toFixed(1)} s</span>
+              </button>
+            ))}
           </div>
           {!frames.length && <div className="hint">Nach der Extraktion erscheinen hier die Videoframes.</div>}
         </aside>

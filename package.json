@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v0191-cad-controls",
-  "version": "0.19.1",
+  "name": "al-green-design-landscape-architecture-v0192-model-pipeline",
+  "version": "0.19.2",
   "private": true,
   "scripts": {
     "dev": "next dev",

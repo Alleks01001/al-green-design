@@ -1,71 +1,78 @@
-# AL Green Design – V0.19.1 CAD CONTROLS
+# AL Green Design – V0.19.2 MODEL PIPELINE
 
-V0.19.1 konzentriert sich auf eine deutlich präzisere CAD-artige Bedienung.
+Diese Version schließt die Lücke zwischen **Video → 3D** und dem Hauptprojekt.
 
-## Auswahl- und Transformationsgriffe
+## Neuer kompletter Ablauf
 
-Bei einem einzeln ausgewählten Objekt erscheinen:
+```text
+Video hochladen
+→ Frames extrahieren
+→ Frame auswählen
+→ 3D-Modell erzeugen
+→ In Projekt übernehmen
+→ Hauptprojekt öffnet sich
+→ Modell erscheint in der 3D-Szene
+```
 
-- Auswahlrahmen
-- vier Skalierungsgriffe
-- Rotationsgriff
-- Live-Maße
-- Live-Drehwinkel
+## Video-3D-Studio
 
-## Mehrfachauswahl
+Neue Funktionen:
 
-- Shift, Strg oder Cmd + Klick fügt Objekte zur Auswahl hinzu oder entfernt sie.
-- Strg/Cmd + A wählt alle Objekte.
-- Mehrere Objekte können gemeinsam verschoben werden.
+- Modellbreite in Metern festlegen
+- Tiefenstärke festlegen
+- 3D-Modell erzeugen
+- **In Projekt übernehmen**
+- **GLB exportieren**
+- **OBJ exportieren**
 
-## Gruppierung
+## Direkte Projektübernahme
 
-- Gruppieren
-- Gruppierung lösen
-- komplette Gruppe auswählen
-- G gruppiert
-- Shift+G löst die Gruppierung
+Das erzeugte Video-3D-Modell wird im Browser-Projektspeicher abgelegt und danach automatisch in der Hauptanwendung geladen.
 
-## Ausrichten
+Im Bereich **3D-Szene** können importierte Modelle ausgewählt werden.
 
-Mehrfach ausgewählte Objekte können ausgerichtet werden:
+Einstellbar:
 
-- links
-- Mitte X
-- rechts
-- oben
-- Mitte Y
-- unten
+- Name
+- Position X
+- Höhe Y
+- Position Z
+- Drehung Y
+- Maßstab
+- Transparenz
+- Sichtbarkeit
+- Duplizieren
+- Löschen
+- Zurücksetzen
 
-## Duplizieren
+## Projekt speichern
 
-- Button Duplizieren
-- Strg/Cmd + D
+Browser-Projekte speichern jetzt auch importierte Video-3D-Modelle.
 
-## Verbesserter Fang
+## Export
 
-- Mittelpunkte und Außenkanten rasten an anderen Objekten ein.
-- Blaue Fanglinien zeigen die Ausrichtung.
-- Wände rasten mit Endpunkten an andere Wand-Endpunkte.
-- Fenster, Türen und Schiebetüren rasten an Wandachsen ein.
-- Öffnungen übernehmen die Wanddrehung und speichern die Wand als `parentId`.
+### GLB
 
-Hinweis: Das logische Einsetzen von Fenstern und Türen ist umgesetzt. Ein echtes boolesches Ausschneiden des Wand-Meshes in 3D folgt in einer späteren Architektur-Version.
+Enthält die erzeugte 3D-Geometrie und ist für moderne 3D-Programme geeignet.
 
-## Maße und Abstände
+### OBJ
 
-Im Eigenschaftenbereich werden angezeigt:
+Enthält die Geometrie. Die direkte Übernahme in AL Green Design behält die Fototextur zuverlässig im Browserprojekt.
 
-- Breite × Tiefe
-- Fläche
-- Abstand zum nächstgelegenen Objekt
+## Wichtige technische Einordnung
 
-## Weiter enthalten
+Das aktuelle Video-3D-Modell ist weiterhin die schnelle bildbasierte Relief-/Tiefenrekonstruktion aus einem ausgewählten Videoframe.
 
-- Video → 3D Studio
-- Bild als Planhintergrund anwenden
-- Bildanalyse
-- 2D/3D Split View
-- Architektur-Bauteile
-- Gelände
-- Scan-/LiDAR-Grundlage
+Eine präzise Rekonstruktion eines vollständigen Gartens aus allen Videoframes benötigt weiterhin einen externen Photogrammetrie-Worker:
+
+```text
+Video
+→ Kamerapositionen
+→ Punktwolke
+→ dichte Rekonstruktion
+→ Mesh
+→ Textur
+→ GLB
+```
+
+Die vorbereitete Pipeline dafür bleibt enthalten.
