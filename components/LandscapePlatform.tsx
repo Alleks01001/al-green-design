@@ -7,8 +7,65 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importedModel';
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
-type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
-type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
+type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'hardscape' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
+type Tool = 'select' | 'terrain' | 'gardenWall' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
+
+type ElevationPoint = {
+  id: number;
+  x: number;
+  y: number;
+  elevation: number;
+  kind: 'existing' | 'proposed';
+  name: string;
+};
+
+type TerrainAnalysis = {
+  cutVolume: number;
+  fillVolume: number;
+  netVolume: number;
+  minExisting: number;
+  maxExisting: number;
+  minProposed: number;
+  maxProposed: number;
+  sampleCount: number;
+};
+
+type PlantCategory = 'tree' | 'shrub' | 'hedge' | 'perennial' | 'grass';
+type PlantLight = 'Sonne' | 'Halbschatten' | 'Schatten';
+type PlantWater = 1 | 2 | 3 | 4 | 5;
+
+type PlantSpecies = {
+  id: string;
+  botanicalName: string;
+  commonName: string;
+  category: PlantCategory;
+  objectType: 'tree' | 'shrub' | 'hedge';
+  matureHeight: number;
+  matureWidth: number;
+  recommendedSpacing: number;
+  growthRate: 'langsam' | 'mittel' | 'schnell';
+  evergreen: boolean;
+  bloomMonths: number[];
+  bloomColor: string;
+  foliageColor: string;
+  light: PlantLight[];
+  waterNeed: PlantWater;
+  soil: string[];
+  hardinessMin: number;
+  hardinessMax: number;
+  unitCost: number;
+  plantForm: 'round' | 'columnar' | 'multiStem' | 'hedge' | 'perennial' | 'grass';
+  notes: string;
+};
+
+type PlantCheck = {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  objectIds: number[];
+  title: string;
+  message: string;
+};
+
 type SelectedKind = 'terrain' | 'zone' | 'object' | 'room' | null;
 type MoveStart = { id: number; x: number; y: number };
 type Drag2D =
@@ -19,6 +76,7 @@ type Drag2D =
 
 type EditorSnapshot = {
   terrainBlobs: TerrainBlob[];
+  elevationPoints: ElevationPoint[];
   zones: Zone[];
   objects: GardenObject[];
   rooms: Room[];
@@ -88,7 +146,7 @@ type Zone = {
   color: string;
 };
 
-type GardenObjectType = 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
+type GardenObjectType = 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'gardenWall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 
 type GardenObject = {
   id: number;
@@ -115,7 +173,57 @@ type GardenObject = {
   sillHeight?: number;
   wallNodeStart?: string;
   wallNodeEnd?: string;
+  points?: { x:number; y:number }[];
+  pathWidth?: number;
+  curve?: boolean;
+  startElevation?: number;
+  endElevation?: number;
+  stepCount?: number;
+  riserHeight?: number;
+  treadDepth?: number;
+  foundationDepth?: number;
+  capHeight?: number;
+  speciesId?: string;
+  botanicalName?: string;
+  plantCategory?: PlantCategory;
+  matureHeight?: number;
+  matureWidth?: number;
+  recommendedSpacing?: number;
+  growthRate?: 'langsam' | 'mittel' | 'schnell';
+  evergreen?: boolean;
+  bloomMonths?: number[];
+  bloomColor?: string;
+  soilNeeds?: string[];
+  hardinessMin?: number;
+  hardinessMax?: number;
+  plantForm?: PlantSpecies['plantForm'];
+  siteLight?: PlantLight;
+  plantingYear?: number;
+  installationHeight?: number;
+  installationWidth?: number;
 };
+
+const PLANT_CATALOG: PlantSpecies[] = [
+  {id:'acer-palmatum',botanicalName:'Acer palmatum',commonName:'Japanischer Fächerahorn',category:'tree',objectType:'tree',matureHeight:5,matureWidth:4,recommendedSpacing:3.5,growthRate:'langsam',evergreen:false,bloomMonths:[4,5],bloomColor:'rot',foliageColor:'#b91c1c',light:['Halbschatten','Sonne'],waterNeed:3,soil:['humos','durchlässig','frisch'],hardinessMin:5,hardinessMax:9,unitCost:190,plantForm:'multiStem',notes:'Geschützter Standort; Staunässe und starke Mittagshitze vermeiden.'},
+  {id:'acer-campestre',botanicalName:'Acer campestre',commonName:'Feldahorn',category:'tree',objectType:'tree',matureHeight:12,matureWidth:8,recommendedSpacing:6,growthRate:'mittel',evergreen:false,bloomMonths:[4,5],bloomColor:'gelbgrün',foliageColor:'#4d7c0f',light:['Sonne','Halbschatten'],waterNeed:2,soil:['anpassungsfähig','durchlässig'],hardinessMin:4,hardinessMax:8,unitCost:145,plantForm:'round',notes:'Robuster heimischer Baum und gut schnittverträglich.'},
+  {id:'amelanchier-lamarckii',botanicalName:'Amelanchier lamarckii',commonName:'Kupfer-Felsenbirne',category:'tree',objectType:'tree',matureHeight:6,matureWidth:4.5,recommendedSpacing:4,growthRate:'mittel',evergreen:false,bloomMonths:[4],bloomColor:'weiß',foliageColor:'#15803d',light:['Sonne','Halbschatten'],waterNeed:2,soil:['humos','durchlässig'],hardinessMin:4,hardinessMax:8,unitCost:170,plantForm:'multiStem',notes:'Mehrstämmiger Kleinbaum mit Blüte, Früchten und Herbstfärbung.'},
+  {id:'betula-utilis',botanicalName:'Betula utilis var. jacquemontii',commonName:'Himalaya-Birke',category:'tree',objectType:'tree',matureHeight:12,matureWidth:6,recommendedSpacing:5,growthRate:'mittel',evergreen:false,bloomMonths:[4,5],bloomColor:'gelbgrün',foliageColor:'#65a30d',light:['Sonne','Halbschatten'],waterNeed:3,soil:['frisch','durchlässig'],hardinessMin:4,hardinessMax:8,unitCost:210,plantForm:'columnar',notes:'Auffällige weiße Rinde; ausreichend Bodenfeuchte vorsehen.'},
+  {id:'prunus-serrulata-kanzan',botanicalName:'Prunus serrulata Kanzan',commonName:'Japanische Nelkenkirsche',category:'tree',objectType:'tree',matureHeight:8,matureWidth:6,recommendedSpacing:5,growthRate:'mittel',evergreen:false,bloomMonths:[4,5],bloomColor:'rosa',foliageColor:'#15803d',light:['Sonne'],waterNeed:2,soil:['nährstoffreich','durchlässig'],hardinessMin:5,hardinessMax:8,unitCost:185,plantForm:'round',notes:'Starker Frühlingsaspekt; ausreichend Raum für die Krone vorsehen.'},
+  {id:'hydrangea-limelight',botanicalName:'Hydrangea paniculata Limelight',commonName:'Rispenhortensie Limelight',category:'shrub',objectType:'shrub',matureHeight:2.2,matureWidth:2,recommendedSpacing:1.7,growthRate:'mittel',evergreen:false,bloomMonths:[7,8,9,10],bloomColor:'weißgrün',foliageColor:'#22c55e',light:['Sonne','Halbschatten'],waterNeed:4,soil:['humos','frisch'],hardinessMin:4,hardinessMax:8,unitCost:42,plantForm:'round',notes:'Lange Blüte; bei Sonne auf ausreichende Wasserversorgung achten.'},
+  {id:'cornus-alba',botanicalName:'Cornus alba Sibirica',commonName:'Sibirischer Hartriegel',category:'shrub',objectType:'shrub',matureHeight:3,matureWidth:3,recommendedSpacing:2.2,growthRate:'schnell',evergreen:false,bloomMonths:[5,6],bloomColor:'weiß',foliageColor:'#16a34a',light:['Sonne','Halbschatten'],waterNeed:3,soil:['frisch','feucht','anpassungsfähig'],hardinessMin:3,hardinessMax:8,unitCost:26,plantForm:'round',notes:'Rote Wintertriebe; Rückschnitt fördert die Rindenfärbung.'},
+  {id:'spiraea-japonica',botanicalName:'Spiraea japonica',commonName:'Japanischer Spierstrauch',category:'shrub',objectType:'shrub',matureHeight:1,matureWidth:1.2,recommendedSpacing:0.9,growthRate:'mittel',evergreen:false,bloomMonths:[6,7,8],bloomColor:'rosa',foliageColor:'#22c55e',light:['Sonne','Halbschatten'],waterNeed:2,soil:['anpassungsfähig','durchlässig'],hardinessMin:4,hardinessMax:8,unitCost:18,plantForm:'round',notes:'Kompakter, robuster Blütenstrauch.'},
+  {id:'taxus-baccata',botanicalName:'Taxus baccata',commonName:'Europäische Eibe',category:'hedge',objectType:'hedge',matureHeight:5,matureWidth:2.5,recommendedSpacing:0.6,growthRate:'langsam',evergreen:true,bloomMonths:[3,4],bloomColor:'unscheinbar',foliageColor:'#14532d',light:['Sonne','Halbschatten','Schatten'],waterNeed:2,soil:['durchlässig','humos','kalkverträglich'],hardinessMin:5,hardinessMax:8,unitCost:48,plantForm:'hedge',notes:'Sehr schnittverträglich; Pflanzenteile sind überwiegend giftig.'},
+  {id:'carpinus-betulus',botanicalName:'Carpinus betulus',commonName:'Hainbuche',category:'hedge',objectType:'hedge',matureHeight:5,matureWidth:2.5,recommendedSpacing:0.5,growthRate:'mittel',evergreen:false,bloomMonths:[4,5],bloomColor:'gelbgrün',foliageColor:'#3f6212',light:['Sonne','Halbschatten'],waterNeed:2,soil:['anpassungsfähig','frisch'],hardinessMin:4,hardinessMax:8,unitCost:22,plantForm:'hedge',notes:'Heimische robuste Heckenpflanze.'},
+  {id:'prunus-laurocerasus-etna',botanicalName:'Prunus laurocerasus Etna',commonName:'Kirschlorbeer Etna',category:'hedge',objectType:'hedge',matureHeight:2.5,matureWidth:2,recommendedSpacing:0.8,growthRate:'mittel',evergreen:true,bloomMonths:[5],bloomColor:'weiß',foliageColor:'#166534',light:['Sonne','Halbschatten','Schatten'],waterNeed:2,soil:['humos','durchlässig'],hardinessMin:6,hardinessMax:9,unitCost:30,plantForm:'hedge',notes:'Immergrüner Sichtschutz; für naturnahe Konzepte Alternativen prüfen.'},
+  {id:'lavandula-angustifolia',botanicalName:'Lavandula angustifolia',commonName:'Echter Lavendel',category:'perennial',objectType:'shrub',matureHeight:0.6,matureWidth:0.7,recommendedSpacing:0.45,growthRate:'mittel',evergreen:true,bloomMonths:[6,7,8],bloomColor:'violett',foliageColor:'#6b7280',light:['Sonne'],waterNeed:1,soil:['trocken','durchlässig','mager'],hardinessMin:5,hardinessMax:9,unitCost:8,plantForm:'perennial',notes:'Volle Sonne und sehr gute Drainage.'},
+  {id:'salvia-caradonna',botanicalName:'Salvia nemorosa Caradonna',commonName:'Steppen-Salbei Caradonna',category:'perennial',objectType:'shrub',matureHeight:0.7,matureWidth:0.5,recommendedSpacing:0.4,growthRate:'mittel',evergreen:false,bloomMonths:[6,7,8],bloomColor:'violettblau',foliageColor:'#3f6212',light:['Sonne'],waterNeed:1,soil:['durchlässig','trocken bis frisch'],hardinessMin:4,hardinessMax:8,unitCost:7,plantForm:'perennial',notes:'Lange Blüte und guter Insektenwert.'},
+  {id:'echinacea-purpurea',botanicalName:'Echinacea purpurea',commonName:'Purpur-Sonnenhut',category:'perennial',objectType:'shrub',matureHeight:1,matureWidth:0.6,recommendedSpacing:0.45,growthRate:'mittel',evergreen:false,bloomMonths:[7,8,9],bloomColor:'purpurrosa',foliageColor:'#4d7c0f',light:['Sonne'],waterNeed:2,soil:['durchlässig','frisch'],hardinessMin:4,hardinessMax:8,unitCost:9,plantForm:'perennial',notes:'Markante Sommerblüte; Staunässe vermeiden.'},
+  {id:'nepeta-faassenii',botanicalName:'Nepeta × faassenii',commonName:'Katzenminze',category:'perennial',objectType:'shrub',matureHeight:0.5,matureWidth:0.7,recommendedSpacing:0.45,growthRate:'schnell',evergreen:false,bloomMonths:[5,6,7,8,9],bloomColor:'blauviolett',foliageColor:'#64748b',light:['Sonne'],waterNeed:1,soil:['trocken','durchlässig'],hardinessMin:4,hardinessMax:9,unitCost:7,plantForm:'perennial',notes:'Lange Blüte und trockenheitsverträglich.'},
+  {id:'miscanthus-gracillimus',botanicalName:'Miscanthus sinensis Gracillimus',commonName:'Chinaschilf Gracillimus',category:'grass',objectType:'shrub',matureHeight:1.8,matureWidth:1.2,recommendedSpacing:1,growthRate:'mittel',evergreen:false,bloomMonths:[9,10],bloomColor:'silbrig',foliageColor:'#84a98c',light:['Sonne'],waterNeed:2,soil:['frisch','durchlässig'],hardinessMin:5,hardinessMax:9,unitCost:18,plantForm:'grass',notes:'Hoher strukturgebender Horst; Rückschnitt im Frühjahr.'},
+  {id:'pennisetum-hameln',botanicalName:'Pennisetum alopecuroides Hameln',commonName:'Lampenputzergras Hameln',category:'grass',objectType:'shrub',matureHeight:0.9,matureWidth:0.8,recommendedSpacing:0.65,growthRate:'mittel',evergreen:false,bloomMonths:[8,9,10],bloomColor:'beige',foliageColor:'#84a98c',light:['Sonne'],waterNeed:2,soil:['durchlässig','frisch'],hardinessMin:5,hardinessMax:9,unitCost:14,plantForm:'grass',notes:'Kompaktes Ziergras mit markanten Blütenständen.'},
+  {id:'calamagrostis-karl-foerster',botanicalName:'Calamagrostis × acutiflora Karl Foerster',commonName:'Reitgras Karl Foerster',category:'grass',objectType:'shrub',matureHeight:1.8,matureWidth:0.7,recommendedSpacing:0.6,growthRate:'mittel',evergreen:false,bloomMonths:[6,7,8],bloomColor:'goldbraun',foliageColor:'#65a30d',light:['Sonne','Halbschatten'],waterNeed:2,soil:['anpassungsfähig','frisch'],hardinessMin:4,hardinessMax:8,unitCost:15,plantForm:'grass',notes:'Straffer aufrechter Wuchs für moderne Pflanzungen.'},
+  {id:'hakonechloa-macra',botanicalName:'Hakonechloa macra',commonName:'Japanisches Berggras',category:'grass',objectType:'shrub',matureHeight:0.5,matureWidth:0.8,recommendedSpacing:0.6,growthRate:'langsam',evergreen:false,bloomMonths:[8,9],bloomColor:'unscheinbar',foliageColor:'#a3e635',light:['Halbschatten','Schatten'],waterNeed:3,soil:['humos','frisch'],hardinessMin:5,hardinessMax:9,unitCost:16,plantForm:'grass',notes:'Für halbschattige bis schattige, frische Standorte.'}
+];
 
 const SCALE = 50;
 const VIEWBOX = { x: -12, y: -8, width: 24, height: 16 };
@@ -159,6 +267,209 @@ function terrainHeightAt(x: number, y: number, blobs: TerrainBlob[]) {
   }, 0);
 }
 
+function idwTerrainHeight(
+  x: number,
+  y: number,
+  points: ElevationPoint[],
+  fallbackBlobs: TerrainBlob[],
+  power = 2
+) {
+  if (!points.length) return terrainHeightAt(x, y, fallbackBlobs);
+
+  let numerator = 0;
+  let denominator = 0;
+
+  for (const point of points) {
+    const distance = Math.hypot(x - point.x, y - point.y);
+    if (distance < 0.001) return point.elevation;
+    const weight = 1 / Math.pow(distance, power);
+    numerator += point.elevation * weight;
+    denominator += weight;
+  }
+
+  return denominator > 0 ? numerator / denominator : terrainHeightAt(x, y, fallbackBlobs);
+}
+
+function terrainSurfaceHeight(
+  x: number,
+  y: number,
+  points: ElevationPoint[],
+  fallbackBlobs: TerrainBlob[],
+  kind: 'existing' | 'proposed'
+) {
+  const filtered = points.filter(point => point.kind === kind);
+  return idwTerrainHeight(x, y, filtered, fallbackBlobs);
+}
+
+function createContourSegments(
+  points: ElevationPoint[],
+  fallbackBlobs: TerrainBlob[],
+  interval: number,
+  kind: 'existing' | 'proposed',
+  bounds = { minX: -10, maxX: 10, minY: -6.5, maxY: 6.5 },
+  resolution = 34
+) {
+  const filtered = points.filter(point => point.kind === kind);
+  if (!filtered.length && !fallbackBlobs.length) return [];
+
+  const grid: number[][] = [];
+  let minH = Infinity;
+  let maxH = -Infinity;
+
+  for (let gy = 0; gy <= resolution; gy++) {
+    const row: number[] = [];
+    const y = bounds.minY + (gy / resolution) * (bounds.maxY - bounds.minY);
+    for (let gx = 0; gx <= resolution; gx++) {
+      const x = bounds.minX + (gx / resolution) * (bounds.maxX - bounds.minX);
+      const h = terrainSurfaceHeight(x, y, points, fallbackBlobs, kind);
+      row.push(h);
+      minH = Math.min(minH, h);
+      maxH = Math.max(maxH, h);
+    }
+    grid.push(row);
+  }
+
+  const safeInterval = Math.max(0.05, interval);
+  const levels: number[] = [];
+  let level = Math.ceil(minH / safeInterval) * safeInterval;
+
+  while (level <= maxH + 0.0001 && levels.length < 100) {
+    levels.push(Number(level.toFixed(4)));
+    level += safeInterval;
+  }
+
+  const segments: { level:number; x1:number; y1:number; x2:number; y2:number }[] = [];
+  const edgePairs = [[0,1],[1,2],[2,3],[3,0]] as const;
+
+  for (const contourLevel of levels) {
+    for (let gy = 0; gy < resolution; gy++) {
+      for (let gx = 0; gx < resolution; gx++) {
+        const x0 = bounds.minX + (gx / resolution) * (bounds.maxX - bounds.minX);
+        const x1 = bounds.minX + ((gx + 1) / resolution) * (bounds.maxX - bounds.minX);
+        const y0 = bounds.minY + (gy / resolution) * (bounds.maxY - bounds.minY);
+        const y1 = bounds.minY + ((gy + 1) / resolution) * (bounds.maxY - bounds.minY);
+
+        const corners = [
+          { x:x0, y:y0, h:grid[gy][gx] },
+          { x:x1, y:y0, h:grid[gy][gx+1] },
+          { x:x1, y:y1, h:grid[gy+1][gx+1] },
+          { x:x0, y:y1, h:grid[gy+1][gx] }
+        ];
+
+        const hits: {x:number;y:number}[] = [];
+
+        for (const [aIndex,bIndex] of edgePairs) {
+          const a = corners[aIndex];
+          const b = corners[bIndex];
+          const da = a.h - contourLevel;
+          const db = b.h - contourLevel;
+
+          if ((da === 0 && db === 0) || da * db > 0) continue;
+          const denominator = b.h - a.h;
+          if (Math.abs(denominator) < 0.000001) continue;
+
+          const t = clamp((contourLevel - a.h) / denominator, 0, 1);
+          hits.push({
+            x: a.x + (b.x - a.x) * t,
+            y: a.y + (b.y - a.y) * t
+          });
+        }
+
+        if (hits.length >= 2) {
+          segments.push({
+            level: contourLevel,
+            x1: hits[0].x,
+            y1: hits[0].y,
+            x2: hits[1].x,
+            y2: hits[1].y
+          });
+        }
+
+        if (hits.length >= 4) {
+          segments.push({
+            level: contourLevel,
+            x1: hits[2].x,
+            y1: hits[2].y,
+            x2: hits[3].x,
+            y2: hits[3].y
+          });
+        }
+      }
+    }
+  }
+
+  return segments;
+}
+
+function calculateCutFill(
+  points: ElevationPoint[],
+  fallbackBlobs: TerrainBlob[],
+  bounds = { minX: -10, maxX: 10, minY: -6.5, maxY: 6.5 },
+  resolution = 42
+): TerrainAnalysis {
+  const existing = points.filter(point => point.kind === 'existing');
+  const proposed = points.filter(point => point.kind === 'proposed');
+
+  if (!existing.length && !fallbackBlobs.length) {
+    return {
+      cutVolume:0,
+      fillVolume:0,
+      netVolume:0,
+      minExisting:0,
+      maxExisting:0,
+      minProposed:0,
+      maxProposed:0,
+      sampleCount:0
+    };
+  }
+
+  const dx = (bounds.maxX - bounds.minX) / resolution;
+  const dy = (bounds.maxY - bounds.minY) / resolution;
+  const cellArea = dx * dy;
+
+  let cut = 0;
+  let fill = 0;
+  let minExisting = Infinity;
+  let maxExisting = -Infinity;
+  let minProposed = Infinity;
+  let maxProposed = -Infinity;
+  let sampleCount = 0;
+
+  for (let gy = 0; gy < resolution; gy++) {
+    const y = bounds.minY + (gy + 0.5) * dy;
+
+    for (let gx = 0; gx < resolution; gx++) {
+      const x = bounds.minX + (gx + 0.5) * dx;
+      const existingH = terrainSurfaceHeight(x, y, points, fallbackBlobs, 'existing');
+      const proposedH = proposed.length
+        ? terrainSurfaceHeight(x, y, points, fallbackBlobs, 'proposed')
+        : existingH;
+
+      const diff = proposedH - existingH;
+      if (diff > 0) fill += diff * cellArea;
+      else cut += Math.abs(diff) * cellArea;
+
+      minExisting = Math.min(minExisting, existingH);
+      maxExisting = Math.max(maxExisting, existingH);
+      minProposed = Math.min(minProposed, proposedH);
+      maxProposed = Math.max(maxProposed, proposedH);
+      sampleCount++;
+    }
+  }
+
+  return {
+    cutVolume:Number(cut.toFixed(2)),
+    fillVolume:Number(fill.toFixed(2)),
+    netVolume:Number((fill-cut).toFixed(2)),
+    minExisting:Number(minExisting.toFixed(2)),
+    maxExisting:Number(maxExisting.toFixed(2)),
+    minProposed:Number(minProposed.toFixed(2)),
+    maxProposed:Number(maxProposed.toFixed(2)),
+    sampleCount
+  };
+}
+
+
 function terrainStats(blobs: TerrainBlob[]) {
   const positive = blobs.filter(b => b.height > 0).reduce((s, b) => s + Math.PI * b.radius * b.radius * Math.abs(b.height) * 0.45, 0);
   const negative = blobs.filter(b => b.height < 0).reduce((s, b) => s + Math.PI * b.radius * b.radius * Math.abs(b.height) * 0.45, 0);
@@ -195,6 +506,150 @@ function wallEndpoints(obj: GardenObject) {
 
 function distance2D(a: {x:number;y:number}, b: {x:number;y:number}) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+
+function growthRatePerYear(rate: 'langsam' | 'mittel' | 'schnell' | undefined) {
+  if (rate === 'langsam') return 0.08;
+  if (rate === 'schnell') return 0.22;
+  return 0.14;
+}
+
+function plantGrowthProgress(
+  years: number,
+  growthRate: 'langsam' | 'mittel' | 'schnell' | undefined,
+  category: PlantCategory | undefined
+) {
+  if (years <= 0) return 0;
+
+  const annual = growthRatePerYear(growthRate);
+  const categoryFactor =
+    category === 'tree' ? 0.78 :
+    category === 'hedge' ? 1.12 :
+    category === 'grass' ? 1.5 :
+    category === 'perennial' ? 1.8 :
+    1.0;
+
+  return clamp(1 - Math.exp(-annual * categoryFactor * years), 0, 1);
+}
+
+function currentPlantDimensions(obj: GardenObject, years: number) {
+  const matureHeight = Math.max(obj.matureHeight || obj.height || 1, 0.1);
+  const matureWidth = Math.max(obj.matureWidth || obj.width || 1, 0.1);
+
+  const installationHeight = Math.max(
+    obj.installationHeight ?? Math.min(obj.height || matureHeight * 0.35, matureHeight),
+    0.1
+  );
+  const installationWidth = Math.max(
+    obj.installationWidth ?? Math.min(obj.width || matureWidth * 0.35, matureWidth),
+    0.1
+  );
+
+  const progress = plantGrowthProgress(years, obj.growthRate, obj.plantCategory);
+
+  return {
+    progress,
+    height: Math.min(
+      matureHeight,
+      installationHeight + (matureHeight - installationHeight) * progress
+    ),
+    width: Math.min(
+      matureWidth,
+      installationWidth + (matureWidth - installationWidth) * progress
+    )
+  };
+}
+
+function growthStageLabel(progress: number) {
+  if (progress < 0.12) return 'Pflanzung';
+  if (progress < 0.35) return 'Jungpflanze';
+  if (progress < 0.68) return 'Aufbauphase';
+  if (progress < 0.9) return 'Fast ausgewachsen';
+  return 'Ausgewachsen';
+}
+
+function polylineLength(points: {x:number;y:number}[]) {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += distance2D(points[i-1], points[i]);
+  return total;
+}
+
+function polylineCenter(points: {x:number;y:number}[]) {
+  if (!points.length) return {x:0,y:0};
+  const minX = Math.min(...points.map(point=>point.x));
+  const maxX = Math.max(...points.map(point=>point.x));
+  const minY = Math.min(...points.map(point=>point.y));
+  const maxY = Math.max(...points.map(point=>point.y));
+  return {x:(minX+maxX)/2,y:(minY+maxY)/2};
+}
+
+function relativePolyline(points: {x:number;y:number}[], center: {x:number;y:number}) {
+  return points.map(point=>({x:point.x-center.x,y:point.y-center.y}));
+}
+
+function absolutePolyline(obj: GardenObject) {
+  return (obj.points || []).map(point=>({x:obj.x+point.x,y:obj.y+point.y}));
+}
+
+function svgPathForPolyline(points: {x:number;y:number}[], curve = false) {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0].x*SCALE} ${points[0].y*SCALE}`;
+  if (!curve || points.length < 3) {
+    return points.map((point,index)=>`${index===0?'M':'L'} ${point.x*SCALE} ${point.y*SCALE}`).join(' ');
+  }
+
+  let d = `M ${points[0].x*SCALE} ${points[0].y*SCALE}`;
+  for (let i=1;i<points.length-1;i++) {
+    const current = points[i];
+    const next = points[i+1];
+    const mid = {x:(current.x+next.x)/2,y:(current.y+next.y)/2};
+    d += ` Q ${current.x*SCALE} ${current.y*SCALE} ${mid.x*SCALE} ${mid.y*SCALE}`;
+  }
+  const last = points[points.length-1];
+  d += ` L ${last.x*SCALE} ${last.y*SCALE}`;
+  return d;
+}
+
+function stairMetrics(
+  run: number,
+  rise: number,
+  preferredRiser = 0.16
+) {
+  const absRise = Math.abs(rise);
+  const count = Math.max(1, Math.round(absRise / Math.max(0.08, preferredRiser)));
+  const riser = absRise / count;
+  const tread = run / count;
+  return { count, riser, tread };
+}
+
+function buildLinearSegment3D(
+  group: THREE.Group,
+  start: {x:number;y:number},
+  end: {x:number;y:number},
+  width: number,
+  height: number,
+  yPosition: number,
+  material: THREE.Material
+) {
+  const dx = end.x - start.x;
+  const dz = end.y - start.y;
+  const length = Math.hypot(dx,dz);
+  if (length < 0.01) return;
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(length, height, width),
+    material
+  );
+
+  mesh.position.set(
+    (start.x+end.x)/2,
+    yPosition,
+    (start.y+end.y)/2
+  );
+
+  mesh.rotation.y = -Math.atan2(dz,dx);
+  group.add(mesh);
 }
 
 function polygonArea(points: {x:number;y:number}[]) {
@@ -445,7 +900,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.21 FLOORS + ROOMS – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.25 PLANT GROWTH TIMELINE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -470,7 +925,11 @@ export default function LandscapePlatform() {
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [gridSize, setGridSize] = useState(0.5);
   const [nightMode, setNightMode] = useState(false);
-  const [growthYear, setGrowthYear] = useState<0 | 3 | 10 | 20>(0);
+  const [growthYear, setGrowthYear] = useState<number>(0);
+  const [growthTimelineMode, setGrowthTimelineMode] = useState<'year'|'compare'>('year');
+  const [growthCompareYearA, setGrowthCompareYearA] = useState(0);
+  const [growthCompareYearB, setGrowthCompareYearB] = useState(10);
+  const [showMaturePlantOutline, setShowMaturePlantOutline] = useState(true);
   const [season, setSeason] = useState<'Frühling' | 'Sommer' | 'Herbst' | 'Winter'>('Sommer');
   const [sunAzimuth, setSunAzimuth] = useState(135);
   const [sunElevation, setSunElevation] = useState(42);
@@ -489,6 +948,38 @@ export default function LandscapePlatform() {
     { id: 2, name: 'Hügel Süd', x: 2.8, y: 2.2, radius: 1.9, height: 0.55, softness: 1.2, source: 'Start' },
     { id: 3, name: 'Mulde Mitte', x: 1.0, y: -2.8, radius: 1.8, height: -0.45, softness: 1.4, source: 'Start' }
   ]);
+  const [elevationPoints, setElevationPoints] = useState<ElevationPoint[]>([
+    { id: 9001, x: -8, y: -5, elevation: 0.00, kind: 'existing', name: 'Bestand P1' },
+    { id: 9002, x: 8, y: -5, elevation: 0.35, kind: 'existing', name: 'Bestand P2' },
+    { id: 9003, x: -8, y: 5, elevation: 0.75, kind: 'existing', name: 'Bestand P3' },
+    { id: 9004, x: 8, y: 5, elevation: 1.10, kind: 'existing', name: 'Bestand P4' }
+  ]);
+  const [activeTerrainSurface, setActiveTerrainSurface] = useState<'existing'|'proposed'>('existing');
+  const [newElevationValue, setNewElevationValue] = useState(0);
+  const [contourInterval, setContourInterval] = useState(0.25);
+  const [showTerrainContours2D, setShowTerrainContours2D] = useState(true);
+  const [terrainSculptMode, setTerrainSculptMode] = useState<'point'|'plateau'|'slope'>('point');
+  const [plateauRadius, setPlateauRadius] = useState(2.5);
+  const [plateauElevation, setPlateauElevation] = useState(0.5);
+  const [hardscapeDraftPoints, setHardscapeDraftPoints] = useState<{x:number;y:number}[]>([]);
+  const [hardscapeDraftType, setHardscapeDraftType] = useState<'path'|'gardenWall'>('path');
+  const [smartPathWidth, setSmartPathWidth] = useState(1.2);
+  const [smartPathCurve, setSmartPathCurve] = useState(true);
+  const [smartPathMaterial, setSmartPathMaterial] = useState('Naturstein');
+  const [gardenWallThickness, setGardenWallThickness] = useState(0.28);
+  const [gardenWallHeight, setGardenWallHeight] = useState(1.0);
+  const [gardenWallFoundation, setGardenWallFoundation] = useState(0.5);
+  const [stairDraftStart, setStairDraftStart] = useState<{x:number;y:number} | null>(null);
+  const [smartStairWidth, setSmartStairWidth] = useState(1.4);
+  const [preferredRiserHeight, setPreferredRiserHeight] = useState(0.16);
+  const [manualStairRise, setManualStairRise] = useState(0.75);
+  const [plantSearch, setPlantSearch] = useState('');
+  const [plantCategoryFilter, setPlantCategoryFilter] = useState<'all'|PlantCategory>('all');
+  const [plantLightFilter, setPlantLightFilter] = useState<'all'|PlantLight>('all');
+  const [plantWaterFilter, setPlantWaterFilter] = useState<'all'|PlantWater>('all');
+  const [selectedPlantSpeciesId, setSelectedPlantSpeciesId] = useState<string | null>(null);
+  const [projectHardinessZone, setProjectHardinessZone] = useState(7);
+  const [defaultPlantSiteLight, setDefaultPlantSiteLight] = useState<PlantLight>('Sonne');
 
   const [zones, setZones] = useState<Zone[]>([
     { id: 101, kind: 'hardscape', name: 'Terrasse', x: -5.4, y: 3.0, width: 4.2, depth: 2.4, color: '#b8b0a2' },
@@ -651,6 +1142,7 @@ export default function LandscapePlatform() {
         localStorage.setItem('al-green-v0193-autosave', JSON.stringify({
           projectInfo,
           terrainBlobs,
+          elevationPoints,
           zones,
           objects,
           rooms,
@@ -669,7 +1161,7 @@ export default function LandscapePlatform() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [autosaveEnabled, projectInfo, terrainBlobs, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled]);
+  }, [autosaveEnabled, projectInfo, terrainBlobs, elevationPoints, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled]);
 
   function restoreAutosave() {
     try {
@@ -679,6 +1171,7 @@ export default function LandscapePlatform() {
       snapshot();
       if (data.projectInfo) setProjectInfo(data.projectInfo);
       if (Array.isArray(data.terrainBlobs)) setTerrainBlobs(data.terrainBlobs);
+      if (Array.isArray(data.elevationPoints)) setElevationPoints(data.elevationPoints);
       if (Array.isArray(data.zones)) setZones(data.zones);
       if (Array.isArray(data.objects)) setObjects(data.objects);
       if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -728,7 +1221,65 @@ export default function LandscapePlatform() {
     });
   }, [wallTransformSignature]);
 
+  const terrainAnalysis = useMemo(
+    () => calculateCutFill(elevationPoints, terrainBlobs),
+    [elevationPoints, terrainBlobs]
+  );
+
+  const contourSegments2D = useMemo(
+    () => createContourSegments(
+      elevationPoints,
+      terrainBlobs,
+      contourInterval,
+      activeTerrainSurface
+    ),
+    [elevationPoints, terrainBlobs, contourInterval, activeTerrainSurface]
+  );
+
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
+
+  const projectPlants = useMemo(
+    () => objects.filter(object=>['tree','shrub','hedge'].includes(object.type) && object.speciesId),
+    [objects]
+  );
+
+  const averagePlantGrowthProgress = useMemo(() => {
+    if (!projectPlants.length) return 0;
+    return projectPlants.reduce(
+      (sum,plant)=>sum+currentPlantDimensions(plant,growthYear).progress,
+      0
+    ) / projectPlants.length;
+  }, [projectPlants,growthYear]);
+
+  const plantGrowthSummary = useMemo(() => {
+    return projectPlants.reduce((summary,plant) => {
+      const stage=growthStageLabel(currentPlantDimensions(plant,growthYear).progress);
+      summary[stage]=(summary[stage]||0)+1;
+      return summary;
+    }, {} as Record<string,number>);
+  }, [projectPlants,growthYear]);
+
+  const filteredPlantCatalog = useMemo(() => {
+    const query=plantSearch.trim().toLowerCase();
+
+    return PLANT_CATALOG.filter(species => {
+      const matchesSearch=!query
+        || species.commonName.toLowerCase().includes(query)
+        || species.botanicalName.toLowerCase().includes(query);
+      const matchesCategory=plantCategoryFilter==='all' || species.category===plantCategoryFilter;
+      const matchesLight=plantLightFilter==='all' || species.light.includes(plantLightFilter);
+      const matchesWater=plantWaterFilter==='all' || species.waterNeed===plantWaterFilter;
+      return matchesSearch && matchesCategory && matchesLight && matchesWater;
+    });
+  }, [plantSearch,plantCategoryFilter,plantLightFilter,plantWaterFilter]);
+
+  const plantChecks = useMemo(
+    () => plantChecksForProject(),
+    [objects,projectHardinessZone]
+  );
+
+  const criticalPlantChecks=plantChecks.filter(check=>check.severity==='critical').length;
+  const warningPlantChecks=plantChecks.filter(check=>check.severity==='warning').length;
 
   const metrics = useMemo(() => {
     const greenArea = zones.filter(z => z.kind === 'plantZone').reduce((s, z) => s + z.width * z.depth, 0);
@@ -743,6 +1294,7 @@ export default function LandscapePlatform() {
   function createEditorSnapshot(label = 'Arbeitsstand'): EditorSnapshot {
     return {
       terrainBlobs: structuredClone(terrainBlobs),
+      elevationPoints: structuredClone(elevationPoints),
       zones: structuredClone(zones),
       objects: structuredClone(objects),
       rooms: structuredClone(rooms),
@@ -762,6 +1314,7 @@ export default function LandscapePlatform() {
 
   function restoreEditorSnapshot(data: EditorSnapshot) {
     setTerrainBlobs(data.terrainBlobs || []);
+    setElevationPoints(data.elevationPoints || []);
     setZones(data.zones || []);
     setObjects(data.objects || []);
     setRooms(data.rooms || []);
@@ -877,6 +1430,8 @@ export default function LandscapePlatform() {
         setSnapGuides(null);
         setContextMenu(null);
         setWallDraftStart(null);
+        setHardscapeDraftPoints([]);
+        setStairDraftStart(null);
         setSelectedObjectIds([]);
         setSelectedKind(null);
         setSelectedId(null);
@@ -907,7 +1462,7 @@ export default function LandscapePlatform() {
 
   function objectLayer(obj: GardenObject) {
     if (['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(obj.type)) return 'buildings';
-    if (['tree','shrub','hedge'].includes(obj.type)) return 'plants';
+    if (['tree','shrub','hedge'].includes(obj.type) || obj.speciesId) return 'plants';
     if (['pool','pond'].includes(obj.type)) return 'water';
     if (obj.type === 'light') return 'lighting';
     if (['irrigation','drainage'].includes(obj.type)) return 'utilities';
@@ -916,18 +1471,19 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v021-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v022-project', JSON.stringify({ projectInfo, terrainBlobs, elevationPoints, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v021-project') || localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
+    const raw = localStorage.getItem('al-green-v022-project') || localStorage.getItem('al-green-v021-project') || localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
       snapshot();
       if (data.projectInfo) setProjectInfo(data.projectInfo);
       if (data.terrainBlobs) setTerrainBlobs(data.terrainBlobs);
+      if (Array.isArray(data.elevationPoints)) setElevationPoints(data.elevationPoints);
       if (data.zones) setZones(data.zones);
       if (data.objects) setObjects(data.objects);
       if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -1021,6 +1577,71 @@ export default function LandscapePlatform() {
         <circle cx={(-obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
         <circle cx={(obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
         <text x="0" y={-thickness*SCALE/2-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name} · {obj.width.toFixed(2)} m</text>
+      </g>
+    );
+  }
+
+  if ((obj.type==='path' || obj.type==='gardenWall') && obj.points?.length) {
+    const localPath = svgPathForPolyline(obj.points,obj.type==='path' && !!obj.curve);
+    const strokeWidth = (obj.type==='path' ? (obj.pathWidth || 1) : (obj.thickness || 0.28))*SCALE;
+
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
+        {obj.type==='path' ? (
+          <>
+            <path d={localPath} fill="none" stroke={stroke} strokeWidth={strokeWidth+6} strokeLinecap="round" strokeLinejoin="round" opacity={selected?1:0.45}/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={localPath} fill="none" stroke="#ffffff" strokeOpacity="0.28" strokeWidth="2" strokeDasharray="12 8"/>
+          </>
+        ) : (
+          <>
+            <path d={localPath} fill="none" stroke={stroke} strokeWidth={strokeWidth+5} strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+          </>
+        )}
+
+        {selected && obj.points.map((point,index)=>(
+          <circle key={`poly-point-${index}`} cx={point.x*SCALE} cy={point.y*SCALE} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2"/>
+        ))}
+
+        <text x="0" y="-12" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">
+          {obj.name} · {polylineLength(obj.points).toFixed(2)} m
+        </text>
+      </g>
+    );
+  }
+
+  if (obj.type==='stairs' && obj.points?.length===2) {
+    const start=obj.points[0];
+    const end=obj.points[1];
+    const dx=end.x-start.x;
+    const dy=end.y-start.y;
+    const run=Math.hypot(dx,dy);
+    const angle=Math.atan2(dy,dx)*180/Math.PI;
+    const steps=Math.max(1,obj.stepCount || 1);
+
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty})`}>
+        <g transform={`rotate(${angle} ${(start.x+end.x)/2*SCALE} ${(start.y+end.y)/2*SCALE})`}>
+          <rect
+            x={(start.x)*SCALE}
+            y={((start.y)-(obj.width/2))*SCALE}
+            width={run*SCALE}
+            height={obj.width*SCALE}
+            fill={obj.color}
+            fillOpacity="0.8"
+            stroke={stroke}
+            strokeWidth={sw}
+          />
+          {Array.from({length:steps+1}).map((_,index)=>{
+            const px=(start.x + (dx/run)*(run*index/steps))*SCALE;
+            const py=(start.y)*SCALE;
+            return <line key={index} x1={px} y1={py-obj.width*SCALE/2} x2={px} y2={py+obj.width*SCALE/2} stroke="#78716c" strokeWidth="1"/>;
+          })}
+        </g>
+        <text x="0" y="-14" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="4">
+          {steps} Stufen
+        </text>
       </g>
     );
   }
@@ -1310,6 +1931,401 @@ export default function LandscapePlatform() {
     });
   }
 
+  function addElevationPoint(
+    x: number,
+    y: number,
+    elevation = newElevationValue,
+    kind: 'existing'|'proposed' = activeTerrainSurface
+  ) {
+    snapshot();
+    const id = Date.now();
+    const point: ElevationPoint = {
+      id,
+      x,
+      y,
+      elevation,
+      kind,
+      name: `${kind==='existing'?'Bestand':'Planung'} P${elevationPoints.filter(point=>point.kind===kind).length+1}`
+    };
+
+    setElevationPoints(current=>[...current,point]);
+    setStatus(`${point.name} gesetzt · ${elevation.toFixed(2)} m.`);
+  }
+
+  function updateElevationPoint(id: number, patch: Partial<ElevationPoint>) {
+    setElevationPoints(current=>current.map(point=>point.id===id?{...point,...patch}:point));
+  }
+
+  function deleteElevationPoint(id: number) {
+    snapshot();
+    setElevationPoints(current=>current.filter(point=>point.id!==id));
+    setStatus('Höhenpunkt gelöscht.');
+  }
+
+  function copyExistingToProposed() {
+    snapshot();
+    const proposed = elevationPoints
+      .filter(point=>point.kind==='existing')
+      .map((point,index)=>({
+        ...structuredClone(point),
+        id:Date.now()+index+1,
+        kind:'proposed' as const,
+        name:`Planung P${index+1}`
+      }));
+
+    setElevationPoints(current=>[
+      ...current.filter(point=>point.kind!=='proposed'),
+      ...proposed
+    ]);
+
+    setActiveTerrainSurface('proposed');
+    setStatus(`${proposed.length} Bestandshöhen in Planung übernommen.`);
+  }
+
+  function createPlateauAt(x: number, y: number) {
+    snapshot();
+    const count = 12;
+    const base = Date.now();
+    const points: ElevationPoint[] = [];
+
+    points.push({
+      id:base,
+      x,
+      y,
+      elevation:plateauElevation,
+      kind:'proposed',
+      name:'Plateau Zentrum'
+    });
+
+    for (let i=0;i<count;i++) {
+      const angle=(i/count)*Math.PI*2;
+      points.push({
+        id:base+i+1,
+        x:x+Math.cos(angle)*plateauRadius,
+        y:y+Math.sin(angle)*plateauRadius,
+        elevation:plateauElevation,
+        kind:'proposed',
+        name:`Plateau Rand ${i+1}`
+      });
+    }
+
+    setElevationPoints(current=>[...current,...points]);
+    setActiveTerrainSurface('proposed');
+    setStatus(`Plateau mit Ø ${(plateauRadius*2).toFixed(1)} m auf ${plateauElevation.toFixed(2)} m angelegt.`);
+  }
+
+  function calculateCurrentSlope() {
+    const proposed = elevationPoints.filter(point=>point.kind==='proposed');
+    if (proposed.length < 2) {
+      setStatus('Für eine Neigung mindestens zwei Planungshöhenpunkte setzen.');
+      return;
+    }
+
+    const sorted=[...proposed].sort((a,b)=>a.x-b.x || a.y-b.y);
+    const first=sorted[0];
+    const last=sorted[sorted.length-1];
+    const distance=Math.max(0.01,distance2D(first,last));
+    const slope=((last.elevation-first.elevation)/distance)*100;
+
+    setStatus(`Planungsgefälle zwischen äußersten Punkten: ${slope.toFixed(2)} % über ${distance.toFixed(2)} m.`);
+  }
+
+  function resetHardscapeDraft() {
+    setHardscapeDraftPoints([]);
+    setStairDraftStart(null);
+  }
+
+  function addHardscapeDraftPoint(point: {x:number;y:number}) {
+    setHardscapeDraftPoints(current=>[...current,point]);
+    setStatus(`${hardscapeDraftType==='path'?'Weg':'Gartenmauer'}: Punkt ${hardscapeDraftPoints.length+1} gesetzt.`);
+  }
+
+  function undoHardscapeDraftPoint() {
+    setHardscapeDraftPoints(current=>current.slice(0,-1));
+    setStatus('Letzten Linienpunkt entfernt.');
+  }
+
+  function finalizeHardscapePolyline() {
+    if (hardscapeDraftPoints.length < 2) {
+      setStatus('Mindestens zwei Punkte erforderlich.');
+      return;
+    }
+
+    snapshot();
+
+    const center = polylineCenter(hardscapeDraftPoints);
+    const relative = relativePolyline(hardscapeDraftPoints,center);
+    const length = polylineLength(hardscapeDraftPoints);
+    const xs = hardscapeDraftPoints.map(point=>point.x);
+    const ys = hardscapeDraftPoints.map(point=>point.y);
+    const boundsWidth = Math.max(0.2,Math.max(...xs)-Math.min(...xs));
+    const boundsDepth = Math.max(0.2,Math.max(...ys)-Math.min(...ys));
+    const id = Date.now();
+
+    const start = hardscapeDraftPoints[0];
+    const end = hardscapeDraftPoints[hardscapeDraftPoints.length-1];
+    const surfaceKind = elevationPoints.some(point=>point.kind==='proposed') ? 'proposed' : 'existing';
+    const startElevation = terrainSurfaceHeight(start.x,start.y,elevationPoints,terrainBlobs,surfaceKind);
+    const endElevation = terrainSurfaceHeight(end.x,end.y,elevationPoints,terrainBlobs,surfaceKind);
+
+    const object: GardenObject = hardscapeDraftType==='path'
+      ? {
+          id,
+          type:'path',
+          name:'Intelligenter Weg',
+          x:center.x,
+          y:center.y,
+          width:boundsWidth,
+          depth:boundsDepth,
+          height:0.08,
+          rotation:0,
+          color:'#cbbba0',
+          material:smartPathMaterial,
+          unitCost:95,
+          points:relative,
+          pathWidth:smartPathWidth,
+          curve:smartPathCurve,
+          startElevation,
+          endElevation,
+          note:`Länge ${length.toFixed(2)} m`
+        }
+      : {
+          id,
+          type:'gardenWall',
+          name:'Gartenmauer',
+          x:center.x,
+          y:center.y,
+          width:boundsWidth,
+          depth:boundsDepth,
+          height:gardenWallHeight,
+          rotation:0,
+          color:'#9ca3af',
+          material:'Naturstein / Beton',
+          unitCost:340,
+          points:relative,
+          thickness:gardenWallThickness,
+          foundationDepth:gardenWallFoundation,
+          capHeight:0.08,
+          startElevation,
+          endElevation,
+          note:`Länge ${length.toFixed(2)} m`
+        };
+
+    setObjects(current=>[...current,object]);
+    setSelectedKind('object');
+    setSelectedId(id);
+    setSelectedObjectIds([id]);
+    setHardscapeDraftPoints([]);
+    setStatus(`${object.name} erstellt · ${length.toFixed(2)} m.`);
+  }
+
+  function createSmartStairs(start: {x:number;y:number}, end: {x:number;y:number}) {
+    const run = distance2D(start,end);
+    if (run < 0.4) {
+      setStatus('Treppenlauf ist zu kurz.');
+      return;
+    }
+
+    const surfaceKind = elevationPoints.some(point=>point.kind==='proposed') ? 'proposed' : 'existing';
+    let startElevation = terrainSurfaceHeight(start.x,start.y,elevationPoints,terrainBlobs,surfaceKind);
+    let endElevation = terrainSurfaceHeight(end.x,end.y,elevationPoints,terrainBlobs,surfaceKind);
+
+    if (Math.abs(endElevation-startElevation) < 0.08) {
+      endElevation = startElevation + manualStairRise;
+    }
+
+    // Für eine saubere Darstellung wird intern immer vom tieferen zum höheren Punkt aufgebaut.
+    let lowerPoint = start;
+    let upperPoint = end;
+    let lowerElevation = startElevation;
+    let upperElevation = endElevation;
+
+    if (startElevation > endElevation) {
+      lowerPoint = end;
+      upperPoint = start;
+      lowerElevation = endElevation;
+      upperElevation = startElevation;
+    }
+
+    const rise = upperElevation-lowerElevation;
+    const metrics = stairMetrics(run,rise,preferredRiserHeight);
+    const center = {
+      x:(lowerPoint.x+upperPoint.x)/2,
+      y:(lowerPoint.y+upperPoint.y)/2
+    };
+
+    snapshot();
+    const id = Date.now();
+
+    const object: GardenObject = {
+      id,
+      type:'stairs',
+      name:'Intelligente Treppe',
+      x:center.x,
+      y:center.y,
+      width:smartStairWidth,
+      depth:run,
+      height:rise,
+      rotation:0,
+      color:'#c8b6a6',
+      material:'Naturstein',
+      unitCost:420,
+      points:relativePolyline([lowerPoint,upperPoint],center),
+      startElevation:lowerElevation,
+      endElevation:upperElevation,
+      stepCount:metrics.count,
+      riserHeight:metrics.riser,
+      treadDepth:metrics.tread,
+      note:`${metrics.count} Stufen · ${metrics.riser.toFixed(3)} m Steigung`
+    };
+
+    setObjects(current=>[...current,object]);
+    setSelectedKind('object');
+    setSelectedId(id);
+    setSelectedObjectIds([id]);
+    setStairDraftStart(null);
+    setStatus(`${metrics.count} Stufen berechnet · Steigung ${metrics.riser.toFixed(3)} m · Auftritt ${metrics.tread.toFixed(3)} m.`);
+  }
+
+  function speciesForObject(obj: GardenObject) {
+    return obj.speciesId ? PLANT_CATALOG.find(species=>species.id===obj.speciesId) || null : null;
+  }
+
+  function choosePlantSpecies(species: PlantSpecies) {
+    setSelectedPlantSpeciesId(species.id);
+    setTool(species.objectType);
+    setTab('library');
+    setStatus(`${species.commonName} gewählt. Jetzt im 2D-Plan platzieren.`);
+  }
+
+  function applySpeciesToPlant(object: GardenObject, species: PlantSpecies): GardenObject {
+    const width = species.category==='hedge'
+      ? Math.max(2.5, species.recommendedSpacing*4)
+      : Math.max(0.3,species.matureWidth*0.45);
+
+    const depth = species.category==='hedge'
+      ? Math.max(0.5,species.matureWidth*0.35)
+      : width;
+
+    return {
+      ...object,
+      type:species.objectType,
+      name:species.commonName,
+      speciesId:species.id,
+      botanicalName:species.botanicalName,
+      plantCategory:species.category,
+      width:Number(width.toFixed(2)),
+      depth:Number(depth.toFixed(2)),
+      height:Number(Math.max(0.3,species.matureHeight*0.45).toFixed(2)),
+      matureHeight:species.matureHeight,
+      matureWidth:species.matureWidth,
+      recommendedSpacing:species.recommendedSpacing,
+      growthRate:species.growthRate,
+      evergreen:species.evergreen,
+      bloomMonths:species.bloomMonths,
+      bloomColor:species.bloomColor,
+      soilNeeds:species.soil,
+      hardinessMin:species.hardinessMin,
+      hardinessMax:species.hardinessMax,
+      plantForm:species.plantForm,
+      color:species.foliageColor,
+      material:'Pflanze',
+      unitCost:species.unitCost,
+      waterNeed:species.waterNeed,
+      lightNeed:species.light.join('/'),
+      siteLight:defaultPlantSiteLight,
+      subtype:species.category,
+      plantingYear:0,
+      installationHeight:Number(Math.max(0.2,species.matureHeight*0.28).toFixed(2)),
+      installationWidth:Number(Math.max(0.2,species.matureWidth*0.24).toFixed(2))
+    };
+  }
+
+  function replacePlantSpecies(objectId: number, species: PlantSpecies) {
+    snapshot();
+    setObjects(current=>current.map(object=>object.id===objectId?applySpeciesToPlant(object,species):object));
+    setStatus(`Pflanzenart auf ${species.commonName} geändert.`);
+  }
+
+  function plantChecksForProject(): PlantCheck[] {
+    const plants = objects.filter(object=>['tree','shrub','hedge'].includes(object.type) && object.speciesId);
+    const checks: PlantCheck[] = [];
+
+    for (let i=0;i<plants.length;i++) {
+      const plant=plants[i];
+      const species=speciesForObject(plant);
+      if (!species) continue;
+
+      if (projectHardinessZone<species.hardinessMin || projectHardinessZone>species.hardinessMax) {
+        checks.push({
+          id:`hardiness-${plant.id}`,
+          severity:'critical',
+          objectIds:[plant.id],
+          title:'Winterhärte prüfen',
+          message:`${plant.name}: Projektzone ${projectHardinessZone} liegt außerhalb der hinterlegten Planungszone ${species.hardinessMin}–${species.hardinessMax}.`
+        });
+      }
+
+      if (plant.siteLight && !species.light.includes(plant.siteLight)) {
+        checks.push({
+          id:`light-${plant.id}`,
+          severity:'warning',
+          objectIds:[plant.id],
+          title:'Lichtbedarf passt nicht',
+          message:`${plant.name}: Standort „${plant.siteLight}“ passt nicht zu ${species.light.join(', ')}.`
+        });
+      }
+
+      if (species.waterNeed>=4) {
+        const irrigation=objects.filter(object=>object.type==='irrigation');
+        const nearest=irrigation.length
+          ? Math.min(...irrigation.map(line=>Math.hypot(line.x-plant.x,line.y-plant.y)))
+          : Infinity;
+
+        if (nearest>4) {
+          checks.push({
+            id:`water-${plant.id}`,
+            severity:'warning',
+            objectIds:[plant.id],
+            title:'Wasserversorgung prüfen',
+            message:`${plant.name} hat hohen Wasserbedarf; keine Bewässerung im Umkreis von 4 m erkannt.`
+          });
+        }
+      }
+
+      for (let j=i+1;j<plants.length;j++) {
+        const other=plants[j];
+        const otherSpecies=speciesForObject(other);
+        if (!otherSpecies) continue;
+
+        const actualDistance=Math.hypot(other.x-plant.x,other.y-plant.y);
+        const required=Math.max(species.recommendedSpacing,otherSpecies.recommendedSpacing);
+
+        if (actualDistance<required*0.72) {
+          checks.push({
+            id:`spacing-${plant.id}-${other.id}`,
+            severity:actualDistance<required*0.45?'critical':'warning',
+            objectIds:[plant.id,other.id],
+            title:'Pflanzabstand zu gering',
+            message:`${plant.name} ↔ ${other.name}: ${actualDistance.toFixed(2)} m vorhanden, ca. ${required.toFixed(2)} m empfohlen.`
+          });
+        }
+      }
+
+      if (species.matureHeight>=8 && objects.some(object=>(object.type==='building'||object.type==='wall') && Math.hypot(object.x-plant.x,object.y-plant.y)<2.5)) {
+        checks.push({
+          id:`height-${plant.id}`,
+          severity:'info',
+          objectIds:[plant.id],
+          title:'Endhöhe nahe Baukörper',
+          message:`${plant.name} erreicht laut Bibliothek etwa ${species.matureHeight.toFixed(1)} m. Abstand zu Baukörpern prüfen.`
+        });
+      }
+    }
+
+    return checks;
+  }
+
   function addBuildingLevel() {
     snapshot();
     const sorted = [...levels].sort((a,b)=>a.elevation-b.elevation);
@@ -1455,6 +2471,7 @@ export default function LandscapePlatform() {
       pond: { name: 'Neuer Gartenteich', width: 3.6, depth: 2.6, height: 0.45, color: '#0ea5e9', material: 'Teichfolie', unitCost: 240 },
       pergola: { name: 'Neue Pergola', width: 3.0, depth: 2.4, height: 2.6, color: '#8b5e3c', material: 'Holz', unitCost: 480 },
       wall: { name: 'Neue Mauer', width: 3.0, depth: 0.25, height: 1.0, color: '#9ca3af', material: 'Beton/Stein', unitCost: 260 },
+      gardenWall: { name: 'Neue Gartenmauer', width: 3.0, depth: 0.28, height: 1.0, color: '#9ca3af', material: 'Naturstein/Beton', unitCost: 340, thickness: 0.28, foundationDepth: 0.5 },
       fence: { name: 'Neuer Zaun', width: 4.0, depth: 0.12, height: 1.4, color: '#7c5c3e', material: 'Holz/Metall', unitCost: 120 },
       gate: { name: 'Neues Tor', width: 2.5, depth: 0.18, height: 1.6, color: '#475569', material: 'Metall', unitCost: 650 },
       stairs: { name: 'Neue Stufen', width: 2.2, depth: 1.4, height: 0.9, color: '#c8b6a6', material: 'Naturstein', unitCost: 380 },
@@ -1483,10 +2500,15 @@ export default function LandscapePlatform() {
     };
     const preset = presets[type] as any;
     const draftObject = { id, type, x, y, rotation: 0, note: '', ...preset } as GardenObject;
-    const obj: GardenObject = {
+    let obj: GardenObject = {
       ...draftObject,
       level: isLevelBoundObject(draftObject) ? activeLevel : preset.level
     };
+
+    if (['tree','shrub','hedge'].includes(type) && selectedPlantSpeciesId) {
+      const species=PLANT_CATALOG.find(item=>item.id===selectedPlantSpeciesId);
+      if (species && species.objectType===type) obj=applySpeciesToPlant(obj,species);
+    }
     setObjects(v => [...v, obj]);
     setSelection('object', id, `${obj.name} gesetzt.`);
   }
@@ -1494,6 +2516,34 @@ export default function LandscapePlatform() {
   function handleCanvasClick(e: React.MouseEvent<SVGSVGElement>) {
     const rawPoint = worldFromEvent(svgRef.current, e);
     const p = snapPointToWallEndpoints(rawPoint);
+
+    if (tab === 'hardscape' && (tool === 'path' || tool === 'gardenWall')) {
+      setHardscapeDraftType(tool);
+      addHardscapeDraftPoint(p);
+      return;
+    }
+
+    if (tab === 'hardscape' && tool === 'stairs') {
+      if (!stairDraftStart) {
+        setStairDraftStart(p);
+        setStatus('Treppe: unteren oder ersten Punkt gesetzt. Zweiten Punkt klicken.');
+      } else {
+        createSmartStairs(stairDraftStart,p);
+      }
+      return;
+    }
+
+    if (tab === 'terrain' && tool === 'terrain') {
+      if (terrainSculptMode === 'point') {
+        addElevationPoint(p.x, p.y);
+      } else if (terrainSculptMode === 'plateau') {
+        createPlateauAt(p.x, p.y);
+      } else {
+        addElevationPoint(p.x, p.y, newElevationValue, 'proposed');
+        setStatus('Planungs-Höhenpunkt für Gefälle gesetzt.');
+      }
+      return;
+    }
 
     if (tool === 'wall' || tool === 'interiorWall') {
       if (!wallDraftStart) {
@@ -1870,7 +2920,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.21.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.25.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -1892,7 +2942,7 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['video3d','Video → 3D'],['terrain','Terrain'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
+            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['video3d','Video → 3D'],['terrain','Terrain'],['hardscape','Wege/Mauern/Treppen'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
@@ -2014,13 +3064,152 @@ export default function LandscapePlatform() {
 
         {tab === 'terrain' && (
           <>
-            <h2>Terrain-Werkzeuge</h2>
-            <div className="grid2">
-              {([
-                ['select','Auswählen'],['mound','Erhebung'],['depression','Mulde'],['plantZone','Pflanzzone'],['hardscape','Belag']
-              ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
+            <h2>Professionelles Gelände</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Aushub</small><strong>{terrainAnalysis.cutVolume.toFixed(1)} m³</strong></div>
+              <div className="kpi"><small>Aufschüttung</small><strong>{terrainAnalysis.fillVolume.toFixed(1)} m³</strong></div>
+              <div className="kpi"><small>Bilanz</small><strong>{terrainAnalysis.netVolume.toFixed(1)} m³</strong></div>
             </div>
-            <div className="hint" style={{marginTop:10}}>Erhebungen und Senken bleiben weich. Gebäude und andere Objekte können unabhängig davon verschoben werden.</div>
+
+            <label style={{marginTop:10}}>
+              Geländeoberfläche
+              <select value={activeTerrainSurface} onChange={e=>setActiveTerrainSurface(e.target.value as 'existing'|'proposed')}>
+                <option value="existing">Bestand</option>
+                <option value="proposed">Planung</option>
+              </select>
+            </label>
+
+            <div className="grid3">
+              <button className={`tool ${terrainSculptMode==='point'?'active':''}`} onClick={()=>{setTerrainSculptMode('point');setTool('terrain');}}>Höhenpunkt</button>
+              <button className={`tool ${terrainSculptMode==='plateau'?'active':''}`} onClick={()=>{setTerrainSculptMode('plateau');setTool('terrain');setActiveTerrainSurface('proposed');}}>Plateau</button>
+              <button className={`tool ${terrainSculptMode==='slope'?'active':''}`} onClick={()=>{setTerrainSculptMode('slope');setTool('terrain');setActiveTerrainSurface('proposed');}}>Gefälle</button>
+            </div>
+
+            <label>
+              Höhe neuer Punkt
+              <input type="number" step="0.05" value={newElevationValue} onChange={e=>setNewElevationValue(Number(e.target.value))}/>
+            </label>
+
+            {terrainSculptMode==='plateau' && (
+              <div className="grid2">
+                <label>Plateau-Radius<input type="number" min="0.5" step="0.25" value={plateauRadius} onChange={e=>setPlateauRadius(Number(e.target.value))}/></label>
+                <label>Plateau-Höhe<input type="number" step="0.05" value={plateauElevation} onChange={e=>setPlateauElevation(Number(e.target.value))}/></label>
+              </div>
+            )}
+
+            <div className="grid2">
+              <button className="btn blue" onClick={copyExistingToProposed}>Bestand → Planung kopieren</button>
+              <button className="btn" onClick={calculateCurrentSlope}>Gefälle berechnen</button>
+            </div>
+
+            <label style={{marginTop:10}}>
+              Höhenlinien-Abstand
+              <input type="number" min="0.05" step="0.05" value={contourInterval} onChange={e=>setContourInterval(Math.max(0.05,Number(e.target.value)||0.25))}/>
+            </label>
+
+            <label>
+              <input type="checkbox" checked={showTerrainContours2D} onChange={e=>setShowTerrainContours2D(e.target.checked)}/>
+              Höhenlinien im 2D-Plan anzeigen
+            </label>
+
+            <div className="terrainRangeInfo">
+              <div className="item"><strong>Bestand</strong><span>{terrainAnalysis.minExisting.toFixed(2)} bis {terrainAnalysis.maxExisting.toFixed(2)} m</span></div>
+              <div className="item"><strong>Planung</strong><span>{terrainAnalysis.minProposed.toFixed(2)} bis {terrainAnalysis.maxProposed.toFixed(2)} m</span></div>
+            </div>
+
+            <h2 style={{marginTop:14}}>Höhenpunkte</h2>
+
+            <div className="elevationPointList">
+              {elevationPoints
+                .filter(point=>point.kind===activeTerrainSurface)
+                .map(point=>(
+                  <div className="elevationPointCard" key={point.id}>
+                    <input value={point.name} onChange={e=>updateElevationPoint(point.id,{name:e.target.value})}/>
+                    <div className="grid3">
+                      <label>X<input type="number" step="0.1" value={point.x} onChange={e=>updateElevationPoint(point.id,{x:Number(e.target.value)})}/></label>
+                      <label>Y<input type="number" step="0.1" value={point.y} onChange={e=>updateElevationPoint(point.id,{y:Number(e.target.value)})}/></label>
+                      <label>Höhe<input type="number" step="0.05" value={point.elevation} onChange={e=>updateElevationPoint(point.id,{elevation:Number(e.target.value)})}/></label>
+                    </div>
+                    <button className="btn danger" onClick={()=>deleteElevationPoint(point.id)}>Löschen</button>
+                  </div>
+                ))}
+            </div>
+
+            <div className="hint" style={{marginTop:10}}>
+              Höhenpunkte werden per IDW interpoliert. Aushub und Aufschüttung werden über ein regelmäßiges Raster näherungsweise in m³ berechnet.
+            </div>
+          </>
+        )}
+
+        {tab === 'hardscape' && (
+          <>
+            <h2>Intelligente Wege, Mauern und Treppen</h2>
+
+            <div className="grid2">
+              <button className={`tool ${tool==='path'?'active':''}`} onClick={()=>{setTool('path');setHardscapeDraftType('path');setStairDraftStart(null);}}>Weg als Linienzug</button>
+              <button className={`tool ${tool==='gardenWall'?'active':''}`} onClick={()=>{setTool('gardenWall');setHardscapeDraftType('gardenWall');setStairDraftStart(null);}}>Gartenmauer als Linienzug</button>
+              <button className={`tool ${tool==='stairs'?'active':''}`} onClick={()=>{setTool('stairs');setHardscapeDraftPoints([]);}}>Treppe zwischen zwei Punkten</button>
+              <button className={`tool ${tool==='select'?'active':''}`} onClick={()=>{setTool('select');resetHardscapeDraft();}}>Auswählen</button>
+            </div>
+
+            {(tool==='path' || tool==='gardenWall') && (
+              <div className="hardscapeDraftPanel">
+                <div className="item">
+                  <strong>{tool==='path'?'Weg':'Gartenmauer'} · Linienzug</strong>
+                  <span>{hardscapeDraftPoints.length} Punkte · {polylineLength(hardscapeDraftPoints).toFixed(2)} m</span>
+                </div>
+
+                <div className="grid3">
+                  <button className="btn" disabled={!hardscapeDraftPoints.length} onClick={undoHardscapeDraftPoint}>Punkt zurück</button>
+                  <button className="btn primary" disabled={hardscapeDraftPoints.length<2} onClick={finalizeHardscapePolyline}>Linie abschließen</button>
+                  <button className="btn danger" disabled={!hardscapeDraftPoints.length} onClick={()=>setHardscapeDraftPoints([])}>Abbrechen</button>
+                </div>
+              </div>
+            )}
+
+            {tool==='path' && (
+              <div className="form">
+                <label>Wegbreite<input type="number" min="0.3" step="0.1" value={smartPathWidth} onChange={e=>setSmartPathWidth(Math.max(0.3,Number(e.target.value)||1.2))}/></label>
+                <label>Material<select value={smartPathMaterial} onChange={e=>setSmartPathMaterial(e.target.value)}>
+                  <option>Naturstein</option>
+                  <option>Pflaster</option>
+                  <option>Kies</option>
+                  <option>Beton</option>
+                  <option>Ziegel</option>
+                  <option>Holz</option>
+                </select></label>
+                <label><input type="checkbox" checked={smartPathCurve} onChange={e=>setSmartPathCurve(e.target.checked)}/> Linienzug optisch glätten</label>
+              </div>
+            )}
+
+            {tool==='gardenWall' && (
+              <div className="form">
+                <label>Mauerhöhe<input type="number" min="0.2" step="0.05" value={gardenWallHeight} onChange={e=>setGardenWallHeight(Math.max(0.2,Number(e.target.value)||1))}/></label>
+                <label>Mauerdicke<input type="number" min="0.1" step="0.02" value={gardenWallThickness} onChange={e=>setGardenWallThickness(Math.max(0.1,Number(e.target.value)||0.28))}/></label>
+                <label>Fundamenttiefe<input type="number" min="0" step="0.05" value={gardenWallFoundation} onChange={e=>setGardenWallFoundation(Math.max(0,Number(e.target.value)||0))}/></label>
+              </div>
+            )}
+
+            {tool==='stairs' && (
+              <div className="form">
+                <label>Treppenbreite<input type="number" min="0.5" step="0.1" value={smartStairWidth} onChange={e=>setSmartStairWidth(Math.max(0.5,Number(e.target.value)||1.4))}/></label>
+                <label>Gewünschte Steigung<input type="number" min="0.08" max="0.25" step="0.005" value={preferredRiserHeight} onChange={e=>setPreferredRiserHeight(Math.max(0.08,Number(e.target.value)||0.16))}/></label>
+                <label>Manuelle Höhendifferenz bei flachem Gelände<input type="number" min="0.1" step="0.05" value={manualStairRise} onChange={e=>setManualStairRise(Math.max(0.1,Number(e.target.value)||0.75))}/></label>
+
+                {stairDraftStart && (
+                  <div className="item">
+                    <strong>Treppen-Startpunkt gesetzt</strong>
+                    <span>X {stairDraftStart.x.toFixed(2)} · Y {stairDraftStart.y.toFixed(2)}</span>
+                    <button className="btn danger" onClick={()=>setStairDraftStart(null)}>Abbrechen</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="hint" style={{marginTop:10}}>
+              Weg/Mauer: beliebig viele Punkte setzen und anschließend „Linie abschließen“. Treppe: zwei Punkte setzen; Höhen, Stufenzahl, Steigung und Auftritt werden automatisch berechnet.
+            </div>
           </>
         )}
 
@@ -2173,13 +3362,200 @@ export default function LandscapePlatform() {
 
         {tab === 'library' && (
           <>
-            <h2>Objekt- und Pflanzenbibliothek</h2>
-            <div className="grid3">
-              {([
-                ['tree','Baum'],['shrub','Strauch'],['hedge','Hecke'],['planter','Hochbeet'],['bench','Sitzbank'],['light','Leuchte'],['firepit','Feuerstelle'],['rock','Felsen'],['irrigation','Bewässerung'],['drainage','Drainage'],['select','Auswählen']
-              ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
+            <h2>Pflanzenbibliothek</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Arten</small><strong>{PLANT_CATALOG.length}</strong></div>
+              <div className="kpi"><small>Im Projekt</small><strong>{objects.filter(object=>object.speciesId).length}</strong></div>
+              <div className="kpi"><small>Kritisch</small><strong>{criticalPlantChecks}</strong></div>
+              <div className="kpi"><small>Warnungen</small><strong>{warningPlantChecks}</strong></div>
             </div>
-            <div className="hint" style={{marginTop:10}}>Objekt wählen und in den 2D-Plan klicken. Danach kann es in 2D und 3D verschoben und rechts angepasst werden.</div>
+
+            <div className="plantFilterPanel">
+              <label>Suche<input value={plantSearch} onChange={e=>setPlantSearch(e.target.value)} placeholder="Name oder botanischer Name"/></label>
+
+              <div className="grid3">
+                <label>Kategorie<select value={plantCategoryFilter} onChange={e=>setPlantCategoryFilter(e.target.value as 'all'|PlantCategory)}>
+                  <option value="all">Alle</option>
+                  <option value="tree">Bäume</option>
+                  <option value="shrub">Sträucher</option>
+                  <option value="hedge">Hecken</option>
+                  <option value="perennial">Stauden</option>
+                  <option value="grass">Gräser</option>
+                </select></label>
+
+                <label>Licht<select value={plantLightFilter} onChange={e=>setPlantLightFilter(e.target.value as 'all'|PlantLight)}>
+                  <option value="all">Alle</option>
+                  <option value="Sonne">Sonne</option>
+                  <option value="Halbschatten">Halbschatten</option>
+                  <option value="Schatten">Schatten</option>
+                </select></label>
+
+                <label>Wasser<select value={plantWaterFilter} onChange={e=>setPlantWaterFilter(e.target.value==='all'?'all':Number(e.target.value) as PlantWater)}>
+                  <option value="all">Alle</option>
+                  <option value="1">1 niedrig</option>
+                  <option value="2">2</option>
+                  <option value="3">3 mittel</option>
+                  <option value="4">4</option>
+                  <option value="5">5 hoch</option>
+                </select></label>
+              </div>
+
+              <div className="grid2">
+                <label>Projekt-Winterhärtezone<select value={projectHardinessZone} onChange={e=>setProjectHardinessZone(Number(e.target.value))}>
+                  {[3,4,5,6,7,8,9].map(zone=><option key={zone} value={zone}>Zone {zone}</option>)}
+                </select></label>
+
+                <label>Standard-Standortlicht<select value={defaultPlantSiteLight} onChange={e=>setDefaultPlantSiteLight(e.target.value as PlantLight)}>
+                  <option value="Sonne">Sonne</option>
+                  <option value="Halbschatten">Halbschatten</option>
+                  <option value="Schatten">Schatten</option>
+                </select></label>
+              </div>
+            </div>
+
+            <div className="plantCatalogGrid">
+              {filteredPlantCatalog.map(species=>(
+                <article key={species.id} className={`plantSpeciesCard ${selectedPlantSpeciesId===species.id?'active':''}`}>
+                  <div className="plantSpeciesColor" style={{background:species.foliageColor}}/>
+                  <div>
+                    <strong>{species.commonName}</strong>
+                    <em>{species.botanicalName}</em>
+                  </div>
+
+                  <div className="plantSpeciesFacts">
+                    <span>{species.matureHeight.toFixed(1)} × {species.matureWidth.toFixed(1)} m</span>
+                    <span>Abstand {species.recommendedSpacing.toFixed(2)} m</span>
+                    <span>Wasser {species.waterNeed}/5</span>
+                    <span>{species.light.join(' · ')}</span>
+                    <span>Zone {species.hardinessMin}–{species.hardinessMax}</span>
+                    <span>{species.evergreen?'immergrün':'laubabwerfend'}</span>
+                  </div>
+
+                  <p>{species.notes}</p>
+                  <button className="btn primary" onClick={()=>choosePlantSpecies(species)}>Im Plan platzieren</button>
+                </article>
+              ))}
+              {!filteredPlantCatalog.length && <div className="hint">Keine Pflanze entspricht den gewählten Filtern.</div>}
+            </div>
+
+            <h2 style={{marginTop:14}}>Pflanzenwachstum</h2>
+
+            <div className="plantGrowthPanel">
+              <div className="kpis">
+                <div className="kpi"><small>Jahr</small><strong>{growthYear}</strong></div>
+                <div className="kpi"><small>Pflanzen</small><strong>{projectPlants.length}</strong></div>
+                <div className="kpi"><small>Ø Entwicklung</small><strong>{Math.round(averagePlantGrowthProgress*100)} %</strong></div>
+              </div>
+
+              <div className="growthYearButtons">
+                {[0,1,3,5,10,15,20].map(year=>(
+                  <button
+                    key={year}
+                    className={`pill ${growthYear===year?'active':''}`}
+                    onClick={()=>setGrowthYear(year)}
+                  >
+                    Jahr {year}
+                  </button>
+                ))}
+              </div>
+
+              <label>
+                Freies Entwicklungsjahr
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={growthYear}
+                  onChange={e=>setGrowthYear(Number(e.target.value))}
+                />
+                <span>{growthYear} Jahre</span>
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showMaturePlantOutline}
+                  onChange={e=>setShowMaturePlantOutline(e.target.checked)}
+                />
+                Endgröße im 2D-Plan als Umriss anzeigen
+              </label>
+
+              <div className="growthStageSummary">
+                {Object.entries(plantGrowthSummary).map(([stage,count])=>(
+                  <span key={stage}>{stage}: {count}</span>
+                ))}
+                {!projectPlants.length && <span>Noch keine konkreten Pflanzenarten platziert.</span>}
+              </div>
+
+              <div className="grid2">
+                <button
+                  className={`btn ${growthTimelineMode==='year'?'primary':''}`}
+                  onClick={()=>setGrowthTimelineMode('year')}
+                >
+                  Einzeljahr
+                </button>
+                <button
+                  className={`btn ${growthTimelineMode==='compare'?'primary':''}`}
+                  onClick={()=>setGrowthTimelineMode('compare')}
+                >
+                  Vergleich
+                </button>
+              </div>
+
+              {growthTimelineMode==='compare' && (
+                <div className="grid2">
+                  <label>Vergleich A
+                    <select value={growthCompareYearA} onChange={e=>setGrowthCompareYearA(Number(e.target.value))}>
+                      {[0,1,3,5,10,15,20,30].map(year=><option key={year} value={year}>Jahr {year}</option>)}
+                    </select>
+                  </label>
+                  <label>Vergleich B
+                    <select value={growthCompareYearB} onChange={e=>setGrowthCompareYearB(Number(e.target.value))}>
+                      {[0,1,3,5,10,15,20,30].map(year=><option key={year} value={year}>Jahr {year}</option>)}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {growthTimelineMode==='compare' && projectPlants.length>0 && (
+                <div className="growthCompareGrid">
+                  <div className="item">
+                    <strong>Jahr {growthCompareYearA}</strong>
+                    <span>Ø {Math.round(projectPlants.reduce((sum,plant)=>sum+currentPlantDimensions(plant,growthCompareYearA).progress,0)/projectPlants.length*100)} % Entwicklung</span>
+                  </div>
+                  <div className="item">
+                    <strong>Jahr {growthCompareYearB}</strong>
+                    <span>Ø {Math.round(projectPlants.reduce((sum,plant)=>sum+currentPlantDimensions(plant,growthCompareYearB).progress,0)/projectPlants.length*100)} % Entwicklung</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="hint">
+                Wachstum wird aus Endgröße, Pflanzgröße, Kategorie und Wachstumsgeschwindigkeit abgeleitet.
+              </div>
+            </div>
+
+            <h2 style={{marginTop:14}}>Standort- und Pflanzprüfungen</h2>
+
+            <div className="plantCheckList">
+              {plantChecks.map(check=>(
+                <button
+                  key={check.id}
+                  className={`plantCheck ${check.severity}`}
+                  onClick={()=>{const firstId=check.objectIds[0];if(firstId)selectObject(firstId,false);}}
+                >
+                  <strong>{check.title}</strong>
+                  <span>{check.message}</span>
+                </button>
+              ))}
+              {!plantChecks.length && <div className="hint">Keine automatischen Konflikte erkannt.</div>}
+            </div>
+
+            <div className="hint" style={{marginTop:10}}>
+              Die hinterlegten Pflanzenwerte sind editierbare Planungsrichtwerte. Standort, Sorte, Mikroklima und Pflege können die tatsächliche Entwicklung verändern.
+            </div>
           </>
         )}
 
@@ -2215,7 +3591,7 @@ export default function LandscapePlatform() {
               <label><input type="checkbox" checked={showGrid3D} onChange={e=>setShowGrid3D(e.target.checked)}/> 3D-Raster</label>
             </div>
             <div className="grid2">
-              {[0,3,10,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y as any)}>{y===0?'heute':y+' Jahre'}</button>)}
+              {[0,1,3,5,10,15,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y)}>{y===0?'heute':y+' Jahre'}</button>)}
             </div>
           </>
         )}
@@ -2291,7 +3667,7 @@ export default function LandscapePlatform() {
             </div>
             <div className="grid2" style={{marginTop:10}}>
               <button className={`btn ${nightMode?'active':''}`} onClick={()=>setNightMode(!nightMode)}>Nachtmodus</button>
-              {[0,3,10,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y as any)}>{y===0?'heute':y+' Jahre'}</button>)}
+              {[0,1,3,5,10,15,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y)}>{y===0?'heute':y+' Jahre'}</button>)}
             </div>
           </>
         )}
@@ -2310,7 +3686,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.21 FLOORS + ROOMS</span>
+          <span className="pill">V0.25 PLANT GROWTH TIMELINE</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -2349,6 +3725,72 @@ export default function LandscapePlatform() {
                 ))}
               </defs>
               <Grid />
+              {tab==='hardscape' && hardscapeDraftPoints.length>0 && (
+                <g pointerEvents="none">
+                  <path
+                    d={svgPathForPolyline(hardscapeDraftPoints, hardscapeDraftType==='path' && smartPathCurve)}
+                    fill="none"
+                    stroke={hardscapeDraftType==='path'?'#0284c7':'#475569'}
+                    strokeWidth={(hardscapeDraftType==='path'?smartPathWidth:gardenWallThickness)*SCALE}
+                    strokeOpacity="0.42"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {hardscapeDraftPoints.map((point,index)=>(
+                    <g key={`draft-hardscape-${index}`}>
+                      <circle cx={point.x*SCALE} cy={point.y*SCALE} r="6" fill="#ffffff" stroke="#0ea5e9" strokeWidth="2"/>
+                      <text x={point.x*SCALE+9} y={point.y*SCALE-8} fontSize="10" fill="#0f172a" paintOrder="stroke" stroke="#fff" strokeWidth="4">{index+1}</text>
+                    </g>
+                  ))}
+                </g>
+              )}
+
+              {tab==='hardscape' && stairDraftStart && (
+                <g pointerEvents="none">
+                  <circle cx={stairDraftStart.x*SCALE} cy={stairDraftStart.y*SCALE} r="8" fill="#ffffff" stroke="#f59e0b" strokeWidth="3"/>
+                  <text x={stairDraftStart.x*SCALE+10} y={stairDraftStart.y*SCALE-10} fontSize="11" fill="#92400e" paintOrder="stroke" stroke="#fff" strokeWidth="4">Treppenstart</text>
+                </g>
+              )}
+
+              {showTerrainContours2D && contourSegments2D.map((segment,index)=>(
+                <line
+                  key={`contour-${segment.level}-${index}`}
+                  x1={segment.x1*SCALE}
+                  y1={segment.y1*SCALE}
+                  x2={segment.x2*SCALE}
+                  y2={segment.y2*SCALE}
+                  stroke={activeTerrainSurface==='existing'?'#64748b':'#0284c7'}
+                  strokeWidth="1"
+                  opacity="0.72"
+                  pointerEvents="none"
+                />
+              ))}
+
+              {elevationPoints
+                .filter(point=>point.kind===activeTerrainSurface)
+                .map(point=>(
+                  <g key={`elevation-${point.id}`} pointerEvents="none">
+                    <circle
+                      cx={point.x*SCALE}
+                      cy={point.y*SCALE}
+                      r="6"
+                      fill={point.kind==='existing'?'#ffffff':'#dbeafe'}
+                      stroke={point.kind==='existing'?'#334155':'#0284c7'}
+                      strokeWidth="2"
+                    />
+                    <text
+                      x={point.x*SCALE+9}
+                      y={point.y*SCALE-8}
+                      fontSize="10"
+                      fill="#0f172a"
+                      paintOrder="stroke"
+                      stroke="#ffffff"
+                      strokeWidth="4"
+                    >
+                      {point.elevation.toFixed(2)} m
+                    </text>
+                  </g>
+                ))}
               {objects.filter(isWallObject).flatMap(wall =>
                 wallEndpoints(wall).map((endpoint,index)=>(
                   <circle
@@ -2410,6 +3852,8 @@ export default function LandscapePlatform() {
                   obj={obj}
                   openings={isWallObject(obj) ? objects.filter(opening => opening.parentId===obj.id && isOpeningObject(opening)) : []}
                   selected={selectedKind==='object' && selectedObjectIds.includes(obj.id)}
+                  growthYear={growthYear}
+                  showMaturePlantOutline={showMaturePlantOutline}
                   onClick={(e)=>{e.stopPropagation(); selectObject(obj.id,e.shiftKey||e.metaKey||e.ctrlKey);}}
                   onPointerDown={(e)=>start2DDrag(e,'object',obj.id,obj.x,obj.y,obj.name)}
                 />
@@ -2419,7 +3863,7 @@ export default function LandscapePlatform() {
               {selectedObject && selectedObjectIds.length===1 && <ObjectTransformHandles obj={selectedObject} onScaleStart={startScaleObject} onRotateStart={startRotateObject}/>}
             </svg>
           ) : view === '3d' ? (
-            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+            <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
               setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -2440,7 +3884,7 @@ export default function LandscapePlatform() {
                 <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={visibleObjectsForPlan} rooms={visibleRoomsForPlan} selectedRoomId={selectedRoomId} selectedId={selectedId} selectedKind={selectedKind} />
               </div>
               <div className="splitPane">
-                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+                <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
                   setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
                 }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -2568,6 +4012,40 @@ export default function LandscapePlatform() {
               <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
             </>}
             <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
+            {selectedObject.type==='path' && selectedObject.points?.length && (
+              <div className="smartHardscapeProperties">
+                <h3>Intelligenter Weg</h3>
+                <div className="item"><strong>Länge</strong><span>{polylineLength(selectedObject.points).toFixed(2)} m</span></div>
+                <label>Wegbreite<input type="number" min="0.3" step="0.1" value={selectedObject.pathWidth || 1.2} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,pathWidth:Number(e.target.value)}:obj))}/></label>
+                <label>Material<input value={selectedObject.material || ''} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,material:e.target.value}:obj))}/></label>
+                <label><input type="checkbox" checked={!!selectedObject.curve} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,curve:e.target.checked}:obj))}/> Linienzug glätten</label>
+                <div className="item"><strong>Gefälle Anfang → Ende</strong><span>{selectedObject.startElevation!==undefined && selectedObject.endElevation!==undefined ? (((selectedObject.endElevation-selectedObject.startElevation)/Math.max(0.01,polylineLength(selectedObject.points)))*100).toFixed(2) : '0.00'} %</span></div>
+              </div>
+            )}
+
+            {selectedObject.type==='gardenWall' && selectedObject.points?.length && (
+              <div className="smartHardscapeProperties">
+                <h3>Gartenmauer</h3>
+                <div className="item"><strong>Länge</strong><span>{polylineLength(selectedObject.points).toFixed(2)} m</span></div>
+                <label>Höhe<input type="number" min="0.2" step="0.05" value={selectedObject.height} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,height:Number(e.target.value)}:obj))}/></label>
+                <label>Dicke<input type="number" min="0.1" step="0.02" value={selectedObject.thickness || 0.28} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,thickness:Number(e.target.value)}:obj))}/></label>
+                <label>Fundamenttiefe<input type="number" min="0" step="0.05" value={selectedObject.foundationDepth || 0} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,foundationDepth:Number(e.target.value)}:obj))}/></label>
+              </div>
+            )}
+
+            {selectedObject.type==='stairs' && selectedObject.points?.length===2 && (
+              <div className="smartHardscapeProperties">
+                <h3>Intelligente Treppe</h3>
+                <div className="kpis">
+                  <div className="kpi"><small>Stufen</small><strong>{selectedObject.stepCount || 1}</strong></div>
+                  <div className="kpi"><small>Steigung</small><strong>{(selectedObject.riserHeight || 0).toFixed(3)} m</strong></div>
+                  <div className="kpi"><small>Auftritt</small><strong>{(selectedObject.treadDepth || 0).toFixed(3)} m</strong></div>
+                </div>
+                <label>Breite<input type="number" min="0.5" step="0.1" value={selectedObject.width} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,width:Number(e.target.value)}:obj))}/></label>
+                <div className="item"><strong>Höhendifferenz</strong><span>{Math.abs((selectedObject.endElevation||0)-(selectedObject.startElevation||0)).toFixed(2)} m</span></div>
+              </div>
+            )}
+
             {isOpeningObject(selectedObject) && (
               <div className="architectureOpeningPanel">
                 <h3>Wandöffnung</h3>
@@ -2608,7 +4086,86 @@ export default function LandscapePlatform() {
               <button className="btn" onClick={duplicateSelected}>Duplizieren</button>
               {['wall','interiorWall'].includes(selectedObject.type) && <button className="btn blue" onClick={connectSelectedWall}>Wand verbinden</button>}
             </div>
-            {['tree','shrub','hedge'].includes(selectedObject.type) && <><label>Wasserbedarf<input type="number" min="1" max="5" value={Number(selectedObject.waterNeed||2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,waterNeed:Number(e.target.value)}:o))}/></label><label>Lichtbedarf<input value={selectedObject.lightNeed||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,lightNeed:e.target.value}:o))}/></label></>}
+
+            {['tree','shrub','hedge'].includes(selectedObject.type) && (
+              <div className="plantObjectProperties">
+                <h3>Pflanzendaten</h3>
+
+                {selectedObject.speciesId ? (
+                  <>
+                    <div className="item"><strong>{selectedObject.name}</strong><span>{selectedObject.botanicalName}</span></div>
+
+                    <label>Art wechseln<select value={selectedObject.speciesId} onChange={e=>{
+                      const species=PLANT_CATALOG.find(item=>item.id===e.target.value);
+                      if(species)replacePlantSpecies(selectedObject.id,species);
+                    }}>
+                      {PLANT_CATALOG.map(species=><option key={species.id} value={species.id}>{species.commonName} · {species.botanicalName}</option>)}
+                    </select></label>
+
+                    <div className="grid2">
+                      <div className="item"><strong>Endhöhe</strong><span>{(selectedObject.matureHeight||0).toFixed(1)} m</span></div>
+                      <div className="item"><strong>Endbreite</strong><span>{(selectedObject.matureWidth||0).toFixed(1)} m</span></div>
+                      <div className="item"><strong>Pflanzabstand</strong><span>{(selectedObject.recommendedSpacing||0).toFixed(2)} m</span></div>
+                      <div className="item"><strong>Wuchs</strong><span>{selectedObject.growthRate||'—'}</span></div>
+                    </div>
+
+                    <label>Geplanter Standort<select value={selectedObject.siteLight||defaultPlantSiteLight} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,siteLight:e.target.value as PlantLight}:object))}>
+                      <option value="Sonne">Sonne</option>
+                      <option value="Halbschatten">Halbschatten</option>
+                      <option value="Schatten">Schatten</option>
+                    </select></label>
+
+                    <label>Wasserbedarf<input type="number" min="1" max="5" value={Number(selectedObject.waterNeed||2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,waterNeed:Number(e.target.value)}:o))}/></label>
+
+                    <div className="item"><strong>Boden</strong><span>{selectedObject.soilNeeds?.join(', ')||'—'}</span></div>
+                    <div className="item"><strong>Blüte</strong><span>{selectedObject.bloomMonths?.length?selectedObject.bloomMonths.join(', '):'—'} · {selectedObject.bloomColor||'—'}</span></div>
+                    <div className="item"><strong>Winterhärte</strong><span>Zone {selectedObject.hardinessMin}–{selectedObject.hardinessMax}</span></div>
+                    {(() => {
+                      const dims=currentPlantDimensions(selectedObject,growthYear);
+                      return (
+                        <div className="plantGrowthFacts">
+                          <div className="item"><strong>Entwicklungsphase</strong><span>{growthStageLabel(dims.progress)}</span></div>
+                          <div className="item"><strong>Größe Jahr {growthYear}</strong><span>{dims.height.toFixed(2)} × {dims.width.toFixed(2)} m</span></div>
+                          <div className="item"><strong>Endgröße</strong><span>{(selectedObject.matureHeight||selectedObject.height).toFixed(2)} × {(selectedObject.matureWidth||selectedObject.width).toFixed(2)} m</span></div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="grid2">
+                      <label>Pflanzhöhe
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={selectedObject.installationHeight ?? selectedObject.height}
+                          onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,installationHeight:Number(e.target.value)}:object))}
+                        />
+                      </label>
+                      <label>Pflanzbreite
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={selectedObject.installationWidth ?? selectedObject.width}
+                          onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,installationWidth:Number(e.target.value)}:object))}
+                        />
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hint">Generisches Pflanzenobjekt. Eine konkrete Art kann jetzt zugeordnet werden.</div>
+                    <label>Art zuordnen<select defaultValue="" onChange={e=>{
+                      const species=PLANT_CATALOG.find(item=>item.id===e.target.value);
+                      if(species)replacePlantSpecies(selectedObject.id,species);
+                    }}>
+                      <option value="" disabled>Art wählen …</option>
+                      {PLANT_CATALOG.map(species=><option key={species.id} value={species.id}>{species.commonName}</option>)}
+                    </select></label>
+                  </>
+                )}
+              </div>
+            )}
             <button className="btn danger" onClick={()=>{ setObjects(v=>v.filter(o=>o.id!==selectedObject.id)); setSelection(null,null,'Objekt gelöscht.'); }}>Objekt löschen</button>
           </div>
         )}
@@ -2666,7 +4223,7 @@ function Grid() {
   return <g>{lines}</g>;
 }
 
-function GardenObject2D({ obj, openings = [], selected, onClick, onPointerDown }: { obj: GardenObject; openings?: GardenObject[]; selected: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onPointerDown: (e: React.PointerEvent<SVGGElement>) => void }) {
+function GardenObject2D({ obj, openings = [], selected, growthYear = 0, showMaturePlantOutline = false, onClick, onPointerDown }: { obj: GardenObject; openings?: GardenObject[]; selected: boolean; growthYear?: number; showMaturePlantOutline?: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onPointerDown: (e: React.PointerEvent<SVGGElement>) => void }) {
   const stroke = selected ? '#f59e0b' : '#1f2937';
   const sw = selected ? 3 : 1.5;
   const tx = obj.x * SCALE;
@@ -2690,7 +4247,38 @@ function GardenObject2D({ obj, openings = [], selected, onClick, onPointerDown }
       </g>
     );
   }
+  if (obj.speciesId && obj.plantForm==='grass') {
+    const dims=currentPlantDimensions(obj,growthYear);
+    const renderWidth=dims.width;
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <circle cx="0" cy="0" r={(renderWidth/2)*SCALE} fill={obj.color} fillOpacity="0.22" stroke={stroke} strokeWidth={sw}/>
+        {Array.from({length:12}).map((_,index)=>{
+          const angle=(index/12)*Math.PI*2;
+          return <line key={index} x1="0" y1="0" x2={Math.cos(angle)*(renderWidth*0.28)*SCALE} y2={Math.sin(angle)*(renderWidth*0.28)*SCALE} stroke={obj.color} strokeWidth="2"/>;
+        })}
+        <text x="0" y={(renderWidth/2+0.28)*SCALE} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+      </g>
+    );
+  }
+
+  if (obj.speciesId && obj.plantForm==='perennial') {
+    const dims=currentPlantDimensions(obj,growthYear);
+    const renderWidth=dims.width;
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <circle cx="0" cy="0" r={(renderWidth/2)*SCALE} fill={obj.color} fillOpacity="0.42" stroke={stroke} strokeWidth={sw}/>
+        {[[-0.18,-0.12],[0.2,-0.1],[-0.05,0.18]].map(([x,y],index)=>(
+          <circle key={index} cx={x*renderWidth*SCALE} cy={y*renderWidth*SCALE} r="4" fill={obj.bloomColor?.includes('violett')?'#8b5cf6':'#f472b6'} opacity="0.9"/>
+        ))}
+        <text x="0" y={(renderWidth/2+0.28)*SCALE} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+      </g>
+    );
+  }
+
   if (['tree','shrub','rock','firepit','light'].includes(obj.type)) {
+    const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
+    const renderWidth=dims?.width || obj.width;
     return (
       <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         <circle cx="0" cy="0" r={(obj.width / 2) * SCALE} fill={obj.color} fillOpacity="0.85" stroke={stroke} strokeWidth={sw} />
@@ -2763,6 +4351,7 @@ function PlanOverview2D({
 
 function Terrain3D({
   terrainBlobs,
+  elevationPoints,
   zones,
   objects,
   levels,
@@ -2785,6 +4374,7 @@ function Terrain3D({
   onStatus
 }: {
   terrainBlobs: TerrainBlob[];
+  elevationPoints: ElevationPoint[];
   zones: Zone[];
   objects: GardenObject[];
   levels: BuildingLevel[];
@@ -2839,7 +4429,7 @@ function Terrain3D({
     const colors: number[] = [];
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i);
-      const y = terrainHeightAt(x, z, terrainBlobs);
+      const y = terrainSurfaceHeight(x, z, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
       pos.setY(i, y);
       const t = clamp((y + 1.2) / 2.8, 0, 1);
       const lowColor = season==='Winter' ? '#cbd5e1' : '#60a5fa'; const highColor = season==='Herbst' ? '#d97706' : season==='Winter' ? '#f8fafc' : '#84cc16'; const color = new THREE.Color().lerpColors(new THREE.Color(lowColor), new THREE.Color(highColor), t);
@@ -2975,7 +4565,7 @@ function Terrain3D({
     });
 
     sceneObjects.forEach(obj => {
-      const baseH = terrainHeightAt(obj.x, obj.y, terrainBlobs);
+      const baseH = terrainSurfaceHeight(obj.x, obj.y, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
       const levelBase = isLevelBoundObject(obj) ? levelElevationFor(levels, obj.level ?? 0) : 0;
       const group = new THREE.Group();
       group.position.set(obj.x, baseH, obj.y);
@@ -3084,13 +4674,45 @@ function Terrain3D({
         buildWallWithOpenings3D(group, obj, openings, selectedKind === 'object' && selectedId === obj.id, levelBase);
       }
       if (obj.type === 'stairs') {
-        const steps = 4;
-        for (let i = 0; i < steps; i++) {
-          const stepH = obj.height / steps;
-          const stepD = obj.depth / steps;
-          const step = new THREE.Mesh(new THREE.BoxGeometry(obj.width, stepH, stepD), new THREE.MeshStandardMaterial({ color: obj.color }));
-          step.position.set(0, stepH / 2 + i * stepH, -obj.depth / 2 + stepD / 2 + i * stepD);
-          group.add(step);
+        if (obj.points?.length===2) {
+          const start=obj.points[0];
+          const end=obj.points[1];
+          const dx=end.x-start.x;
+          const dz=end.y-start.y;
+          const run=Math.hypot(dx,dz);
+          const steps=Math.max(1,obj.stepCount || 1);
+          const rise=Math.abs((obj.endElevation||obj.height)-(obj.startElevation||0));
+          const lowerElevation=Math.min(obj.startElevation||0,obj.endElevation||obj.height);
+          const baseOffset=lowerElevation-baseH;
+          const tread=run/steps;
+          const angle=Math.atan2(dx,dz);
+
+          for (let i=0;i<steps;i++) {
+            const progress=(i+0.5)/steps;
+            const x=start.x+dx*progress;
+            const z=start.y+dz*progress;
+            const blockHeight=Math.max(0.05,(rise/steps)*(i+1));
+            const step=new THREE.Mesh(
+              new THREE.BoxGeometry(obj.width,blockHeight,tread*1.04),
+              new THREE.MeshStandardMaterial({color:obj.color,roughness:0.9})
+            );
+            step.position.set(
+              x,
+              baseOffset + blockHeight/2,
+              z
+            );
+            step.rotation.y=angle;
+            group.add(step);
+          }
+        } else {
+          const steps = 4;
+          for (let i = 0; i < steps; i++) {
+            const stepH = obj.height / steps;
+            const stepD = obj.depth / steps;
+            const step = new THREE.Mesh(new THREE.BoxGeometry(obj.width, stepH, stepD), new THREE.MeshStandardMaterial({ color: obj.color }));
+            step.position.set(0, stepH / 2 + i * stepH, -obj.depth / 2 + stepD / 2 + i * stepD);
+            group.add(step);
+          }
         }
       }
       if (obj.type === 'pond') {
@@ -3103,7 +4725,81 @@ function Terrain3D({
         const rail = new THREE.Mesh(new THREE.BoxGeometry(obj.width,obj.height,obj.depth), new THREE.MeshStandardMaterial({color:obj.color,transparent:true,opacity:obj.type==='fence'?0.72:1}));
         rail.position.y=obj.height/2; group.add(rail); addEdge(rail, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x475569);
       }
-      if (obj.type === 'path' || obj.type === 'irrigation' || obj.type === 'drainage') {
+      if ((obj.type==='path' || obj.type==='gardenWall') && obj.points?.length && obj.points.length>=2) {
+        let localPoints = obj.points;
+
+        if (obj.type==='path' && obj.curve && obj.points.length>=3) {
+          const curve = new THREE.CatmullRomCurve3(
+            obj.points.map(point=>new THREE.Vector3(point.x,0,point.y)),
+            false,
+            'centripetal'
+          );
+          localPoints = curve.getPoints(Math.max(18,obj.points.length*8)).map(point=>({x:point.x,y:point.z}));
+        }
+
+        const material = new THREE.MeshStandardMaterial({
+          color:obj.color,
+          roughness:obj.type==='path'?0.92:0.82,
+          metalness:0
+        });
+
+        for (let i=1;i<localPoints.length;i++) {
+          const a=localPoints[i-1];
+          const b=localPoints[i];
+
+          const worldA={x:obj.x+a.x,y:obj.y+a.y};
+          const worldB={x:obj.x+b.x,y:obj.y+b.y};
+
+          const hA=terrainSurfaceHeight(
+            worldA.x,worldA.y,elevationPoints,terrainBlobs,
+            elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing'
+          );
+          const hB=terrainSurfaceHeight(
+            worldB.x,worldB.y,elevationPoints,terrainBlobs,
+            elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing'
+          );
+
+          const averageTerrain=(hA+hB)/2-baseH;
+
+          if (obj.type==='path') {
+            buildLinearSegment3D(
+              group,
+              a,
+              b,
+              obj.pathWidth || 1.2,
+              Math.max(0.05,obj.height),
+              averageTerrain + Math.max(0.05,obj.height)/2 + 0.015,
+              material
+            );
+          } else {
+            const wallHeight=Math.max(0.2,obj.height);
+            buildLinearSegment3D(
+              group,
+              a,
+              b,
+              obj.thickness || 0.28,
+              wallHeight,
+              averageTerrain + wallHeight/2,
+              material
+            );
+
+            if ((obj.foundationDepth || 0) > 0.01) {
+              const foundationMaterial = new THREE.MeshStandardMaterial({color:'#6b7280',roughness:1});
+              buildLinearSegment3D(
+                group,
+                a,
+                b,
+                Math.max((obj.thickness || 0.28)+0.16,0.3),
+                obj.foundationDepth || 0.5,
+                averageTerrain - (obj.foundationDepth || 0.5)/2,
+                foundationMaterial
+              );
+            }
+          }
+        }
+      }
+
+      if ((obj.type === 'path' && !obj.points?.length) || obj.type === 'irrigation' || obj.type === 'drainage') {
         const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width,Math.max(0.05,obj.height),obj.depth),new THREE.MeshStandardMaterial({color:obj.color,roughness:0.88}));
         slab.position.y=Math.max(0.03,obj.height/2); group.add(slab);
       }
@@ -3118,7 +4814,7 @@ function Terrain3D({
         seat.position.y=0.48; group.add(seat);
         const back = new THREE.Mesh(new THREE.BoxGeometry(obj.width,0.55,0.10),new THREE.MeshStandardMaterial({color:obj.color}));
         back.position.set(0,0.75,-obj.depth/2+0.05); group.add(back);
-        [-obj.width*0.38,obj.width*0.38].forEach(x=>{const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.48,0.1),new THREE.MeshStandardMaterial({color:'#475569'}));leg.position.set(x,0.24,0);group.add(leg);});
+        [-(obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width)*0.38,(obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width)*0.38].forEach(x=>{const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.48,0.1),new THREE.MeshStandardMaterial({color:'#475569'}));leg.position.set(x,0.24,0);group.add(leg);});
       }
       if (obj.type === 'light') {
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,obj.height,12),new THREE.MeshStandardMaterial({color:'#475569'}));
@@ -3138,23 +4834,68 @@ function Terrain3D({
         rock.scale.set(1,obj.height/Math.max(obj.width,obj.depth),obj.depth/obj.width);rock.position.y=obj.height/2;group.add(rock);
       }
       if (obj.type === 'tree') {
-        const growthFactor = growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9;
+        const growthData = obj.speciesId ? currentPlantDimensions(obj,growthYear) : null;
+        const growthFactor = growthData
+          ? Math.max(0.08,growthData.height/Math.max(obj.height,0.1))
+          : growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9;
+        const widthGrowthFactor = growthData
+          ? Math.max(0.08,growthData.width/Math.max(obj.width,0.1))
+          : growthFactor;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, obj.height * 0.45 * growthFactor, 12), new THREE.MeshStandardMaterial({ color: '#7c4a2d' }));
         trunk.position.y = obj.height * 0.225 * growthFactor;
         group.add(trunk);
         const leafColor = season==='Herbst'?'#d97706':season==='Winter'?'#94a3b8':season==='Frühling'?'#22c55e':obj.color;
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.6 * growthFactor, 0.8), 18, 14), new THREE.MeshStandardMaterial({ color: leafColor, transparent: season==='Winter', opacity: season==='Winter'?0.45:1 }));
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.6 * widthGrowthFactor, 0.18), 18, 14), new THREE.MeshStandardMaterial({ color: leafColor, transparent: season==='Winter', opacity: season==='Winter'?0.45:1 }));
         crown.position.y = obj.height * 0.7 * growthFactor;
+        if (obj.plantForm==='columnar') crown.scale.set(0.68,1.35,0.68);
+        if (obj.plantForm==='multiStem') crown.scale.set(1.12,0.82,1.02);
         group.add(crown);
       }
-      if (obj.type === 'shrub') {
+      if (obj.type === 'shrub' && obj.plantForm === 'grass') {
+        const grassMaterial=new THREE.MeshStandardMaterial({color:obj.color,roughness:0.95});
+        for(let i=0;i<18;i++){
+          const angle=(i/18)*Math.PI*2;
+          const radius=(i%5)/5*Math.max(0.15,(obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width)*0.28);
+          const bladeHeight=(obj.speciesId?currentPlantDimensions(obj,growthYear).height:obj.height)*(0.65+((i*37)%30)/100);
+          const blade=new THREE.Mesh(new THREE.CylinderGeometry(0.008,0.02,bladeHeight,5),grassMaterial);
+          blade.position.set(Math.cos(angle)*radius,bladeHeight/2,Math.sin(angle)*radius);
+          blade.rotation.z=Math.sin(angle)*0.16;
+          blade.rotation.x=Math.cos(angle)*0.16;
+          group.add(blade);
+        }
+      }
+
+      if (obj.type === 'shrub' && obj.plantForm === 'perennial') {
+        const stemMaterial=new THREE.MeshStandardMaterial({color:'#3f6212'});
+        const flowerColor=obj.bloomColor?.includes('violett')?'#8b5cf6'
+          :obj.bloomColor?.includes('blau')?'#6366f1'
+          :obj.bloomColor?.includes('weiß')?'#f8fafc'
+          :'#ec4899';
+
+        for(let i=0;i<12;i++){
+          const angle=(i/12)*Math.PI*2;
+          const radius=(i%4)/4*Math.max(0.12,(obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width)*0.3);
+          const stemHeight=(obj.speciesId?currentPlantDimensions(obj,growthYear).height:obj.height)*(0.55+((i*29)%35)/100);
+          const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.016,stemHeight,6),stemMaterial);
+          stem.position.set(Math.cos(angle)*radius,stemHeight/2,Math.sin(angle)*radius);
+          group.add(stem);
+
+          const flower=new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.035,obj.width*0.055),8,6),new THREE.MeshStandardMaterial({color:flowerColor}));
+          flower.position.set(Math.cos(angle)*radius,stemHeight,Math.sin(angle)*radius);
+          group.add(flower);
+        }
+      }
+
+      if (obj.type === 'shrub' && obj.plantForm !== 'grass' && obj.plantForm !== 'perennial') {
         const shrubColor = season==='Herbst'?'#b45309':season==='Winter'?'#94a3b8':obj.color;
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.5 * (growthYear===0?1:growthYear===3?1.15:growthYear===10?1.4:1.65), 0.45), 16, 14), new THREE.MeshStandardMaterial({ color: shrubColor }));
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max((obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width*(growthYear===0?1:growthYear===3?1.15:growthYear===10?1.4:1.65))*0.5, 0.16), 16, 14), new THREE.MeshStandardMaterial({ color: shrubColor }));
         crown.position.y = obj.height * 0.45;
         crown.scale.y = 0.8;
         group.add(crown);
       }
       if (obj.type === 'hedge') {
+    const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
+    const renderDepth=dims?Math.min(obj.depth,Math.max(0.25,dims.width*0.35)):obj.depth;
         const hedge = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
         hedge.position.y = obj.height / 2;
         group.add(hedge);
@@ -3209,7 +4950,7 @@ function Terrain3D({
         if (!item) return;
         const x = clamp(hit.x + dragOffsetX, -11, 11);
         const z = clamp(hit.z + dragOffsetZ, -7, 7);
-        const y = terrainHeightAt(x, z, terrainBlobs);
+        const y = terrainSurfaceHeight(x, z, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
         item.group.position.set(x, y, z);
         pendingDrag = { id: draggedId, x, z };
         onStatus(`3D Position X ${x.toFixed(2)} m · Z ${z.toFixed(2)} m`);
@@ -3252,7 +4993,7 @@ function Terrain3D({
       controls.dispose(); renderer.dispose(); geometry.dispose(); terrainMat.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [terrainBlobs, zones, objects, levels, rooms, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
+  }, [terrainBlobs, elevationPoints, zones, objects, levels, rooms, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
 
   return <div ref={mountRef} className="three" />;
 }

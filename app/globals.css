@@ -124,3 +124,37 @@ input[type=range]{padding:0;height:28px}
 .roomListItem{width:100%;text-align:left;cursor:pointer;border:1px solid #cbd5e1}
 .roomListItem.active{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.14)}
 .roomProperties{border:1px solid #c4b5fd;background:#faf5ff;border-radius:14px;padding:10px;margin-bottom:12px}
+
+.terrainRangeInfo{display:grid;gap:8px;margin-top:10px}
+.elevationPointList{display:grid;gap:8px;max-height:430px;overflow:auto}
+.elevationPointCard{padding:9px;border:1px solid #cbd5e1;border-radius:12px;background:#fff}
+.elevationPointCard>input{margin-bottom:7px}
+
+.hardscapeDraftPanel{padding:10px;margin-top:10px;border:1px solid #7dd3fc;border-radius:14px;background:#f0f9ff}
+.smartHardscapeProperties{margin-top:10px;padding:10px;border:1px solid #d6d3d1;border-radius:14px;background:#fafaf9}
+.smartHardscapeProperties h3{margin:0 0 8px;font-size:14px}
+
+.plantFilterPanel{padding:10px;margin-top:10px;border:1px solid #bbf7d0;border-radius:14px;background:#f0fdf4}
+.plantCatalogGrid{display:grid;gap:10px;margin-top:10px;max-height:560px;overflow:auto}
+.plantSpeciesCard{display:grid;gap:8px;padding:10px;border:1px solid #cbd5e1;border-radius:14px;background:#fff}
+.plantSpeciesCard.active{border-color:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.15)}
+.plantSpeciesCard em{display:block;font-size:11px;color:#64748b;margin-top:2px}
+.plantSpeciesColor{height:8px;border-radius:999px}
+.plantSpeciesFacts{display:flex;flex-wrap:wrap;gap:5px}
+.plantSpeciesFacts span{padding:3px 6px;border-radius:999px;background:#f1f5f9;font-size:10px;color:#334155}
+.plantSpeciesCard p{margin:0;font-size:11px;color:#475569;line-height:1.45}
+.plantCheckList{display:grid;gap:8px;margin-top:8px}
+.plantCheck{display:grid;gap:4px;text-align:left;padding:9px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}
+.plantCheck span{font-size:11px;color:#475569}
+.plantCheck.warning{border-color:#fbbf24;background:#fffbeb}
+.plantCheck.critical{border-color:#f87171;background:#fef2f2}
+.plantCheck.info{border-color:#93c5fd;background:#eff6ff}
+.plantObjectProperties{margin-top:10px;padding:10px;border:1px solid #86efac;border-radius:14px;background:#f0fdf4}
+.plantObjectProperties h3{margin:0 0 8px;font-size:14px}
+
+.plantGrowthPanel{display:grid;gap:10px;padding:10px;border:1px solid #a7f3d0;border-radius:14px;background:#ecfdf5}
+.growthYearButtons{display:flex;gap:6px;flex-wrap:wrap}
+.growthStageSummary{display:flex;gap:6px;flex-wrap:wrap}
+.growthStageSummary span{padding:4px 7px;border-radius:999px;background:#fff;border:1px solid #d1fae5;font-size:10px;color:#166534}
+.plantGrowthFacts{display:grid;gap:6px;margin-top:8px}
+.growthCompareGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}

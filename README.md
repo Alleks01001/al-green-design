@@ -1,74 +1,85 @@
-# AL Green Design – V0.21 FLOORS + ROOMS
+# AL Green Design – V0.25 PLANT GROWTH TIMELINE
 
-V0.21 erweitert das Architekturmodul um eine echte Geschoss- und Raumstruktur.
+V0.25 erweitert die Pflanzenplanung um zeitliche Entwicklung.
 
-## Geschosse
+## Entwicklungsjahre
 
-Standardmäßig vorhanden:
-
-```text
-EG      0,00 m
-1. OG   3,00 m
-Dach    6,00 m
-```
-
-Jedes Geschoss besitzt:
-
-- Name
-- Höhe ab 0,00 m
-- Geschosshöhe
-- Sichtbarkeit
-
-## Aktives Geschoss
-
-Neue Architektur-Bauteile werden automatisch dem aktiven Geschoss zugeordnet.
-
-## Geschoss duplizieren
-
-Das aktive Geschoss kann komplett kopiert werden, einschließlich Architektur-Bauteilen und erkannten Räumen.
-
-## Räume automatisch erkennen
-
-Aus geschlossenen Wandzügen werden Raumflächen erkannt.
+Direkt wählbar:
 
 ```text
-Wände schließen
-→ Räume automatisch erkennen
-→ Raumfläche erzeugen
-→ m² berechnen
+Jahr 0
+Jahr 1
+Jahr 3
+Jahr 5
+Jahr 10
+Jahr 15
+Jahr 20
 ```
 
-Räume besitzen:
+Zusätzlich steht ein freier Schieberegler von 0 bis 30 Jahren zur Verfügung.
 
-- Name
-- Geschoss
-- Fläche
-- Farbe
-- Herkunft
+## Wachstumskurve
+
+Die Entwicklung wird aus folgenden Daten abgeleitet:
+
+- Pflanzgröße beim Setzen
+- Endhöhe
+- Endbreite
+- Wachstumsgeschwindigkeit
+- Pflanzenkategorie
+- Entwicklungsjahr
+
+Die Endgröße wird über eine nichtlineare Wachstumskurve angenähert.
+
+## Entwicklungsphasen
+
+```text
+Pflanzung
+Jungpflanze
+Aufbauphase
+Fast ausgewachsen
+Ausgewachsen
+```
 
 ## 2D
 
-Räume werden als farbige Polygone mit Name und m² angezeigt.
+Konkrete Pflanzenarten verändern ihre dargestellte Größe entsprechend dem Entwicklungsjahr.
 
-Wahlweise:
-
-- nur aktives Geschoss
-- alle sichtbaren Geschosse
+Optional kann die Endgröße als gestrichelter Umriss eingeblendet werden.
 
 ## 3D
 
-Jedes Geschoss wird auf seiner tatsächlichen Höhenlage dargestellt.
+Bäume, Sträucher, Stauden und Gräser verändern ihre Höhe und Breite abhängig vom Entwicklungsjahr.
 
-Raumflächen erscheinen als transparente Bodenflächen auf dem jeweiligen Geschoss.
+## Pflanzenobjekt
 
-## Projektstruktur
+Zusätzlich einstellbar:
 
-Autosave, Browserprojekt und Undo/Redo speichern jetzt zusätzlich:
+- Pflanzhöhe
+- Pflanzbreite
 
-- Geschosse
-- aktives Geschoss
-- Räume
+Angezeigt werden:
+
+- Entwicklungsphase
+- Größe im gewählten Jahr
+- Endgröße
+
+## Vergleich
+
+Zwei Jahre können miteinander verglichen werden, zum Beispiel:
+
+```text
+Jahr 0
+gegen
+Jahr 10
+```
+
+## Projektübersicht
+
+- Anzahl konkreter Pflanzen
+- durchschnittlicher Entwicklungsstand
+- Verteilung auf Entwicklungsphasen
 
 ## Nächste Version
 
-V0.22: professionelles Gelände mit Höhenpunkten, Interpolation, Höhenlinien und Aushub-/Aufschüttungslogik.
+V0.26: Sonnen- und Schattenanalyse.
