@@ -9,7 +9,12 @@ type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
 type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
 type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 type SelectedKind = 'terrain' | 'zone' | 'object' | null;
-type Drag2D = { kind: SelectedKind; id: number; pointerId: number; offsetX: number; offsetY: number } | null;
+type MoveStart = { id: number; x: number; y: number };
+type Drag2D =
+  | { mode: 'move'; kind: Exclude<SelectedKind, null>; id: number; pointerId: number; offsetX: number; offsetY: number; startPointerX: number; startPointerY: number; groupStart: MoveStart[] }
+  | { mode: 'scale'; kind: 'object'; id: number; pointerId: number; startWidth: number; startDepth: number; startX: number; startY: number; rotation: number }
+  | { mode: 'rotate'; kind: 'object'; id: number; pointerId: number; centerX: number; centerY: number; startAngle: number; startRotation: number }
+  | null;
 type ChatEngine = 'local' | 'openai';
 
 type TerrainBlob = {
@@ -56,6 +61,7 @@ type GardenObject = {
   thickness?: number;
   parentId?: number;
   subtype?: string;
+  groupId?: string;
 };
 
 const SCALE = 50;
@@ -112,13 +118,39 @@ function objectHit(p: {x:number;y:number}, obj: GardenObject) {
   return p.x >= obj.x - halfW && p.x <= obj.x + halfW && p.y >= obj.y - halfD && p.y <= obj.y + halfD;
 }
 
+function rotatePoint(x: number, y: number, degrees: number) {
+  const r = degToRad(degrees);
+  return { x: x * Math.cos(r) - y * Math.sin(r), y: x * Math.sin(r) + y * Math.cos(r) };
+}
+
+function objectLocalPoint(obj: GardenObject, worldX: number, worldY: number) {
+  const dx = worldX - obj.x;
+  const dy = worldY - obj.y;
+  return rotatePoint(dx, dy, -obj.rotation);
+}
+
+function objectWorldPoint(obj: GardenObject, localX: number, localY: number) {
+  const p = rotatePoint(localX, localY, obj.rotation);
+  return { x: obj.x + p.x, y: obj.y + p.y };
+}
+
+function wallEndpoints(obj: GardenObject) {
+  const a = objectWorldPoint(obj, -obj.width / 2, 0);
+  const b = objectWorldPoint(obj, obj.width / 2, 0);
+  return [a, b] as const;
+}
+
+function distance2D(a: {x:number;y:number}, b: {x:number;y:number}) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 export default function LandscapePlatform() {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.19 VIDEO TO 3D + PRECISION – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.19.1 CAD CONTROLS – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -187,10 +219,20 @@ export default function LandscapePlatform() {
 
   const [selectedKind, setSelectedKind] = useState<SelectedKind>('object');
   const [selectedId, setSelectedId] = useState<number | null>(201);
+  const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([201]);
+  const [snapGuides, setSnapGuides] = useState<{x?:number;y?:number} | null>(null);
 
   const selectedBlob = selectedKind === 'terrain' ? terrainBlobs.find(b => b.id === selectedId) || null : null;
   const selectedZone = selectedKind === 'zone' ? zones.find(z => z.id === selectedId) || null : null;
   const selectedObject = selectedKind === 'object' ? objects.find(o => o.id === selectedId) || null : null;
+  const selectedObjects = objects.filter(o => selectedObjectIds.includes(o.id));
+  const nearestObjectInfo = useMemo(() => {
+    if (!selectedObject) return null;
+    const others = objects.filter(o => o.id !== selectedObject.id);
+    if (!others.length) return null;
+    return others.map(o => ({ object:o, distance:Math.hypot(o.x-selectedObject.x,o.y-selectedObject.y) })).sort((a,b)=>a.distance-b.distance)[0] || null;
+  }, [objects, selectedObject]);
+
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
 
   const metrics = useMemo(() => {
@@ -236,22 +278,29 @@ export default function LandscapePlatform() {
   }
 
   function nudgeSelected(dx: number, dy: number) {
-    if (selectedKind === 'object' && selectedId !== null) setObjects(v => v.map(o => o.id === selectedId ? { ...o, x: snapValue(o.x + dx, true), y: snapValue(o.y + dy, true) } : o));
-    if (selectedKind === 'zone' && selectedId !== null) setZones(v => v.map(z => z.id === selectedId ? { ...z, x: snapValue(z.x + dx, true), y: snapValue(z.y + dy, true) } : z));
-    if (selectedKind === 'terrain' && selectedId !== null) setTerrainBlobs(v => v.map(b => b.id === selectedId ? { ...b, x: snapValue(b.x + dx, true), y: snapValue(b.y + dy, true) } : b));
+    if (selectedKind === 'object' && selectedId !== null) {
+      const ids=selectedObjectIds.length?selectedObjectIds:[selectedId];
+      setObjects(v=>v.map(o=>ids.includes(o.id)?{...o,x:snapValue(o.x+dx,true),y:snapValue(o.y+dy,true)}:o));
+    }
+    if (selectedKind === 'zone' && selectedId !== null) setZones(v=>v.map(z=>z.id===selectedId?{...z,x:snapValue(z.x+dx,true),y:snapValue(z.y+dy,true)}:z));
+    if (selectedKind === 'terrain' && selectedId !== null) setTerrainBlobs(v=>v.map(b=>b.id===selectedId?{...b,x:snapValue(b.x+dx,true),y:snapValue(b.y+dy,true)}:b));
   }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
-      const target = event.target as HTMLElement | null;
+      const target=event.target as HTMLElement|null;
       if (target && ['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
+      if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='a') { event.preventDefault(); setSelectedKind('object'); setSelectedObjectIds(objects.map(o=>o.id)); setSelectedId(objects[0]?.id??null); setStatus('Alle Objekte ausgewählt.'); return; }
+      if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='d') { event.preventDefault(); duplicateSelected(); return; }
+      if (event.key.toLowerCase()==='g' && !event.shiftKey) { event.preventDefault(); groupSelected(); return; }
+      if (event.key.toLowerCase()==='g' && event.shiftKey) { event.preventDefault(); ungroupSelected(); return; }
+      if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
       event.preventDefault();
-      const step = event.shiftKey ? 0.01 : event.altKey ? 0.05 : 0.1;
-      if (event.key === 'ArrowLeft') nudgeSelected(-step, 0);
-      if (event.key === 'ArrowRight') nudgeSelected(step, 0);
-      if (event.key === 'ArrowUp') nudgeSelected(0, -step);
-      if (event.key === 'ArrowDown') nudgeSelected(0, step);
+      const step=event.shiftKey?0.01:event.altKey?0.05:0.1;
+      if (event.key==='ArrowLeft') nudgeSelected(-step,0);
+      if (event.key==='ArrowRight') nudgeSelected(step,0);
+      if (event.key==='ArrowUp') nudgeSelected(0,-step);
+      if (event.key==='ArrowDown') nudgeSelected(0,step);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -294,14 +343,149 @@ export default function LandscapePlatform() {
     snapshot();
     if (selectedKind === 'terrain') setTerrainBlobs(v => v.filter(b => b.id !== selectedId));
     if (selectedKind === 'zone') setZones(v => v.filter(z => z.id !== selectedId));
-    if (selectedKind === 'object') setObjects(v => v.filter(o => o.id !== selectedId));
+    if (selectedKind === 'object') {
+      const ids = selectedObjectIds.length ? selectedObjectIds : [selectedId];
+      setObjects(v => v.filter(o => !ids.includes(o.id)));
+      setSelectedObjectIds([]);
+    }
     setSelection(null, null, 'Auswahl gelöscht.');
   }
 
   function setSelection(kind: SelectedKind, id: number | null, message?: string) {
     setSelectedKind(kind);
     setSelectedId(id);
+    if (kind !== 'object') setSelectedObjectIds([]);
+    if (kind === 'object' && id !== null) setSelectedObjectIds([id]);
     if (message) setStatus(message);
+  }
+
+  function selectObject(id: number, additive = false) {
+    const obj = objects.find(o => o.id === id);
+    if (!obj) return;
+    setSelectedKind('object');
+    setSelectedId(id);
+    if (additive) {
+      setSelectedObjectIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current,id]);
+      setStatus(`${obj.name}: Mehrfachauswahl geändert.`);
+    } else {
+      setSelectedObjectIds([id]);
+      setStatus(`${obj.name} ausgewählt.`);
+    }
+  }
+
+  function snapObjectToScene(obj: GardenObject, rawX: number, rawY: number) {
+    let x = rawX;
+    let y = rawY;
+    let rotation = obj.rotation;
+    let parentId = obj.parentId;
+    let guideX: number | undefined;
+    let guideY: number | undefined;
+    const tolerance = Math.max(0.08, Math.min(gridSize * 0.6, 0.22));
+
+    for (const other of objects) {
+      if (other.id === obj.id) continue;
+      const xTargets = [other.x, other.x-other.width/2, other.x+other.width/2];
+      const yTargets = [other.y, other.y-other.depth/2, other.y+other.depth/2];
+      const ownX = [x, x-obj.width/2, x+obj.width/2];
+      const ownY = [y, y-obj.depth/2, y+obj.depth/2];
+      for (const target of xTargets) for (const current of ownX) if (Math.abs(current-target)<=tolerance) { x += target-current; guideX=target; }
+      for (const target of yTargets) for (const current of ownY) if (Math.abs(current-target)<=tolerance) { y += target-current; guideY=target; }
+    }
+
+    if (['window','door','slidingDoor'].includes(obj.type)) {
+      let best: { wall:GardenObject; distance:number; localX:number } | null = null;
+      for (const wall of objects.filter(o => ['wall','interiorWall'].includes(o.type))) {
+        const local = objectLocalPoint(wall,x,y);
+        const within = Math.abs(local.x) <= wall.width/2 + 0.25;
+        const distance = Math.abs(local.y);
+        if (within && distance <= 0.45 && (!best || distance < best.distance)) best = {wall,distance,localX:clamp(local.x,-wall.width/2+obj.width/2,wall.width/2-obj.width/2)};
+      }
+      if (best) {
+        const snapped = objectWorldPoint(best.wall,best.localX,0);
+        x = snapped.x; y = snapped.y; rotation = best.wall.rotation; parentId = best.wall.id;
+      }
+    }
+
+    if (['wall','interiorWall'].includes(obj.type)) {
+      const moved = {...obj,x,y};
+      let bestDelta: {dx:number;dy:number;d:number} | null = null;
+      for (const other of objects.filter(o=>o.id!==obj.id && ['wall','interiorWall'].includes(o.type))) {
+        for (const a of wallEndpoints(moved)) for (const b of wallEndpoints(other)) {
+          const d = distance2D(a,b);
+          if (d<=0.28 && (!bestDelta || d<bestDelta.d)) bestDelta={dx:b.x-a.x,dy:b.y-a.y,d};
+        }
+      }
+      if (bestDelta) { x += bestDelta.dx; y += bestDelta.dy; }
+    }
+
+    setSnapGuides(guideX!==undefined || guideY!==undefined ? {x:guideX,y:guideY} : null);
+    return {x,y,rotation,parentId};
+  }
+
+  function alignSelected(mode: 'left'|'centerX'|'right'|'top'|'centerY'|'bottom') {
+    if (selectedObjectIds.length < 2) return;
+    snapshot();
+    const list = objects.filter(o=>selectedObjectIds.includes(o.id));
+    const minX=Math.min(...list.map(o=>o.x-o.width/2)); const maxX=Math.max(...list.map(o=>o.x+o.width/2));
+    const minY=Math.min(...list.map(o=>o.y-o.depth/2)); const maxY=Math.max(...list.map(o=>o.y+o.depth/2));
+    const centerX=(minX+maxX)/2; const centerY=(minY+maxY)/2;
+    setObjects(current=>current.map(o=>{
+      if (!selectedObjectIds.includes(o.id)) return o;
+      if (mode==='left') return {...o,x:minX+o.width/2};
+      if (mode==='centerX') return {...o,x:centerX};
+      if (mode==='right') return {...o,x:maxX-o.width/2};
+      if (mode==='top') return {...o,y:minY+o.depth/2};
+      if (mode==='centerY') return {...o,y:centerY};
+      return {...o,y:maxY-o.depth/2};
+    }));
+    setStatus(`${selectedObjectIds.length} Objekte ausgerichtet.`);
+  }
+
+  function groupSelected() {
+    if (selectedObjectIds.length<2) return;
+    const groupId=`group-${Date.now()}`;
+    snapshot();
+    setObjects(current=>current.map(o=>selectedObjectIds.includes(o.id)?{...o,groupId}:o));
+    setStatus(`${selectedObjectIds.length} Objekte gruppiert.`);
+  }
+
+  function ungroupSelected() {
+    if (!selectedObjectIds.length) return;
+    snapshot();
+    setObjects(current=>current.map(o=>selectedObjectIds.includes(o.id)?{...o,groupId:undefined}:o));
+    setStatus('Gruppierung aufgehoben.');
+  }
+
+  function selectGroupOf(id:number) {
+    const obj=objects.find(o=>o.id===id);
+    if (!obj?.groupId) return;
+    const ids=objects.filter(o=>o.groupId===obj.groupId).map(o=>o.id);
+    setSelectedKind('object'); setSelectedId(id); setSelectedObjectIds(ids); setStatus(`Gruppe mit ${ids.length} Objekten ausgewählt.`);
+  }
+
+  function duplicateSelected() {
+    if (!selectedObjectIds.length) return;
+    snapshot();
+    const now=Date.now();
+    const copies=objects.filter(o=>selectedObjectIds.includes(o.id)).map((o,index)=>({...o,id:now+index+1,x:o.x+0.35,y:o.y+0.35,name:`${o.name} Kopie`,groupId:undefined}));
+    setObjects(current=>[...current,...copies]);
+    setSelectedObjectIds(copies.map(o=>o.id)); setSelectedId(copies[0]?.id ?? null); setSelectedKind('object');
+    setStatus(`${copies.length} Objekt(e) dupliziert.`);
+  }
+
+  function connectSelectedWall() {
+    if (!selectedObject || !['wall','interiorWall'].includes(selectedObject.type)) return;
+    const others=objects.filter(o=>o.id!==selectedObject.id && ['wall','interiorWall'].includes(o.type));
+    if (!others.length) return;
+    let best:{dx:number;dy:number;distance:number}|null=null;
+    for (const own of wallEndpoints(selectedObject)) for (const other of others) for (const target of wallEndpoints(other)) {
+      const d=distance2D(own,target);
+      if (!best || d<best.distance) best={dx:target.x-own.x,dy:target.y-own.y,distance:d};
+    }
+    if (!best) return;
+    snapshot();
+    setObjects(current=>current.map(o=>o.id===selectedObject.id?{...o,x:o.x+best!.dx,y:o.y+best!.dy}:o));
+    setStatus(`Wand-Endpunkt verbunden · ${best.distance.toFixed(2)} m korrigiert.`);
   }
 
   function addObject(type: GardenObjectType, x: number, y: number) {
@@ -349,10 +533,10 @@ export default function LandscapePlatform() {
     if (tool === 'select') {
       const hit = [...objects].reverse().find(obj => objectHit(p, obj));
       if (hit) {
-        setSelection('object', hit.id, `${hit.name} ausgewählt.`);
+        selectObject(hit.id, e.shiftKey || e.metaKey || e.ctrlKey);
         return;
       }
-      setSelection(null, null, 'Auswahl aufgehoben.');
+      setSelectedObjectIds([]); setSelection(null,null,'Auswahl aufgehoben.');
       return;
     }
     if (tool === 'mound' || tool === 'depression') {
@@ -380,31 +564,79 @@ export default function LandscapePlatform() {
   function start2DDrag(e: React.PointerEvent<SVGGElement>, kind: Exclude<SelectedKind, null>, id: number, currentX: number, currentY: number, label: string) {
     if (tool !== 'select') return;
     e.stopPropagation();
-    const p = worldFromClient(svgRef.current, e.clientX, e.clientY);
+    const p=worldFromClient(svgRef.current,e.clientX,e.clientY);
     svgRef.current?.setPointerCapture?.(e.pointerId);
-    setDrag2D({ kind, id, pointerId: e.pointerId, offsetX: currentX - p.x, offsetY: currentY - p.y });
-    setSelection(kind, id, `${label} wird präzise verschoben.`);
+    const obj=objects.find(o=>o.id===id);
+    let ids=kind==='object' && selectedObjectIds.includes(id) ? selectedObjectIds : [id];
+    if (kind==='object' && obj?.groupId && !e.shiftKey && !e.ctrlKey && !e.metaKey) ids=objects.filter(o=>o.groupId===obj.groupId).map(o=>o.id);
+    const groupStart=kind==='object'?objects.filter(o=>ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y})):[];
+    setDrag2D({mode:'move',kind,id,pointerId:e.pointerId,offsetX:currentX-p.x,offsetY:currentY-p.y,startPointerX:p.x,startPointerY:p.y,groupStart});
+    if (kind==='object') { setSelectedKind('object'); setSelectedId(id); setSelectedObjectIds(ids); }
+    else setSelection(kind,id,`${label} wird verschoben.`);
+    setStatus(`${label} wird verschoben.`);
+  }
+
+  function startScaleObject(e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) {
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    setDrag2D({mode:'scale',kind:'object',id:obj.id,pointerId:e.pointerId,startWidth:obj.width,startDepth:obj.depth,startX:obj.x,startY:obj.y,rotation:obj.rotation});
+    setStatus('Skalieren: Ecke ziehen. Alt um Raster zu umgehen.');
+  }
+
+  function startRotateObject(e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) {
+    e.stopPropagation();
+    const p=worldFromClient(svgRef.current,e.clientX,e.clientY);
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    const startAngle=Math.atan2(p.y-obj.y,p.x-obj.x)*180/Math.PI;
+    setDrag2D({mode:'rotate',kind:'object',id:obj.id,pointerId:e.pointerId,centerX:obj.x,centerY:obj.y,startAngle,startRotation:obj.rotation});
+    setStatus('Drehen: Griff bewegen. Shift rastet auf 15° ein.');
   }
 
   function handleSvgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (!drag2D || drag2D.pointerId !== e.pointerId) return;
-    const p = worldFromClient(svgRef.current, e.clientX, e.clientY);
-    const targetX = clamp(p.x + drag2D.offsetX, VIEWBOX.x, VIEWBOX.x + VIEWBOX.width);
-    const targetY = clamp(p.y + drag2D.offsetY, VIEWBOX.y, VIEWBOX.y + VIEWBOX.height);
-    const x = snapValue(targetX, e.altKey);
-    const y = snapValue(targetY, e.altKey);
-    if (drag2D.kind === 'object') setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x, y } : o));
-    if (drag2D.kind === 'terrain') setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x, y } : b));
-    if (drag2D.kind === 'zone') setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x, y } : z));
-    setStatus(`Position X ${x.toFixed(2)} m · Y ${y.toFixed(2)} m${e.altKey ? ' · Fang aus' : ''}`);
+    if (!drag2D || drag2D.pointerId!==e.pointerId) return;
+    const p=worldFromClient(svgRef.current,e.clientX,e.clientY);
+    if (drag2D.mode==='move') {
+      const targetX=clamp(p.x+drag2D.offsetX,VIEWBOX.x,VIEWBOX.x+VIEWBOX.width);
+      const targetY=clamp(p.y+drag2D.offsetY,VIEWBOX.y,VIEWBOX.y+VIEWBOX.height);
+      const baseX=snapValue(targetX,e.altKey); const baseY=snapValue(targetY,e.altKey);
+      if (drag2D.kind==='object') {
+        const primary=objects.find(o=>o.id===drag2D.id); if (!primary) return;
+        const snapped=e.altKey?{x:baseX,y:baseY,rotation:primary.rotation,parentId:primary.parentId}:snapObjectToScene(primary,baseX,baseY);
+        const primaryStart=drag2D.groupStart.find(item=>item.id===drag2D.id); if (!primaryStart) return;
+        const dx=snapped.x-primaryStart.x; const dy=snapped.y-primaryStart.y;
+        setObjects(current=>current.map(o=>{
+          const start=drag2D.groupStart.find(item=>item.id===o.id); if (!start) return o;
+          if (o.id===drag2D.id) return {...o,x:snapped.x,y:snapped.y,rotation:snapped.rotation,parentId:snapped.parentId};
+          return {...o,x:start.x+dx,y:start.y+dy};
+        }));
+        setStatus(`Position X ${snapped.x.toFixed(2)} m · Y ${snapped.y.toFixed(2)} m${snapped.parentId?' · an Wand gekoppelt':''}`);
+      }
+      if (drag2D.kind==='terrain') setTerrainBlobs(v=>v.map(b=>b.id===drag2D.id?{...b,x:baseX,y:baseY}:b));
+      if (drag2D.kind==='zone') setZones(v=>v.map(z=>z.id===drag2D.id?{...z,x:baseX,y:baseY}:z));
+      return;
+    }
+    const obj=objects.find(o=>o.id===drag2D.id); if (!obj) return;
+    if (drag2D.mode==='scale') {
+      const local=objectLocalPoint(obj,p.x,p.y);
+      let width=Math.max(0.1,Math.abs(local.x)*2); let depth=Math.max(0.08,Math.abs(local.y)*2);
+      if (!e.altKey && snapEnabled) { width=Math.max(0.1,snapValue(width)); depth=Math.max(0.08,snapValue(depth)); }
+      setObjects(current=>current.map(o=>o.id===obj.id?{...o,width,depth}:o));
+      setStatus(`Größe ${width.toFixed(2)} × ${depth.toFixed(2)} m`);
+    }
+    if (drag2D.mode==='rotate') {
+      const angle=Math.atan2(p.y-drag2D.centerY,p.x-drag2D.centerX)*180/Math.PI;
+      let rotation=drag2D.startRotation+(angle-drag2D.startAngle);
+      if (e.shiftKey) rotation=Math.round(rotation/15)*15;
+      rotation=((rotation%360)+360)%360;
+      setObjects(current=>current.map(o=>o.id===obj.id?{...o,rotation}:o));
+      setStatus(`Drehung ${rotation.toFixed(1)}°`);
+    }
   }
 
   function handleSvgPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
-    if (drag2D) setStatus('2D-Verschiebung abgeschlossen. Pfeiltasten: 10 cm · Alt: 5 cm · Shift: 1 cm.');
-    if (e && drag2D?.pointerId === e.pointerId) {
-      try { svgRef.current?.releasePointerCapture?.(e.pointerId); } catch {}
-    }
-    setDrag2D(null);
+    if (drag2D) setStatus('Bearbeitung abgeschlossen.');
+    if (e && drag2D?.pointerId===e.pointerId) { try { svgRef.current?.releasePointerCapture?.(e.pointerId); } catch {} }
+    setDrag2D(null); setSnapGuides(null);
   }
 
   function uploadImage(file: File | null) {
@@ -656,7 +888,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.1', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -950,12 +1182,15 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.19 VIDEO TO 3D + PRECISION</span>
+          <span className="pill">V0.19.1 CAD CONTROLS</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
           <label className="compactControl">Raster <select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value={0.01}>1 cm</option><option value={0.05}>5 cm</option><option value={0.1}>10 cm</option><option value={0.25}>25 cm</option><option value={0.5}>50 cm</option><option value={1}>1 m</option></select></label>
           <button className={`pill ${snapEnabled?'active':''}`} onClick={()=>setSnapEnabled(v=>!v)}>Fang {snapEnabled?'AN':'AUS'}</button>
+          <span className="pill">Auswahl {selectedObjectIds.length}</span>
+          <button className="pill" disabled={selectedObjectIds.length<2} onClick={groupSelected}>Gruppieren</button>
+          <button className="pill" disabled={!selectedObjectIds.length} onClick={duplicateSelected}>Duplizieren</button>
           <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D</button>
           <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D</button>
           <button className={`pill ${view==='splitVertical'?'active':''}`} onClick={()=>setView('splitVertical')}>Split ↔</button>
@@ -1003,11 +1238,14 @@ export default function LandscapePlatform() {
                 <GardenObject2D
                   key={obj.id}
                   obj={obj}
-                  selected={selectedKind==='object' && selectedId===obj.id}
-                  onClick={(e)=>{e.stopPropagation(); setSelection('object', obj.id, `${obj.name} ausgewählt.`);}}
+                  selected={selectedKind==='object' && selectedObjectIds.includes(obj.id)}
+                  onClick={(e)=>{e.stopPropagation(); selectObject(obj.id,e.shiftKey||e.metaKey||e.ctrlKey);}}
                   onPointerDown={(e)=>start2DDrag(e,'object',obj.id,obj.x,obj.y,obj.name)}
                 />
               ))}
+              {snapGuides?.x !== undefined && <line x1={snapGuides.x*SCALE} y1={VIEWBOX.y*SCALE} x2={snapGuides.x*SCALE} y2={(VIEWBOX.y+VIEWBOX.height)*SCALE} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="8 5" pointerEvents="none"/>}
+              {snapGuides?.y !== undefined && <line x1={VIEWBOX.x*SCALE} y1={snapGuides.y*SCALE} x2={(VIEWBOX.x+VIEWBOX.width)*SCALE} y2={snapGuides.y*SCALE} stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="8 5" pointerEvents="none"/>}
+              {selectedObject && selectedObjectIds.length===1 && <ObjectTransformHandles obj={selectedObject} onScaleStart={startScaleObject} onRotateStart={startRotateObject}/>}
             </svg>
           ) : view === '3d' ? (
             <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
@@ -1069,6 +1307,29 @@ export default function LandscapePlatform() {
             <button className="btn danger" onClick={()=>{ setZones(v=>v.filter(z=>z.id!==selectedZone.id)); setSelection(null,null,'Zone gelöscht.'); }}>Zone löschen</button>
           </div>
         )}
+        {selectedObjectIds.length > 1 && (
+          <div className="cadSelectionPanel">
+            <h2>Mehrfachauswahl</h2>
+            <div className="kpis">
+              <div className="kpi"><small>Objekte</small><strong>{selectedObjectIds.length}</strong></div>
+              <div className="kpi"><small>Gruppen</small><strong>{new Set(selectedObjects.map(o=>o.groupId).filter(Boolean)).size}</strong></div>
+            </div>
+            <div className="grid3" style={{marginTop:8}}>
+              <button className="tool" onClick={()=>alignSelected('left')}>Links</button>
+              <button className="tool" onClick={()=>alignSelected('centerX')}>Mitte X</button>
+              <button className="tool" onClick={()=>alignSelected('right')}>Rechts</button>
+              <button className="tool" onClick={()=>alignSelected('top')}>Oben</button>
+              <button className="tool" onClick={()=>alignSelected('centerY')}>Mitte Y</button>
+              <button className="tool" onClick={()=>alignSelected('bottom')}>Unten</button>
+            </div>
+            <div className="grid2" style={{marginTop:8}}>
+              <button className="btn primary" onClick={groupSelected}>Gruppieren</button>
+              <button className="btn" onClick={ungroupSelected}>Gruppierung lösen</button>
+              <button className="btn blue" onClick={duplicateSelected}>Duplizieren</button>
+              <button className="btn danger" onClick={deleteSelection}>Auswahl löschen</button>
+            </div>
+          </div>
+        )}
         {selectedObject && (
           <div className="form">
             <label>Name<input value={selectedObject.name} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,name:e.target.value}:o))} /></label>
@@ -1086,6 +1347,13 @@ export default function LandscapePlatform() {
               <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
             </>}
             <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
+            {nearestObjectInfo && <div className="item"><strong>Nächster Abstand</strong><span>{nearestObjectInfo.distance.toFixed(2)} m zu {nearestObjectInfo.object.name}</span></div>}
+            <div className="item"><strong>Maße</strong><span>{selectedObject.width.toFixed(2)} × {selectedObject.depth.toFixed(2)} m · Fläche {(selectedObject.width*selectedObject.depth).toFixed(2)} m²</span></div>
+            <div className="grid2">
+              <button className="btn" onClick={()=>selectGroupOf(selectedObject.id)} disabled={!selectedObject.groupId}>Gruppe auswählen</button>
+              <button className="btn" onClick={duplicateSelected}>Duplizieren</button>
+              {['wall','interiorWall'].includes(selectedObject.type) && <button className="btn blue" onClick={connectSelectedWall}>Wand verbinden</button>}
+            </div>
             {['tree','shrub','hedge'].includes(selectedObject.type) && <><label>Wasserbedarf<input type="number" min="1" max="5" value={Number(selectedObject.waterNeed||2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,waterNeed:Number(e.target.value)}:o))}/></label><label>Lichtbedarf<input value={selectedObject.lightNeed||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,lightNeed:e.target.value}:o))}/></label></>}
             <button className="btn danger" onClick={()=>{ setObjects(v=>v.filter(o=>o.id!==selectedObject.id)); setSelection(null,null,'Objekt gelöscht.'); }}>Objekt löschen</button>
           </div>
@@ -1093,6 +1361,25 @@ export default function LandscapePlatform() {
         {!selectedBlob && !selectedZone && !selectedObject && <p className="small">Objekt, Zone oder Terrain anklicken.</p>}
       </aside>
     </section>
+  );
+}
+
+function ObjectTransformHandles({ obj, onScaleStart, onRotateStart }: {
+  obj: GardenObject;
+  onScaleStart: (e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) => void;
+  onRotateStart: (e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) => void;
+}) {
+  const halfW=Math.max(obj.width,0.12)*SCALE/2;
+  const halfD=Math.max(obj.depth,0.08)*SCALE/2;
+  const rotateY=-halfD-32;
+  return (
+    <g transform={`translate(${obj.x*SCALE},${obj.y*SCALE}) rotate(${obj.rotation})`} pointerEvents="none">
+      <rect x={-halfW} y={-halfD} width={halfW*2} height={halfD*2} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="7 4"/>
+      <line x1="0" y1={-halfD} x2="0" y2={rotateY} stroke="#f59e0b" strokeWidth="1.5"/>
+      <circle cx="0" cy={rotateY} r="8" fill="#fff" stroke="#f59e0b" strokeWidth="3" pointerEvents="all" className="rotateHandle" onPointerDown={e=>onRotateStart(e,obj)}/>
+      {[[-halfW,-halfD],[halfW,-halfD],[-halfW,halfD],[halfW,halfD]].map(([x,y],index)=><circle key={index} cx={x} cy={y} r="7" fill="#fff" stroke="#0ea5e9" strokeWidth="3" pointerEvents="all" className="scaleHandle" onPointerDown={e=>onScaleStart(e,obj)}/>)}
+      <text x="0" y={halfD+20} textAnchor="middle" fontSize="11" fill="#0f172a" paintOrder="stroke" stroke="#fff" strokeWidth="4">{obj.width.toFixed(2)} × {obj.depth.toFixed(2)} m · {obj.rotation.toFixed(1)}°</text>
+    </g>
   );
 }
 

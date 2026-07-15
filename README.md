@@ -1,65 +1,71 @@
-# AL Green Design – V0.19 VIDEO TO 3D + PRECISION
+# AL Green Design – V0.19.1 CAD CONTROLS
 
-## Behoben: Bild wird wirklich angewendet
+V0.19.1 konzentriert sich auf eine deutlich präzisere CAD-artige Bedienung.
 
-Nach dem Upload gibt es jetzt getrennte Aktionen:
+## Auswahl- und Transformationsgriffe
 
-- **Als Planhintergrund anwenden** – das Bild erscheint tatsächlich im 2D-Plan.
-- **Bildanalyse anwenden** – erzeugt Terrainformen und Zonen und zeigt das Bild als Referenz.
-- Transparenz einstellbar.
-- Seitenverhältnis behalten oder Planfläche füllen.
-- Hintergrund ausblenden, ohne den Upload zu verlieren.
+Bei einem einzeln ausgewählten Objekt erscheinen:
 
-## Behoben: präzises Verschieben
+- Auswahlrahmen
+- vier Skalierungsgriffe
+- Rotationsgriff
+- Live-Maße
+- Live-Drehwinkel
 
-### 2D
+## Mehrfachauswahl
 
-- echte SVG-Koordinaten über `getScreenCTM().inverse()`
-- kein Versatz durch unterschiedliche Seitenverhältnisse
-- Drag-Offset bleibt erhalten: Objekte springen nicht mehr unter den Cursor
-- Pointer Events für Maus und Touch
-- Raster: 1 cm, 5 cm, 10 cm, 25 cm, 50 cm, 1 m
-- Alt beim Ziehen: Raster temporär umgehen
-- Pfeiltasten: 10 cm
-- Alt + Pfeiltaste: 5 cm
-- Shift + Pfeiltaste: 1 cm
+- Shift, Strg oder Cmd + Klick fügt Objekte zur Auswahl hinzu oder entfernt sie.
+- Strg/Cmd + A wählt alle Objekte.
+- Mehrere Objekte können gemeinsam verschoben werden.
 
-### 3D
+## Gruppierung
 
-- Drag-Offset bleibt erhalten
-- kein Sprung beim Start
-- Zustand wird erst beim Loslassen endgültig aktualisiert
-- Live-Koordinaten während der Bewegung
+- Gruppieren
+- Gruppierung lösen
+- komplette Gruppe auswählen
+- G gruppiert
+- Shift+G löst die Gruppierung
 
-## VIDEO → 3D Studio
+## Ausrichten
 
-Neue Seite:
+Mehrfach ausgewählte Objekte können ausgerichtet werden:
 
-```text
-/video-to-3d
-```
+- links
+- Mitte X
+- rechts
+- oben
+- Mitte Y
+- unten
 
-Funktionen:
+## Duplizieren
 
-- Video hochladen
-- 6–48 Frames extrahieren
-- Frame-Vorschau
-- schnelle 3D-Tiefen-/Reliefvorschau direkt im Browser
-- Orbit-/Zoom-Ansicht
-- Präzisions-Rekonstruktionsauftrag vorbereiten
+- Button Duplizieren
+- Strg/Cmd + D
 
-### Technische Trennung
+## Verbesserter Fang
 
-Die schnelle 3D-Vorschau ist eine bildbasierte Tiefen-/Reliefschätzung.
-Eine präzise Mehrbild-Photogrammetrie benötigt einen separaten 3D-Worker:
+- Mittelpunkte und Außenkanten rasten an anderen Objekten ein.
+- Blaue Fanglinien zeigen die Ausrichtung.
+- Wände rasten mit Endpunkten an andere Wand-Endpunkte.
+- Fenster, Türen und Schiebetüren rasten an Wandachsen ein.
+- Öffnungen übernehmen die Wanddrehung und speichern die Wand als `parentId`.
 
-```text
-Kamerapositionen
-→ Punktwolke
-→ dichte Rekonstruktion
-→ Mesh
-→ Textur
-→ GLB
-```
+Hinweis: Das logische Einsetzen von Fenstern und Türen ist umgesetzt. Ein echtes boolesches Ausschneiden des Wand-Meshes in 3D folgt in einer späteren Architektur-Version.
 
-Die API-Grundlage ist unter `/api/video-to-3d/create` enthalten.
+## Maße und Abstände
+
+Im Eigenschaftenbereich werden angezeigt:
+
+- Breite × Tiefe
+- Fläche
+- Abstand zum nächstgelegenen Objekt
+
+## Weiter enthalten
+
+- Video → 3D Studio
+- Bild als Planhintergrund anwenden
+- Bildanalyse
+- 2D/3D Split View
+- Architektur-Bauteile
+- Gelände
+- Scan-/LiDAR-Grundlage
