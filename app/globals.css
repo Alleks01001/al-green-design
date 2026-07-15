@@ -109,3 +109,7 @@ input[type=range]{padding:0;height:28px}
 .editorContextMenu button:disabled{opacity:.45;cursor:not-allowed}
 .versionList{display:grid;gap:8px;max-height:320px;overflow:auto}
 .versionItem{display:block}
+
+.architectureDraftInfo{margin-top:10px;border:1px solid #38bdf8;background:#f0f9ff}
+.architectureOpeningPanel{margin-top:10px;padding:10px;border:1px solid #7dd3fc;border-radius:12px;background:#f0f9ff}
+.architectureOpeningPanel h3{margin:0 0 8px;font-size:14px}

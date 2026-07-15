@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – V0.19.3 NATIVE LIDAR',
+  title: 'AL Green Design – V0.20 NATIVE LIDAR',
   description: 'Erweitertes Garten- und Landschaftsplanungsstudio mit Projektverwaltung, Layern, Soft Terrain, verschiebbaren Gebäuden/Zonen, Kosten, Analysen und OpenAI-JSON-Schema.',
   robots: { index: false, follow: false }
 };

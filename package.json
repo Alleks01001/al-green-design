@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v0193-stability-ux",
-  "version": "0.19.3",
+  "name": "al-green-design-landscape-architecture-v020-architecture-core",
+  "version": "0.20.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

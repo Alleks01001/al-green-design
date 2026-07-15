@@ -83,6 +83,10 @@ type GardenObject = {
   parentId?: number;
   subtype?: string;
   groupId?: string;
+  hostOffset?: number;
+  sillHeight?: number;
+  wallNodeStart?: string;
+  wallNodeEnd?: string;
 };
 
 const SCALE = 50;
@@ -165,13 +169,123 @@ function distance2D(a: {x:number;y:number}, b: {x:number;y:number}) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function isWallObject(obj: GardenObject) {
+  return obj.type === 'wall' || obj.type === 'interiorWall';
+}
+
+function isOpeningObject(obj: GardenObject) {
+  return obj.type === 'window' || obj.type === 'door' || obj.type === 'slidingDoor';
+}
+
+function openingSill(obj: GardenObject) {
+  if (obj.type === 'window') return obj.sillHeight ?? 0.9;
+  return obj.sillHeight ?? 0;
+}
+
+function wallOpeningOffset(wall: GardenObject, opening: GardenObject) {
+  if (typeof opening.hostOffset === 'number') return opening.hostOffset;
+  return objectLocalPoint(wall, opening.x, opening.y).x;
+}
+
+function addWallSegment3D(
+  group: THREE.Group,
+  wall: GardenObject,
+  centerX: number,
+  width: number,
+  centerY: number,
+  height: number,
+  material: THREE.Material,
+  edgeColor: number
+) {
+  if (width <= 0.015 || height <= 0.015) return;
+  const thickness = Math.max(wall.thickness || wall.depth, 0.08);
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, thickness),
+    material
+  );
+  mesh.position.set(centerX, centerY, 0);
+  group.add(mesh);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(mesh.geometry),
+    new THREE.LineBasicMaterial({ color: edgeColor })
+  );
+  mesh.add(edges);
+}
+
+function buildWallWithOpenings3D(
+  group: THREE.Group,
+  wall: GardenObject,
+  openings: GardenObject[],
+  selected: boolean
+) {
+  const material = new THREE.MeshStandardMaterial({
+    color: wall.color,
+    roughness: 0.82,
+    metalness: 0
+  });
+  const edgeColor = selected ? 0xf59e0b : (wall.type === 'interiorWall' ? 0x94a3b8 : 0x475569);
+  const baseY = (wall.level || 0) * 3;
+  const wallHeight = Math.max(0.2, wall.height);
+  const half = wall.width / 2;
+
+  const normalized = openings
+    .map(opening => {
+      const sill = clamp(openingSill(opening), 0, wallHeight);
+      const height = clamp(opening.height, 0.1, Math.max(0.1, wallHeight - sill));
+      const offset = clamp(
+        wallOpeningOffset(wall, opening),
+        -half + opening.width / 2,
+        half - opening.width / 2
+      );
+      return {
+        opening,
+        sill,
+        height,
+        start: clamp(offset - opening.width / 2, -half, half),
+        end: clamp(offset + opening.width / 2, -half, half)
+      };
+    })
+    .filter(item => item.end - item.start > 0.02)
+    .sort((a, b) => a.start - b.start);
+
+  let cursor = -half;
+
+  normalized.forEach(item => {
+    const leftWidth = item.start - cursor;
+    if (leftWidth > 0.015) {
+      addWallSegment3D(group, wall, cursor + leftWidth / 2, leftWidth, baseY + wallHeight / 2, wallHeight, material, edgeColor);
+    }
+
+    if (item.sill > 0.015) {
+      addWallSegment3D(group, wall, (item.start + item.end) / 2, item.end - item.start, baseY + item.sill / 2, item.sill, material, edgeColor);
+    }
+
+    const topStart = item.sill + item.height;
+    const topHeight = wallHeight - topStart;
+    if (topHeight > 0.015) {
+      addWallSegment3D(group, wall, (item.start + item.end) / 2, item.end - item.start, baseY + topStart + topHeight / 2, topHeight, material, edgeColor);
+    }
+
+    cursor = Math.max(cursor, item.end);
+  });
+
+  const tailWidth = half - cursor;
+  if (tailWidth > 0.015) {
+    addWallSegment3D(group, wall, cursor + tailWidth / 2, tailWidth, baseY + wallHeight / 2, wallHeight, material, edgeColor);
+  }
+
+  if (!normalized.length) {
+    addWallSegment3D(group, wall, 0, wall.width, baseY + wallHeight / 2, wallHeight, material, edgeColor);
+  }
+}
+
 export default function LandscapePlatform() {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.19.3 STABILITY + UX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.20 ARCHITECTURE CORE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -249,12 +363,31 @@ export default function LandscapePlatform() {
   const [autosaveState, setAutosaveState] = useState<'idle'|'saving'|'saved'|'error'>('idle');
   const [versionSnapshots, setVersionSnapshots] = useState<EditorSnapshot[]>([]);
   const editorClipboardRef = useRef<GardenObject[]>([]);
+  const [wallDraftStart, setWallDraftStart] = useState<{x:number;y:number} | null>(null);
+  const [wallChainMode, setWallChainMode] = useState(true);
 
   const selectedBlob = selectedKind === 'terrain' ? terrainBlobs.find(b => b.id === selectedId) || null : null;
   const selectedZone = selectedKind === 'zone' ? zones.find(z => z.id === selectedId) || null : null;
   const selectedObject = selectedKind === 'object' ? objects.find(o => o.id === selectedId) || null : null;
   const selectedObjects = objects.filter(o => selectedObjectIds.includes(o.id));
   const selectedImportedModel = importedModels.find(model => model.id === selectedImportedModelId) || null;
+  const architectureStats = useMemo(() => {
+    const walls = objects.filter(isWallObject);
+    const openings = objects.filter(isOpeningObject);
+    const hosted = openings.filter(opening => opening.parentId && walls.some(wall => wall.id === opening.parentId));
+    return {
+      wallCount: walls.length,
+      totalWallLength: walls.reduce((sum, wall) => sum + wall.width, 0),
+      openingCount: openings.length,
+      hostedOpeningCount: hosted.length
+    };
+  }, [objects]);
+
+  const wallTransformSignature = objects
+    .filter(isWallObject)
+    .map(wall => `${wall.id}:${wall.x.toFixed(4)}:${wall.y.toFixed(4)}:${wall.width.toFixed(4)}:${wall.rotation.toFixed(4)}`)
+    .join('|');
+
   const nearestObjectInfo = useMemo(() => {
     if (!selectedObject) return null;
     const others = objects.filter(o => o.id !== selectedObject.id);
@@ -371,6 +504,40 @@ export default function LandscapePlatform() {
       setStatus('Autosave konnte nicht geladen werden.');
     }
   }
+
+  useEffect(() => {
+    setObjects(current => {
+      let changed = false;
+
+      const next = current.map(obj => {
+        if (!isOpeningObject(obj) || !obj.parentId) return obj;
+
+        const wall = current.find(candidate => candidate.id === obj.parentId && isWallObject(candidate));
+        if (!wall) return obj;
+
+        const rawOffset = typeof obj.hostOffset === 'number'
+          ? obj.hostOffset
+          : objectLocalPoint(wall, obj.x, obj.y).x;
+
+        const offset = clamp(rawOffset, -wall.width/2 + obj.width/2, wall.width/2 - obj.width/2);
+        const world = objectWorldPoint(wall, offset, 0);
+
+        if (
+          Math.abs(world.x - obj.x) > 0.0001 ||
+          Math.abs(world.y - obj.y) > 0.0001 ||
+          Math.abs(wall.rotation - obj.rotation) > 0.0001 ||
+          Math.abs(offset - (obj.hostOffset ?? offset)) > 0.0001
+        ) {
+          changed = true;
+          return { ...obj, x: world.x, y: world.y, rotation: wall.rotation, hostOffset: offset };
+        }
+
+        return obj;
+      });
+
+      return changed ? next : current;
+    });
+  }, [wallTransformSignature]);
 
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
 
@@ -514,6 +681,7 @@ export default function LandscapePlatform() {
         setDrag2D(null);
         setSnapGuides(null);
         setContextMenu(null);
+        setWallDraftStart(null);
         setSelectedObjectIds([]);
         setSelectedKind(null);
         setSelectedId(null);
@@ -615,6 +783,7 @@ export default function LandscapePlatform() {
     let y = rawY;
     let rotation = obj.rotation;
     let parentId = obj.parentId;
+    let hostOffset = obj.hostOffset;
     let guideX: number | undefined;
     let guideY: number | undefined;
     const tolerance = Math.max(0.08, Math.min(gridSize * 0.6, 0.22));
@@ -629,7 +798,30 @@ export default function LandscapePlatform() {
       for (const target of yTargets) for (const current of ownY) if (Math.abs(current-target)<=tolerance) { y += target-current; guideY=target; }
     }
 
-    if (['window','door','slidingDoor'].includes(obj.type)) {
+    if (isWallObject(obj)) {
+    const thickness = Math.max(obj.thickness || obj.depth, 0.08);
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <rect x={(-obj.width/2)*SCALE} y={(-thickness/2)*SCALE} width={obj.width*SCALE} height={thickness*SCALE} fill={obj.color} fillOpacity={obj.type==='interiorWall'?0.72:0.92} stroke={stroke} strokeWidth={sw}/>
+
+        {openings.map(opening => {
+          const offset = wallOpeningOffset(obj, opening);
+          return (
+            <g key={`opening-cut-${opening.id}`}>
+              <rect x={(offset-opening.width/2)*SCALE} y={(-thickness/2)*SCALE-1} width={opening.width*SCALE} height={thickness*SCALE+2} fill="#ffffff" stroke={selected ? '#f59e0b' : '#0ea5e9'} strokeWidth="1.5"/>
+              <line x1={(offset-opening.width/2)*SCALE} y1={0} x2={(offset+opening.width/2)*SCALE} y2={0} stroke={opening.type==='door'?'#92400e':'#0284c7'} strokeWidth="3"/>
+            </g>
+          );
+        })}
+
+        <circle cx={(-obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
+        <circle cx={(obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
+        <text x="0" y={-thickness*SCALE/2-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name} · {obj.width.toFixed(2)} m</text>
+      </g>
+    );
+  }
+
+  if (['window','door','slidingDoor'].includes(obj.type)) {
       let best: { wall:GardenObject; distance:number; localX:number } | null = null;
       for (const wall of objects.filter(o => ['wall','interiorWall'].includes(o.type))) {
         const local = objectLocalPoint(wall,x,y);
@@ -639,7 +831,11 @@ export default function LandscapePlatform() {
       }
       if (best) {
         const snapped = objectWorldPoint(best.wall,best.localX,0);
-        x = snapped.x; y = snapped.y; rotation = best.wall.rotation; parentId = best.wall.id;
+        x = snapped.x;
+        y = snapped.y;
+        rotation = best.wall.rotation;
+        parentId = best.wall.id;
+        hostOffset = best.localX;
       }
     }
 
@@ -656,7 +852,7 @@ export default function LandscapePlatform() {
     }
 
     setSnapGuides(guideX!==undefined || guideY!==undefined ? {x:guideX,y:guideY} : null);
-    return {x,y,rotation,parentId};
+    return {x,y,rotation,parentId,hostOffset};
   }
 
   function alignSelected(mode: 'left'|'centerX'|'right'|'top'|'centerY'|'bottom') {
@@ -776,6 +972,140 @@ export default function LandscapePlatform() {
     setContextMenu(null);
   }
 
+  function snapPointToWallEndpoints(point: {x:number;y:number}, tolerance = 0.28) {
+    let best = { ...point };
+    let bestDistance = tolerance;
+
+    objects.filter(isWallObject).forEach(wall => {
+      wallEndpoints(wall).forEach(endpoint => {
+        const distance = distance2D(point, endpoint);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = { x: endpoint.x, y: endpoint.y };
+        }
+      });
+    });
+
+    return best;
+  }
+
+  function createWallFromPoints(
+    type: 'wall' | 'interiorWall',
+    start: {x:number;y:number},
+    end: {x:number;y:number}
+  ) {
+    const length = distance2D(start, end);
+    if (length < 0.15) {
+      setStatus('Wand ist zu kurz. Zweiten Punkt weiter entfernt setzen.');
+      return null;
+    }
+
+    snapshot();
+
+    const id = Date.now();
+    const rotation = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+    const exterior = type === 'wall';
+
+    const wall: GardenObject = {
+      id,
+      type,
+      name: exterior ? 'Neue Außenwand' : 'Neue Innenwand',
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+      width: length,
+      depth: exterior ? 0.22 : 0.14,
+      thickness: exterior ? 0.22 : 0.14,
+      height: exterior ? 2.8 : 2.7,
+      rotation,
+      color: exterior ? '#f8fafc' : '#e5e7eb',
+      material: exterior ? 'Mauerwerk / Putz' : 'Innenwand',
+      unitCost: exterior ? 260 : 120,
+      level: 0,
+      note: '',
+      wallNodeStart: `node-${Math.round(start.x*1000)}-${Math.round(start.y*1000)}`,
+      wallNodeEnd: `node-${Math.round(end.x*1000)}-${Math.round(end.y*1000)}`
+    };
+
+    setObjects(current => [...current, wall]);
+    setSelectedKind('object');
+    setSelectedId(id);
+    setSelectedObjectIds([id]);
+    setStatus(`${wall.name} erstellt · ${length.toFixed(2)} m.`);
+    return wall;
+  }
+
+  function attachOpeningToNearestWall(openingId: number) {
+    const opening = objects.find(obj => obj.id === openingId && isOpeningObject(obj));
+    if (!opening) return;
+
+    let best: { wall: GardenObject; distance: number; localX: number } | null = null;
+
+    objects.filter(isWallObject).forEach(wall => {
+      const local = objectLocalPoint(wall, opening.x, opening.y);
+      const within = Math.abs(local.x) <= wall.width / 2 + 0.5;
+      const distance = Math.abs(local.y);
+      if (within && (!best || distance < best.distance)) {
+        best = {
+          wall,
+          distance,
+          localX: clamp(local.x, -wall.width/2 + opening.width/2, wall.width/2 - opening.width/2)
+        };
+      }
+    });
+
+    if (!best) {
+      setStatus('Keine geeignete Wand gefunden.');
+      return;
+    }
+
+    snapshot();
+    const world = objectWorldPoint(best.wall, best.localX, 0);
+
+    setObjects(current => current.map(obj =>
+      obj.id === opening.id
+        ? {
+            ...obj,
+            x: world.x,
+            y: world.y,
+            rotation: best!.wall.rotation,
+            parentId: best!.wall.id,
+            hostOffset: best!.localX,
+            sillHeight: obj.type === 'window' ? (obj.sillHeight ?? 0.9) : 0
+          }
+        : obj
+    ));
+
+    setStatus(`${opening.name} an ${best.wall.name} gekoppelt.`);
+  }
+
+  function detachOpening(openingId: number) {
+    snapshot();
+    setObjects(current => current.map(obj =>
+      obj.id === openingId
+        ? { ...obj, parentId: undefined, hostOffset: undefined }
+        : obj
+    ));
+    setStatus('Öffnung von Wand gelöst.');
+  }
+
+  function updateHostedOpeningOffset(openingId: number, nextOffset: number) {
+    setObjects(current => {
+      const opening = current.find(obj => obj.id === openingId);
+      if (!opening?.parentId) return current;
+      const wall = current.find(obj => obj.id === opening.parentId && isWallObject(obj));
+      if (!wall) return current;
+
+      const offset = clamp(nextOffset, -wall.width/2 + opening.width/2, wall.width/2 - opening.width/2);
+      const world = objectWorldPoint(wall, offset, 0);
+
+      return current.map(obj =>
+        obj.id === openingId
+          ? { ...obj, x: world.x, y: world.y, rotation: wall.rotation, hostOffset: offset }
+          : obj
+      );
+    });
+  }
+
   function addObject(type: GardenObjectType, x: number, y: number) {
     snapshot();
     const id = Date.now();
@@ -802,9 +1132,9 @@ export default function LandscapePlatform() {
       floor: { name: 'Bodenplatte', width: 5.5, depth: 4.5, height: 0.18, color: '#d1d5db', material: 'Stahlbeton', unitCost: 180, level: 0, thickness: 0.18 },
       interiorWall: { name: 'Innenwand', width: 3.0, depth: 0.14, height: 2.7, color: '#e5e7eb', material: 'Trockenbau/Mauerwerk', unitCost: 120, level: 0, thickness: 0.14 },
       roof: { name: 'Dach', width: 5.8, depth: 4.8, height: 0.55, color: '#7c2d12', material: 'Dachdeckung', unitCost: 240, level: 1, subtype: 'gable' },
-      window: { name: 'Fenster', width: 1.4, depth: 0.10, height: 1.3, color: '#7dd3fc', material: 'Glas/Aluminium', unitCost: 780, level: 0, thickness: 0.10 },
-      door: { name: 'Tür', width: 1.0, depth: 0.12, height: 2.1, color: '#92400e', material: 'Holz/Metall', unitCost: 950, level: 0, thickness: 0.12 },
-      slidingDoor: { name: 'Schiebetür', width: 2.8, depth: 0.12, height: 2.4, color: '#bae6fd', material: 'Glas/Aluminium', unitCost: 2800, level: 0, thickness: 0.12 },
+      window: { name: 'Fenster', width: 1.4, depth: 0.10, height: 1.3, color: '#7dd3fc', material: 'Glas/Aluminium', unitCost: 780, level: 0, thickness: 0.10, sillHeight: 0.9 },
+      door: { name: 'Tür', width: 1.0, depth: 0.12, height: 2.1, color: '#92400e', material: 'Holz/Metall', unitCost: 950, level: 0, thickness: 0.12, sillHeight: 0 },
+      slidingDoor: { name: 'Schiebetür', width: 2.8, depth: 0.12, height: 2.4, color: '#bae6fd', material: 'Glas/Aluminium', unitCost: 2800, level: 0, thickness: 0.12, sillHeight: 0 },
       balcony: { name: 'Balkon', width: 3.5, depth: 1.8, height: 0.18, color: '#94a3b8', material: 'Beton/Holz', unitCost: 650, level: 1 },
       railing: { name: 'Geländer', width: 3.0, depth: 0.10, height: 1.05, color: '#64748b', material: 'Glas/Metall', unitCost: 320, level: 1 },
       column: { name: 'Stütze', width: 0.28, depth: 0.28, height: 2.8, color: '#cbd5e1', material: 'Stahl/Beton/Holz', unitCost: 420, level: 0 },
@@ -817,7 +1147,26 @@ export default function LandscapePlatform() {
   }
 
   function handleCanvasClick(e: React.MouseEvent<SVGSVGElement>) {
-    const p = worldFromEvent(svgRef.current, e);
+    const rawPoint = worldFromEvent(svgRef.current, e);
+    const p = snapPointToWallEndpoints(rawPoint);
+
+    if (tool === 'wall' || tool === 'interiorWall') {
+      if (!wallDraftStart) {
+        setWallDraftStart(p);
+        setStatus(`${tool === 'wall' ? 'Außenwand' : 'Innenwand'}: Startpunkt gesetzt. Zweiten Punkt klicken.`);
+        return;
+      }
+
+      const wall = createWallFromPoints(tool, wallDraftStart, p);
+      if (wallChainMode && wall) {
+        setWallDraftStart(p);
+        setStatus(`${wall.name} erstellt. Kettenmodus: nächsten Endpunkt klicken.`);
+      } else {
+        setWallDraftStart(null);
+      }
+      return;
+    }
+
     if (tool === 'select') {
       const hit = [...objects].reverse().find(obj => objectHit(p, obj));
       if (hit) {
@@ -889,12 +1238,12 @@ export default function LandscapePlatform() {
       const baseX=snapValue(targetX,e.altKey); const baseY=snapValue(targetY,e.altKey);
       if (drag2D.kind==='object') {
         const primary=objects.find(o=>o.id===drag2D.id); if (!primary) return;
-        const snapped=e.altKey?{x:baseX,y:baseY,rotation:primary.rotation,parentId:primary.parentId}:snapObjectToScene(primary,baseX,baseY);
+        const snapped=e.altKey?{x:baseX,y:baseY,rotation:primary.rotation,parentId:primary.parentId,hostOffset:primary.hostOffset}:snapObjectToScene(primary,baseX,baseY);
         const primaryStart=drag2D.groupStart.find(item=>item.id===drag2D.id); if (!primaryStart) return;
         const dx=snapped.x-primaryStart.x; const dy=snapped.y-primaryStart.y;
         setObjects(current=>current.map(o=>{
           const start=drag2D.groupStart.find(item=>item.id===o.id); if (!start) return o;
-          if (o.id===drag2D.id) return {...o,x:snapped.x,y:snapped.y,rotation:snapped.rotation,parentId:snapped.parentId};
+          if (o.id===drag2D.id) return {...o,x:snapped.x,y:snapped.y,rotation:snapped.rotation,parentId:snapped.parentId,hostOffset:snapped.hostOffset};
           return {...o,x:start.x+dx,y:start.y+dy};
         }));
         setStatus(`Position X ${snapped.x.toFixed(2)} m · Y ${snapped.y.toFixed(2)} m${snapped.parentId?' · an Wand gekoppelt':''}`);
@@ -1176,7 +1525,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.3', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.20.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -1332,13 +1681,60 @@ export default function LandscapePlatform() {
 
         {tab === 'architecture' && (
           <>
-            <h2>Architektur + Pflanzen</h2>
-            <div className="grid3">
-              {([
-                ['building','Gebäudekörper'],['floor','Bodenplatte'],['wall','Außenwand'],['interiorWall','Innenwand'],['roof','Dach'],['window','Fenster'],['door','Tür'],['slidingDoor','Schiebetür'],['balcony','Balkon'],['railing','Geländer'],['column','Stütze'],['carport','Carport'],['winterGarden','Wintergarten'],['select','Auswählen']
-              ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
+            <h2>Architektur · Wände und Öffnungen</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Wände</small><strong>{architectureStats.wallCount}</strong></div>
+              <div className="kpi"><small>Wandlänge</small><strong>{architectureStats.totalWallLength.toFixed(1)} m</strong></div>
+              <div className="kpi"><small>Öffnungen</small><strong>{architectureStats.hostedOpeningCount}/{architectureStats.openingCount}</strong></div>
             </div>
-            <div className="hint" style={{marginTop:10}}>2D: Objekt anklicken und ziehen. 3D: Objekt anklicken und über das Gelände verschieben.</div>
+
+            <div className="grid2" style={{marginTop:10}}>
+              {([
+                ['wall','Außenwand zeichnen'],
+                ['interiorWall','Innenwand zeichnen'],
+                ['window','Fenster'],
+                ['door','Tür'],
+                ['slidingDoor','Schiebetür'],
+                ['select','Auswählen']
+              ] as [Tool,string][]).map(([id,label]) => (
+                <button
+                  key={id}
+                  className={`tool ${tool===id?'active':''}`}
+                  onClick={()=>{
+                    setTool(id);
+                    if (id!=='wall' && id!=='interiorWall') setWallDraftStart(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <label style={{marginTop:10}}>
+              <input
+                type="checkbox"
+                checked={wallChainMode}
+                onChange={e=>setWallChainMode(e.target.checked)}
+              />
+              Wände als zusammenhängenden Linienzug weiterzeichnen
+            </label>
+
+            {wallDraftStart && (
+              <div className="item architectureDraftInfo">
+                <strong>Wand-Startpunkt aktiv</strong>
+                <span>X {wallDraftStart.x.toFixed(2)} m · Y {wallDraftStart.y.toFixed(2)} m</span>
+                <button className="btn" onClick={()=>setWallDraftStart(null)}>Zeichnen abbrechen</button>
+              </div>
+            )}
+
+            <div className="hint" style={{marginTop:10}}>
+              Wand: Startpunkt klicken → Endpunkt klicken. Endpunkte rasten an bestehende Wandenden. Im Kettenmodus beginnt die nächste Wand automatisch am letzten Endpunkt.
+            </div>
+
+            <div className="hint" style={{marginTop:8}}>
+              Fenster und Türen auf eine Wand ziehen. Sie werden an die Wandachse gekoppelt und erzeugen in der 2D- und 3D-Wand eine sichtbare Öffnung.
+            </div>
           </>
         )}
 
@@ -1509,7 +1905,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.19.3 STABILITY + UX</span>
+          <span className="pill">V0.20 ARCHITECTURE CORE</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -1547,6 +1943,26 @@ export default function LandscapePlatform() {
                 ))}
               </defs>
               <Grid />
+              {objects.filter(isWallObject).flatMap(wall =>
+                wallEndpoints(wall).map((endpoint,index)=>(
+                  <circle
+                    key={`wall-node-${wall.id}-${index}`}
+                    cx={endpoint.x*SCALE}
+                    cy={endpoint.y*SCALE}
+                    r="4"
+                    fill="#ffffff"
+                    stroke="#64748b"
+                    strokeWidth="1.5"
+                    pointerEvents="none"
+                  />
+                ))
+              )}
+              {wallDraftStart && (tool==='wall' || tool==='interiorWall') && (
+                <>
+                  <circle cx={wallDraftStart.x*SCALE} cy={wallDraftStart.y*SCALE} r="7" fill="#ffffff" stroke={tool==='wall'?'#0f172a':'#64748b'} strokeWidth="3" pointerEvents="none"/>
+                  <text x={wallDraftStart.x*SCALE} y={wallDraftStart.y*SCALE-12} textAnchor="middle" fontSize="11" fill="#0f172a" paintOrder="stroke" stroke="#ffffff" strokeWidth="4" pointerEvents="none">Startpunkt</text>
+                </>
+              )}
               {image && imageApplied && <image href={image.dataUrl} x={-10 * SCALE} y={-6.5 * SCALE} width={20 * SCALE} height={13 * SCALE} opacity={imageOpacity} preserveAspectRatio={imageFit==='contain'?'xMidYMid meet':'none'} pointerEvents="none" />}
 
               {layers.zones && zones.map(zone => (
@@ -1568,6 +1984,7 @@ export default function LandscapePlatform() {
                 <GardenObject2D
                   key={obj.id}
                   obj={obj}
+                  openings={isWallObject(obj) ? objects.filter(opening => opening.parentId===obj.id && isOpeningObject(opening)) : []}
                   selected={selectedKind==='object' && selectedObjectIds.includes(obj.id)}
                   onClick={(e)=>{e.stopPropagation(); selectObject(obj.id,e.shiftKey||e.metaKey||e.ctrlKey);}}
                   onPointerDown={(e)=>start2DDrag(e,'object',obj.id,obj.x,obj.y,obj.name)}
@@ -1715,6 +2132,39 @@ export default function LandscapePlatform() {
               <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
             </>}
             <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
+            {isOpeningObject(selectedObject) && (
+              <div className="architectureOpeningPanel">
+                <h3>Wandöffnung</h3>
+                <div className="item">
+                  <strong>Wandkopplung</strong>
+                  <span>
+                    {selectedObject.parentId
+                      ? (objects.find(obj=>obj.id===selectedObject.parentId)?.name || `Wand ${selectedObject.parentId}`)
+                      : 'Nicht gekoppelt'}
+                  </span>
+                </div>
+
+                {selectedObject.parentId && (
+                  <label>
+                    Position entlang Wand
+                    <input type="number" step="0.05" value={selectedObject.hostOffset ?? 0} onChange={e=>updateHostedOpeningOffset(selectedObject.id,Number(e.target.value))}/>
+                  </label>
+                )}
+
+                {selectedObject.type==='window' && (
+                  <label>
+                    Brüstungshöhe
+                    <input type="number" min="0" step="0.05" value={selectedObject.sillHeight ?? 0.9} onChange={e=>setObjects(current=>current.map(obj=>obj.id===selectedObject.id?{...obj,sillHeight:Number(e.target.value)}:obj))}/>
+                  </label>
+                )}
+
+                <div className="grid2">
+                  <button className="btn blue" onClick={()=>attachOpeningToNearestWall(selectedObject.id)}>An nächste Wand koppeln</button>
+                  <button className="btn" disabled={!selectedObject.parentId} onClick={()=>detachOpening(selectedObject.id)}>Von Wand lösen</button>
+                </div>
+              </div>
+            )}
+
             {nearestObjectInfo && <div className="item"><strong>Nächster Abstand</strong><span>{nearestObjectInfo.distance.toFixed(2)} m zu {nearestObjectInfo.object.name}</span></div>}
             <div className="item"><strong>Maße</strong><span>{selectedObject.width.toFixed(2)} × {selectedObject.depth.toFixed(2)} m · Fläche {(selectedObject.width*selectedObject.depth).toFixed(2)} m²</span></div>
             <div className="grid2">
@@ -1780,7 +2230,7 @@ function Grid() {
   return <g>{lines}</g>;
 }
 
-function GardenObject2D({ obj, selected, onClick, onPointerDown }: { obj: GardenObject; selected: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onPointerDown: (e: React.PointerEvent<SVGGElement>) => void }) {
+function GardenObject2D({ obj, openings = [], selected, onClick, onPointerDown }: { obj: GardenObject; openings?: GardenObject[]; selected: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onPointerDown: (e: React.PointerEvent<SVGGElement>) => void }) {
   const stroke = selected ? '#f59e0b' : '#1f2937';
   const sw = selected ? 3 : 1.5;
   const tx = obj.x * SCALE;
@@ -2055,12 +2505,6 @@ function Terrain3D({
         group.add(slab); addEdge(slab, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x475569);
       }
 
-      if (obj.type === 'interiorWall') {
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.thickness||obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
-        wall.position.y = obj.height/2 + (obj.level||0)*3;
-        group.add(wall); addEdge(wall, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x94a3b8);
-      }
-
       if (obj.type === 'roof') {
         if ((obj.subtype||'gable') === 'flat') {
           const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.18), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
@@ -2077,13 +2521,13 @@ function Terrain3D({
 
       if (obj.type === 'window' || obj.type === 'slidingDoor') {
         const panel = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.06)), new THREE.MeshStandardMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.48, metalness: 0.15, roughness: 0.2 }));
-        panel.position.y = (obj.level||0)*3 + obj.height/2 + (obj.type==='window'?0.75:0);
+        panel.position.y = (obj.level||0)*3 + openingSill(obj) + obj.height/2;
         group.add(panel); addEdge(panel, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x0ea5e9);
       }
 
       if (obj.type === 'door') {
         const door = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
-        door.position.y = (obj.level||0)*3 + obj.height/2;
+        door.position.y = (obj.level||0)*3 + openingSill(obj) + obj.height/2;
         group.add(door); addEdge(door);
       }
 
@@ -2150,11 +2594,9 @@ function Terrain3D({
           group.add(post);
         });
       }
-      if (obj.type === 'wall') {
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
-        wall.position.y = obj.height / 2;
-        group.add(wall);
-        addEdge(wall, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
+      if (obj.type === 'wall' || obj.type === 'interiorWall') {
+        const openings = objects.filter(opening => opening.parentId === obj.id && isOpeningObject(opening));
+        buildWallWithOpenings3D(group, obj, openings, selectedKind === 'object' && selectedId === obj.id);
       }
       if (obj.type === 'stairs') {
         const steps = 4;
