@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v025-plant-growth-timeline",
-  "version": "0.25.0",
+  "name": "al-green-design-landscape-architecture-v027-water-brand-flow",
+  "version": "0.27.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

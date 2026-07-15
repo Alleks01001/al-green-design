@@ -1,85 +1,56 @@
-# AL Green Design – V0.25 PLANT GROWTH TIMELINE
+# AL Green Design – V0.27 WATER + FLOW + BRAND
 
-V0.25 erweitert die Pflanzenplanung um zeitliche Entwicklung.
+V0.27 erweitert das Projekt um Wasser-, Gefälle- und Fließrichtungsanalyse und bringt gleichzeitig ein neues visuelles Branding.
 
-## Entwicklungsjahre
+## Neues Branding
 
-Direkt wählbar:
+Die bisherige moosgrüne Grundanmutung wurde in Richtung Weinrot / Burgundy überarbeitet.
 
-```text
-Jahr 0
-Jahr 1
-Jahr 3
-Jahr 5
-Jahr 10
-Jahr 15
-Jahr 20
-```
+Zusätzlich wurde ein passendes integriertes Markenlogo für die Oberfläche ergänzt:
 
-Zusätzlich steht ein freier Schieberegler von 0 bis 30 Jahren zur Verfügung.
+- Monogramm-/Blatt-Signet
+- geometrischer Planungsbezug
+- markanter Studio-Look
+- ohne externe Bilddatei direkt im UI nutzbar
 
-## Wachstumskurve
+## Wasser- und Abflussanalyse
 
-Die Entwicklung wird aus folgenden Daten abgeleitet:
+Neu:
 
-- Pflanzgröße beim Setzen
-- Endhöhe
-- Endbreite
-- Wachstumsgeschwindigkeit
-- Pflanzenkategorie
-- Entwicklungsjahr
+- Fließanalyse berechnen
+- lokale Tiefpunkte
+- Retentionszellen
+- dominierende Abflussrichtung
+- durchschnittliches Gefälle
+- maximales Gefälle
+- Rückhaltepotenzial
 
-Die Endgröße wird über eine nichtlineare Wachstumskurve angenähert.
+## 2D-Overlays
 
-## Entwicklungsphasen
+Optional einblendbar:
 
-```text
-Pflanzung
-Jungpflanze
-Aufbauphase
-Fast ausgewachsen
-Ausgewachsen
-```
+- Fließrichtungen
+- Tiefpunkte
+- Retentionsbereiche
 
-## 2D
+## Logik
 
-Konkrete Pflanzenarten verändern ihre dargestellte Größe entsprechend dem Entwicklungsjahr.
+Die Analyse rastert das Gelände, bewertet die umliegenden Nachbarzellen und ermittelt:
 
-Optional kann die Endgröße als gestrichelter Umriss eingeblendet werden.
+- stärkste Falllinie
+- lokale Tiefpunkte
+- potenzielle Sammelstellen
+- grobes Retentionspotenzial
 
-## 3D
+## Bestehende Funktionen bleiben erhalten
 
-Bäume, Sträucher, Stauden und Gräser verändern ihre Höhe und Breite abhängig vom Entwicklungsjahr.
-
-## Pflanzenobjekt
-
-Zusätzlich einstellbar:
-
-- Pflanzhöhe
-- Pflanzbreite
-
-Angezeigt werden:
-
-- Entwicklungsphase
-- Größe im gewählten Jahr
-- Endgröße
-
-## Vergleich
-
-Zwei Jahre können miteinander verglichen werden, zum Beispiel:
-
-```text
-Jahr 0
-gegen
-Jahr 10
-```
-
-## Projektübersicht
-
-- Anzahl konkreter Pflanzen
-- durchschnittlicher Entwicklungsstand
-- Verteilung auf Entwicklungsphasen
+- 2D-Editor
+- 3D-Szene
+- Pflanzenbibliothek
+- Wachstum
+- Sonne/Schatten
+- Performance-Modi
 
 ## Nächste Version
 
-V0.26: Sonnen- und Schattenanalyse.
+V0.28: Bewässerungszonen, Regnerreichweiten, Tropfkreise und automatische Leitungslogik.

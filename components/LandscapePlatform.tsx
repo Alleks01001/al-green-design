@@ -66,6 +66,41 @@ type PlantCheck = {
   message: string;
 };
 
+
+type PerformanceMode = 'auto' | 'quality' | 'balanced' | 'fast';
+
+type SunHoursCell = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sunHours: number;
+  sampleCount: number;
+};
+
+type FlowVectorCell = {
+  x: number;
+  y: number;
+  toX: number;
+  toY: number;
+  slopePercent: number;
+};
+
+type LowPointCell = {
+  x: number;
+  y: number;
+  z: number;
+  catchmentScore: number;
+};
+
+type RetentionCell = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depthPotential: number;
+};
+
 type SelectedKind = 'terrain' | 'zone' | 'object' | 'room' | null;
 type MoveStart = { id: number; x: number; y: number };
 type Drag2D =
@@ -509,6 +544,336 @@ function distance2D(a: {x:number;y:number}, b: {x:number;y:number}) {
 }
 
 
+
+function dayOfYear(date: Date) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const current = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return Math.floor((current - start) / 86400000);
+}
+
+function approximateSolarPosition(
+  dateIso: string,
+  localHour: number,
+  latitudeDeg: number
+) {
+  const date = new Date(`${dateIso}T12:00:00`);
+  const n = Math.max(1, dayOfYear(date));
+  const lat = degToRad(clamp(latitudeDeg, -66, 66));
+  const declination = degToRad(23.44) * Math.sin((2 * Math.PI * (284 + n)) / 365);
+  const hourAngle = degToRad((localHour - 12) * 15);
+
+  const sinElevation =
+    Math.sin(lat) * Math.sin(declination) +
+    Math.cos(lat) * Math.cos(declination) * Math.cos(hourAngle);
+
+  const elevation = Math.asin(clamp(sinElevation, -1, 1));
+
+  const azimuthRaw = Math.atan2(
+    Math.sin(hourAngle),
+    Math.cos(hourAngle) * Math.sin(lat) - Math.tan(declination) * Math.cos(lat)
+  );
+
+  const azimuth = (azimuthRaw * 180 / Math.PI + 180 + 360) % 360;
+
+  return {
+    azimuth: Number(azimuth.toFixed(2)),
+    elevation: Number((elevation * 180 / Math.PI).toFixed(2))
+  };
+}
+
+function shadowVectorFromSun(
+  sunAzimuthDeg: number,
+  sunElevationDeg: number,
+  objectHeight: number
+) {
+  const elevation = degToRad(Math.max(1, sunElevationDeg));
+  const azimuth = degToRad(sunAzimuthDeg);
+  const length = Math.min(80, Math.max(0, objectHeight / Math.tan(elevation)));
+
+  return {
+    x: -Math.sin(azimuth) * length,
+    y: Math.cos(azimuth) * length,
+    length
+  };
+}
+
+function rotatedRectangleCorners(
+  centerX: number,
+  centerY: number,
+  width: number,
+  depth: number,
+  rotationDeg: number
+) {
+  const rotation = degToRad(rotationDeg);
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const halfW = width / 2;
+  const halfD = depth / 2;
+
+  return [
+    {x:-halfW,y:-halfD},
+    {x: halfW,y:-halfD},
+    {x: halfW,y: halfD},
+    {x:-halfW,y: halfD}
+  ].map(point => ({
+    x:centerX + point.x * cos - point.y * sin,
+    y:centerY + point.x * sin + point.y * cos
+  }));
+}
+
+function cross2D(
+  origin: {x:number;y:number},
+  a: {x:number;y:number},
+  b: {x:number;y:number}
+) {
+  return (a.x-origin.x)*(b.y-origin.y) - (a.y-origin.y)*(b.x-origin.x);
+}
+
+function convexHull(points: {x:number;y:number}[]) {
+  if (points.length <= 3) return [...points];
+
+  const sorted = [...points].sort((a,b)=>a.x===b.x?a.y-b.y:a.x-b.x);
+  const lower: {x:number;y:number}[] = [];
+  const upper: {x:number;y:number}[] = [];
+
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross2D(lower[lower.length-2], lower[lower.length-1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+
+  for (let i=sorted.length-1;i>=0;i--) {
+    const point = sorted[i];
+    while (upper.length >= 2 && cross2D(upper[upper.length-2], upper[upper.length-1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  lower.pop();
+  upper.pop();
+  return [...lower,...upper];
+}
+
+
+
+function estimateSurfaceMode(elevationPoints: ElevationPoint[]) {
+  return elevationPoints.some(point=>point.kind==='proposed') ? 'proposed' as const : 'existing' as const;
+}
+
+function sampleTerrainGridForFlow(
+  terrainBlobs: TerrainBlob[],
+  elevationPoints: ElevationPoint[],
+  columns: number,
+  rows: number,
+  bounds = {minX:-10,maxX:10,minY:-6.5,maxY:6.5}
+) {
+  const width = (bounds.maxX - bounds.minX) / columns;
+  const height = (bounds.maxY - bounds.minY) / rows;
+  const surfaceMode = estimateSurfaceMode(elevationPoints);
+
+  const cells = Array.from({length: rows}, (_, row) =>
+    Array.from({length: columns}, (_, col) => {
+      const x = bounds.minX + (col + 0.5) * width;
+      const y = bounds.minY + (row + 0.5) * height;
+      const z = terrainSurfaceHeight(x, y, elevationPoints, terrainBlobs, surfaceMode);
+      return { row, col, x, y, z, width, height };
+    })
+  );
+
+  return {cells, width, height, bounds};
+}
+
+function analyzeWaterFlowGrid(
+  terrainBlobs: TerrainBlob[],
+  elevationPoints: ElevationPoint[],
+  columns: number,
+  rows: number
+) {
+  const sampled = sampleTerrainGridForFlow(terrainBlobs, elevationPoints, columns, rows);
+  const {cells, width, height} = sampled;
+  const flowVectors: FlowVectorCell[] = [];
+  const lowPoints: LowPointCell[] = [];
+  const retentionCells: RetentionCell[] = [];
+  let slopeSum = 0;
+  let slopeCount = 0;
+
+  const dirs = [
+    [-1,-1],[-1,0],[-1,1],
+    [0,-1],         [0,1],
+    [1,-1],[1,0],[1,1]
+  ];
+
+  for (let row=0; row<rows; row++) {
+    for (let col=0; col<columns; col++) {
+      const current = cells[row][col];
+      let bestNeighbor: (typeof current) | null = null;
+      let maxDrop = 0;
+      let lowerNeighbors = 0;
+
+      for (const [dRow,dCol] of dirs) {
+        const neighbor = cells[row + dRow]?.[col + dCol];
+        if (!neighbor) continue;
+
+        const dx = neighbor.x - current.x;
+        const dy = neighbor.y - current.y;
+        const distance = Math.max(0.01, Math.hypot(dx, dy));
+        const drop = current.z - neighbor.z;
+
+        if (drop > 0) {
+          lowerNeighbors++;
+          const slopePercent = (drop / distance) * 100;
+          slopeSum += slopePercent;
+          slopeCount++;
+          if (drop > maxDrop) {
+            maxDrop = drop;
+            bestNeighbor = neighbor;
+          }
+        }
+      }
+
+      if (bestNeighbor) {
+        const distance = Math.max(0.01, Math.hypot(bestNeighbor.x-current.x, bestNeighbor.y-current.y));
+        flowVectors.push({
+          x: current.x,
+          y: current.y,
+          toX: bestNeighbor.x,
+          toY: bestNeighbor.y,
+          slopePercent: Number(((current.z - bestNeighbor.z) / distance * 100).toFixed(2))
+        });
+      } else {
+        const catchmentScore = Number((1 + lowerNeighbors * 0.1).toFixed(2));
+        lowPoints.push({
+          x: current.x,
+          y: current.y,
+          z: Number(current.z.toFixed(2)),
+          catchmentScore
+        });
+        retentionCells.push({
+          x: current.x - width/2,
+          y: current.y - height/2,
+          width,
+          height,
+          depthPotential: Number((0.12 + Math.abs(current.z % 0.45)).toFixed(2))
+        });
+      }
+    }
+  }
+
+  const avgSlope = slopeCount ? slopeSum / slopeCount : 0;
+
+  return {
+    flowVectors,
+    lowPoints,
+    retentionCells,
+    avgSlope,
+    maxSlope: flowVectors.length ? Math.max(...flowVectors.map(v=>v.slopePercent)) : 0,
+    bounds: sampled.bounds
+  };
+}
+
+function flowDirectionLabel(vector: FlowVectorCell) {
+  const angle = (Math.atan2(vector.toY - vector.y, vector.toX - vector.x) * 180 / Math.PI + 360) % 360;
+  if (angle >= 337.5 || angle < 22.5) return 'Ost';
+  if (angle < 67.5) return 'Nordost';
+  if (angle < 112.5) return 'Nord';
+  if (angle < 157.5) return 'Nordwest';
+  if (angle < 202.5) return 'West';
+  if (angle < 247.5) return 'Südwest';
+  if (angle < 292.5) return 'Süd';
+  return 'Südost';
+}
+
+function pointInPolygon(
+  point: {x:number;y:number},
+  polygon: {x:number;y:number}[]
+) {
+  let inside = false;
+
+  for (let i=0,j=polygon.length-1;i<polygon.length;j=i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    const intersects =
+      ((a.y > point.y) !== (b.y > point.y)) &&
+      (point.x < (b.x-a.x)*(point.y-a.y)/((b.y-a.y) || 0.000001)+a.x);
+
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
+}
+
+function objectShadowHeight(
+  obj: GardenObject,
+  growthYear: number
+) {
+  if (obj.speciesId && ['tree','shrub','hedge'].includes(obj.type)) {
+    return currentPlantDimensions(obj,growthYear).height;
+  }
+
+  if (obj.type === 'wall' || obj.type === 'interiorWall' || obj.type === 'gardenWall') {
+    return Math.max(0.2,obj.height);
+  }
+
+  if (obj.type === 'pergola') return Math.max(2.2,obj.height);
+  if (obj.type === 'building') return Math.max(2.8,obj.height);
+  if (obj.type === 'roof') return Math.max(1,obj.height);
+
+  return Math.max(0.2,obj.height || 0);
+}
+
+function isShadowBlocker(obj: GardenObject) {
+  return [
+    'building','wall','interiorWall','gardenWall','roof',
+    'pergola','carport','winterGarden','tree','shrub','hedge'
+  ].includes(obj.type);
+}
+
+function shadowFootprintForObject(
+  obj: GardenObject,
+  sunAzimuth: number,
+  sunElevation: number,
+  growthYear: number
+) {
+  if (sunElevation <= 1 || !isShadowBlocker(obj)) return [];
+
+  const height = objectShadowHeight(obj,growthYear);
+  const vector = shadowVectorFromSun(sunAzimuth,sunElevation,height);
+
+  let width = Math.max(0.15,obj.width);
+  let depth = Math.max(0.15,obj.depth);
+
+  if (obj.speciesId && ['tree','shrub'].includes(obj.type)) {
+    const dimensions = currentPlantDimensions(obj,growthYear);
+    width = Math.max(0.2,dimensions.width);
+    depth = width;
+  }
+
+  if (obj.type === 'wall' || obj.type === 'interiorWall') {
+    depth = Math.max(0.08,obj.thickness || obj.depth);
+  }
+
+  if (obj.type === 'gardenWall') {
+    depth = Math.max(0.1,obj.thickness || obj.depth);
+  }
+
+  const base = rotatedRectangleCorners(
+    obj.x,
+    obj.y,
+    width,
+    depth,
+    obj.rotation || 0
+  );
+
+  const shifted = base.map(point=>({
+    x:point.x+vector.x,
+    y:point.y+vector.y
+  }));
+
+  return convexHull([...base,...shifted]);
+}
+
 function growthRatePerYear(rate: 'langsam' | 'mittel' | 'schnell' | undefined) {
   if (rate === 'langsam') return 0.08;
   if (rate === 'schnell') return 0.22;
@@ -900,7 +1265,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.25 PLANT GROWTH TIMELINE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.27 WATER + FLOW + BRAND – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -933,6 +1298,25 @@ export default function LandscapePlatform() {
   const [season, setSeason] = useState<'Frühling' | 'Sommer' | 'Herbst' | 'Winter'>('Sommer');
   const [sunAzimuth, setSunAzimuth] = useState(135);
   const [sunElevation, setSunElevation] = useState(42);
+  const [sunAutoPosition, setSunAutoPosition] = useState(true);
+  const [sunAnalysisDate, setSunAnalysisDate] = useState('2026-06-21');
+  const [sunAnalysisHour, setSunAnalysisHour] = useState(14);
+  const [sunLatitude, setSunLatitude] = useState(48.2);
+  const [showShadowOverlay2D, setShowShadowOverlay2D] = useState(true);
+  const [showSunHoursHeatmap, setShowSunHoursHeatmap] = useState(false);
+  const [sunHoursGrid, setSunHoursGrid] = useState<SunHoursCell[]>([]);
+  const [sunAnalysisBusy, setSunAnalysisBusy] = useState(false);
+  const [enable3DShadows, setEnable3DShadows] = useState(true);
+  const [performanceMode, setPerformanceMode] = useState<PerformanceMode>('auto');
+  const [showFlowOverlay2D, setShowFlowOverlay2D] = useState(true);
+  const [showLowPoints2D, setShowLowPoints2D] = useState(true);
+  const [showRetentionOverlay2D, setShowRetentionOverlay2D] = useState(false);
+  const [waterAnalysisBusy, setWaterAnalysisBusy] = useState(false);
+  const [flowVectors, setFlowVectors] = useState<FlowVectorCell[]>([]);
+  const [lowPoints, setLowPoints] = useState<LowPointCell[]>([]);
+  const [retentionCells, setRetentionCells] = useState<RetentionCell[]>([]);
+  const [runoffAverageSlope, setRunoffAverageSlope] = useState(0);
+  const [runoffMaxSlope, setRunoffMaxSlope] = useState(0);
   const [showContours, setShowContours] = useState(true);
   const [showGrid3D, setShowGrid3D] = useState(true);
   const [cameraMode, setCameraMode] = useState<'orbit' | 'walk' | 'top'>('orbit');
@@ -1237,6 +1621,61 @@ export default function LandscapePlatform() {
   );
 
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
+
+  const dominantRunoffDirection = useMemo(() => {
+    if (!flowVectors.length) return '—';
+    const buckets = flowVectors.reduce((acc, vector) => {
+      const label = flowDirectionLabel(vector);
+      acc[label] = (acc[label] || 0) + 1;
+      return acc;
+    }, {} as Record<string,number>);
+    const entry = Object.entries(buckets).sort((a,b)=>b[1]-a[1])[0];
+    return entry?.[0] || '—';
+  }, [flowVectors]);
+
+  const retentionVolumeEstimate = useMemo(
+    () => retentionCells.reduce((sum,cell)=>sum + cell.width * cell.height * cell.depthPotential, 0),
+    [retentionCells]
+  );
+
+  const currentSolarPosition = useMemo(
+    () => approximateSolarPosition(sunAnalysisDate,sunAnalysisHour,sunLatitude),
+    [sunAnalysisDate,sunAnalysisHour,sunLatitude]
+  );
+
+  useEffect(() => {
+    if (!sunAutoPosition) return;
+    setSunAzimuth(currentSolarPosition.azimuth);
+    setSunElevation(Math.max(1,currentSolarPosition.elevation));
+  }, [sunAutoPosition,currentSolarPosition]);
+
+  const currentShadowPolygons = useMemo(() => {
+    if (!showShadowOverlay2D || sunElevation <= 1) return [];
+
+    return objects
+      .filter(isShadowBlocker)
+      .map(object=>({
+        id:object.id,
+        name:object.name,
+        polygon:shadowFootprintForObject(
+          object,
+          sunAzimuth,
+          sunElevation,
+          growthYear
+        )
+      }))
+      .filter(item=>item.polygon.length>=3);
+  }, [objects,sunAzimuth,sunElevation,growthYear,showShadowOverlay2D]);
+
+  const sunHoursSummary = useMemo(() => {
+    if (!sunHoursGrid.length) return {average:0,min:0,max:0};
+    const values=sunHoursGrid.map(cell=>cell.sunHours);
+    return {
+      average:values.reduce((sum,value)=>sum+value,0)/values.length,
+      min:Math.min(...values),
+      max:Math.max(...values)
+    };
+  }, [sunHoursGrid]);
 
   const projectPlants = useMemo(
     () => objects.filter(object=>['tree','shrub','hedge'].includes(object.type) && object.speciesId),
@@ -2187,6 +2626,134 @@ export default function LandscapePlatform() {
     setStatus(`${metrics.count} Stufen berechnet · Steigung ${metrics.riser.toFixed(3)} m · Auftritt ${metrics.tread.toFixed(3)} m.`);
   }
 
+
+  function runWaterFlowAnalysis() {
+    if (waterAnalysisBusy) return;
+
+    setWaterAnalysisBusy(true);
+    setStatus('Abfluss- und Entwässerungsanalyse wird berechnet …');
+
+    window.setTimeout(() => {
+      try {
+        const resolvedMode: PerformanceMode =
+          performanceMode==='auto'
+            ? (objects.length>80?'fast':objects.length>35?'balanced':'quality')
+            : performanceMode;
+
+        const columns = resolvedMode==='quality' ? 22 : resolvedMode==='fast' ? 12 : 16;
+        const rows = resolvedMode==='quality' ? 14 : resolvedMode==='fast' ? 8 : 10;
+
+        const result = analyzeWaterFlowGrid(
+          terrainBlobs,
+          elevationPoints,
+          columns,
+          rows
+        );
+
+        setFlowVectors(result.flowVectors);
+        setLowPoints(result.lowPoints);
+        setRetentionCells(result.retentionCells);
+        setRunoffAverageSlope(result.avgSlope);
+        setRunoffMaxSlope(result.maxSlope);
+        setShowFlowOverlay2D(true);
+        setShowLowPoints2D(true);
+        setStatus(`Abflussanalyse fertig · ${result.flowVectors.length} Fließvektoren · ${result.lowPoints.length} Tiefpunkte.`);
+      } catch (error) {
+        setStatus(`Abflussanalyse fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        setWaterAnalysisBusy(false);
+      }
+    }, 30);
+  }
+
+  function clearWaterFlowAnalysis() {
+    setFlowVectors([]);
+    setLowPoints([]);
+    setRetentionCells([]);
+    setRunoffAverageSlope(0);
+    setRunoffMaxSlope(0);
+    setStatus('Abflussanalyse ausgeblendet.');
+  }
+
+  function runSunHoursAnalysis() {
+    if (sunAnalysisBusy) return;
+
+    setSunAnalysisBusy(true);
+    setStatus('Sonnenstunden werden berechnet …');
+
+    window.setTimeout(() => {
+      try {
+        const resolvedMode: PerformanceMode =
+          performanceMode==='auto'
+            ? (objects.length>80?'fast':objects.length>35?'balanced':'quality')
+            : performanceMode;
+
+        const columns = resolvedMode==='quality' ? 22 : resolvedMode==='fast' ? 10 : 16;
+        const rows = resolvedMode==='quality' ? 14 : resolvedMode==='fast' ? 7 : 10;
+        const bounds = {minX:-10,maxX:10,minY:-6.5,maxY:6.5};
+        const cellWidth=(bounds.maxX-bounds.minX)/columns;
+        const cellHeight=(bounds.maxY-bounds.minY)/rows;
+        const sampleHours=[8,9,10,11,12,13,14,15,16,17,18];
+        const blockers=objects.filter(isShadowBlocker);
+        const cells: SunHoursCell[]=[];
+
+        for(let row=0;row<rows;row++){
+          for(let col=0;col<columns;col++){
+            const x=bounds.minX+(col+0.5)*cellWidth;
+            const y=bounds.minY+(row+0.5)*cellHeight;
+            let sunny=0;
+            let validSamples=0;
+
+            for(const hour of sampleHours){
+              const solar=approximateSolarPosition(sunAnalysisDate,hour,sunLatitude);
+              if(solar.elevation<=1) continue;
+              validSamples++;
+
+              let shaded=false;
+              for(const blocker of blockers){
+                const polygon=shadowFootprintForObject(
+                  blocker,
+                  solar.azimuth,
+                  solar.elevation,
+                  growthYear
+                );
+                if(polygon.length>=3 && pointInPolygon({x,y},polygon)){
+                  shaded=true;
+                  break;
+                }
+              }
+
+              if(!shaded) sunny++;
+            }
+
+            cells.push({
+              x:bounds.minX+col*cellWidth,
+              y:bounds.minY+row*cellHeight,
+              width:cellWidth,
+              height:cellHeight,
+              sunHours:sunny,
+              sampleCount:validSamples
+            });
+          }
+        }
+
+        setSunHoursGrid(cells);
+        setShowSunHoursHeatmap(true);
+        setStatus(`Sonnenstundenanalyse fertig · ${cells.length} Rasterfelder.`);
+      } catch (error) {
+        setStatus(`Sonnenstundenanalyse fehlgeschlagen: ${error instanceof Error?error.message:String(error)}`);
+      } finally {
+        setSunAnalysisBusy(false);
+      }
+    },30);
+  }
+
+  function clearSunHoursAnalysis() {
+    setSunHoursGrid([]);
+    setShowSunHoursHeatmap(false);
+    setStatus('Sonnenstunden-Raster ausgeblendet.');
+  }
+
   function speciesForObject(obj: GardenObject) {
     return obj.speciesId ? PLANT_CATALOG.find(species=>species.id===obj.speciesId) || null : null;
   }
@@ -2920,7 +3487,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.25.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.27.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -2939,6 +3506,16 @@ export default function LandscapePlatform() {
   return (
     <section className="platform">
       <aside className="panel">
+        <div className="brandBlock">
+          <div className="brandLogo" aria-hidden="true">
+            <span className="brandLeaf"></span>
+            <span className="brandGrid"></span>
+          </div>
+          <div>
+            <strong>AL Green Design</strong>
+            <span>Landscape Architecture Studio</span>
+          </div>
+        </div>
         <h2>Module</h2>
         <div className="grid2">
           {([
@@ -3569,27 +4146,140 @@ export default function LandscapePlatform() {
               <button className={`tool ${tool==='drainage'?'active':''}`} onClick={()=>setTool('drainage')}>Drainage</button>
               <button className={`tool ${tool==='depression'?'active':''}`} onClick={()=>setTool('depression')}>Retentionsmulde</button>
             </div>
+
             <div className="kpis" style={{marginTop:10}}>
               <div className="kpi"><small>Wasserobjekte</small><strong>{objects.filter(o=>['pool','pond'].includes(o.type)).length}</strong></div>
               <div className="kpi"><small>Leitungen</small><strong>{objects.filter(o=>['irrigation','drainage'].includes(o.type)).length}</strong></div>
-              <div className="kpi"><small>Mulden</small><strong>{terrainBlobs.filter(b=>b.height<0).length}</strong></div>
-              <div className="kpi"><small>Rückhalt grob</small><strong>{Math.max(0,(stats.cut*0.65)).toFixed(1)} m³</strong></div>
+              <div className="kpi"><small>Tiefpunkte</small><strong>{lowPoints.length || terrainBlobs.filter(b=>b.height<0).length}</strong></div>
+              <div className="kpi"><small>Rückhalt grob</small><strong>{(retentionCells.length ? retentionVolumeEstimate : Math.max(0,(stats.cut*0.65))).toFixed(1)} m³</strong></div>
+            </div>
+
+            <div className="waterAnalysisPanel">
+              <h3>Abfluss- und Gefälleanalyse</h3>
+              <div className="grid2">
+                <button className="btn primary" disabled={waterAnalysisBusy} onClick={runWaterFlowAnalysis}>
+                  {waterAnalysisBusy ? 'Analyse läuft …' : 'Fließanalyse berechnen'}
+                </button>
+                <button className="btn" disabled={!flowVectors.length && !lowPoints.length} onClick={clearWaterFlowAnalysis}>
+                  Analyse ausblenden
+                </button>
+              </div>
+
+              <div className="waterKpis">
+                <div className="item"><strong>Ø Gefälle</strong><span>{runoffAverageSlope ? runoffAverageSlope.toFixed(2) : '—'} %</span></div>
+                <div className="item"><strong>Max. Gefälle</strong><span>{runoffMaxSlope ? runoffMaxSlope.toFixed(2) : '—'} %</span></div>
+                <div className="item"><strong>Hauptrichtung</strong><span>{dominantRunoffDirection}</span></div>
+                <div className="item"><strong>Retentionspotenzial</strong><span>{retentionVolumeEstimate ? retentionVolumeEstimate.toFixed(1) : '—'} m³</span></div>
+              </div>
+
+              <label><input type="checkbox" checked={showFlowOverlay2D} onChange={e=>setShowFlowOverlay2D(e.target.checked)} /> Fließrichtungen im 2D-Plan anzeigen</label>
+              <label><input type="checkbox" checked={showLowPoints2D} onChange={e=>setShowLowPoints2D(e.target.checked)} /> Tiefpunkte im 2D-Plan anzeigen</label>
+              <label><input type="checkbox" checked={showRetentionOverlay2D} onChange={e=>setShowRetentionOverlay2D(e.target.checked)} /> Retentionszellen im 2D-Plan anzeigen</label>
+
+              <div className="hint">
+                Die Analyse sampelt das Gelände als Raster, sucht je Feld die stärkste Falllinie und markiert lokale Tiefpunkte als mögliche Sammel- oder Rückhaltebereiche.
+              </div>
             </div>
           </>
         )}
 
         {tab === 'climate' && (
           <>
-            <h2>Klima, Sonne und Simulation</h2>
+            <h2>Sonne, Schatten und Simulation</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Azimut</small><strong>{sunAzimuth.toFixed(0)}°</strong></div>
+              <div className="kpi"><small>Sonnenhöhe</small><strong>{sunElevation.toFixed(1)}°</strong></div>
+              <div className="kpi"><small>Ø Sonne</small><strong>{sunHoursGrid.length?sunHoursSummary.average.toFixed(1):'—'} h</strong></div>
+              <div className="kpi"><small>Performance</small><strong>{performanceMode}</strong></div>
+            </div>
+
             <div className="form">
-              <label>Jahreszeit<select value={season} onChange={e=>setSeason(e.target.value as any)}><option>Frühling</option><option>Sommer</option><option>Herbst</option><option>Winter</option></select></label>
-              <label>Sonnenrichtung °<input type="range" min="0" max="360" value={sunAzimuth} onChange={e=>setSunAzimuth(Number(e.target.value))}/><span>{sunAzimuth}°</span></label>
-              <label>Sonnenhöhe °<input type="range" min="5" max="85" value={sunElevation} onChange={e=>setSunElevation(Number(e.target.value))}/><span>{sunElevation}°</span></label>
-              <label>Kamera<select value={cameraMode} onChange={e=>setCameraMode(e.target.value as any)}><option value="orbit">Orbit</option><option value="walk">Begehen</option><option value="top">Draufsicht</option></select></label>
+              <label>Jahreszeit
+                <select value={season} onChange={e=>setSeason(e.target.value as any)}>
+                  <option>Frühling</option>
+                  <option>Sommer</option>
+                  <option>Herbst</option>
+                  <option>Winter</option>
+                </select>
+              </label>
+
+              <label>
+                <input type="checkbox" checked={sunAutoPosition} onChange={e=>setSunAutoPosition(e.target.checked)}/>
+                Sonnenstand aus Datum, Uhrzeit und Breitengrad berechnen
+              </label>
+
+              <div className="grid3">
+                <label>Datum
+                  <input type="date" value={sunAnalysisDate} onChange={e=>setSunAnalysisDate(e.target.value)}/>
+                </label>
+                <label>Uhrzeit
+                  <input type="number" min="0" max="23.75" step="0.25" value={sunAnalysisHour} onChange={e=>setSunAnalysisHour(Number(e.target.value))}/>
+                </label>
+                <label>Breitengrad
+                  <input type="number" min="-66" max="66" step="0.1" value={sunLatitude} onChange={e=>setSunLatitude(Number(e.target.value))}/>
+                </label>
+              </div>
+
+              {!sunAutoPosition && (
+                <>
+                  <label>Sonnenrichtung °
+                    <input type="range" min="0" max="360" value={sunAzimuth} onChange={e=>setSunAzimuth(Number(e.target.value))}/>
+                    <span>{sunAzimuth}°</span>
+                  </label>
+                  <label>Sonnenhöhe °
+                    <input type="range" min="1" max="85" value={sunElevation} onChange={e=>setSunElevation(Number(e.target.value))}/>
+                    <span>{sunElevation}°</span>
+                  </label>
+                </>
+              )}
+
+              <label>Performance-Modus
+                <select value={performanceMode} onChange={e=>setPerformanceMode(e.target.value as PerformanceMode)}>
+                  <option value="auto">Auto</option>
+                  <option value="quality">Qualität</option>
+                  <option value="balanced">Ausgewogen</option>
+                  <option value="fast">Schnell</option>
+                </select>
+              </label>
+
+              <label>Kamera
+                <select value={cameraMode} onChange={e=>setCameraMode(e.target.value as any)}>
+                  <option value="orbit">Orbit</option>
+                  <option value="walk">Begehen</option>
+                  <option value="top">Draufsicht</option>
+                </select>
+              </label>
+
+              <label><input type="checkbox" checked={showShadowOverlay2D} onChange={e=>setShowShadowOverlay2D(e.target.checked)}/> Aktuellen Schatten im 2D-Plan anzeigen</label>
+              <label><input type="checkbox" checked={enable3DShadows} onChange={e=>setEnable3DShadows(e.target.checked)}/> Echte 3D-Schatten aktivieren</label>
               <label><input type="checkbox" checked={nightMode} onChange={e=>setNightMode(e.target.checked)}/> Nachtmodus</label>
-              <label><input type="checkbox" checked={showContours} onChange={e=>setShowContours(e.target.checked)}/> Höhenlinien</label>
+              <label><input type="checkbox" checked={showContours} onChange={e=>setShowContours(e.target.checked)}/> 3D-Höhenlinien</label>
               <label><input type="checkbox" checked={showGrid3D} onChange={e=>setShowGrid3D(e.target.checked)}/> 3D-Raster</label>
             </div>
+
+            <div className="grid2">
+              <button className="btn primary" disabled={sunAnalysisBusy} onClick={runSunHoursAnalysis}>
+                {sunAnalysisBusy?'Analyse läuft …':'Sonnenstunden berechnen'}
+              </button>
+              <button className="btn" disabled={!sunHoursGrid.length} onClick={clearSunHoursAnalysis}>
+                Analyse ausblenden
+              </button>
+            </div>
+
+            {sunHoursGrid.length>0 && (
+              <div className="sunHoursSummary">
+                <div className="item"><strong>Minimum</strong><span>{sunHoursSummary.min.toFixed(1)} h</span></div>
+                <div className="item"><strong>Durchschnitt</strong><span>{sunHoursSummary.average.toFixed(1)} h</span></div>
+                <div className="item"><strong>Maximum</strong><span>{sunHoursSummary.max.toFixed(1)} h</span></div>
+              </div>
+            )}
+
+            <div className="hint" style={{marginTop:10}}>
+              Die Sonnenstundenanalyse tastet den Plan zwischen 08:00 und 18:00 Uhr stündlich ab. Gebäude, Mauern, Pergolen und Pflanzen werden als Schattengeber berücksichtigt.
+            </div>
+
+            <h2 style={{marginTop:14}}>Pflanzenentwicklung</h2>
             <div className="grid2">
               {[0,1,3,5,10,15,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y)}>{y===0?'heute':y+' Jahre'}</button>)}
             </div>
@@ -3686,7 +4376,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.25 PLANT GROWTH TIMELINE</span>
+          <span className="pill brandPill">V0.27 WATER + FLOW + BRAND</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -3695,6 +4385,7 @@ export default function LandscapePlatform() {
           <label className="compactControl">Geschoss <select value={activeLevel} onChange={e=>setActiveLevel(Number(e.target.value))}>{[...levels].sort((a,b)=>a.elevation-b.elevation).map(level=><option key={level.id} value={level.id}>{level.name}</option>)}</select></label>
           <span className="pill">Auswahl {selectedObjectIds.length}</span>
           <button className={`pill ${autosaveEnabled?'active':''}`} onClick={()=>setAutosaveEnabled(v=>!v)}>Autosave {autosaveEnabled?'AN':'AUS'}</button>
+          <label className="compactControl">Leistung <select value={performanceMode} onChange={e=>setPerformanceMode(e.target.value as PerformanceMode)}><option value="auto">Auto</option><option value="quality">Qualität</option><option value="balanced">Ausgewogen</option><option value="fast">Schnell</option></select></label>
           <span className="pill">Speicher {autosaveState==='saving'?'…':autosaveState==='saved'?'✓':autosaveState==='error'?'!':'bereit'}</span>
           <button className="pill" disabled={selectedObjectIds.length<2} onClick={groupSelected}>Gruppieren</button>
           <button className="pill" disabled={!selectedObjectIds.length} onClick={duplicateSelected}>Duplizieren</button>
@@ -3725,6 +4416,95 @@ export default function LandscapePlatform() {
                 ))}
               </defs>
               <Grid />
+              {tab==='climate' && showSunHoursHeatmap && sunHoursGrid.map((cell,index)=>{
+                const ratio=cell.sampleCount?cell.sunHours/cell.sampleCount:0;
+                const hue=Math.round(ratio*120);
+                return (
+                  <rect
+                    key={`sun-cell-${index}`}
+                    x={cell.x*SCALE}
+                    y={cell.y*SCALE}
+                    width={cell.width*SCALE}
+                    height={cell.height*SCALE}
+                    fill={`hsl(${hue} 72% 48%)`}
+                    fillOpacity="0.24"
+                    stroke="none"
+                    pointerEvents="none"
+                  />
+                );
+              })}
+
+              {tab==='climate' && showShadowOverlay2D && currentShadowPolygons.map(item=>(
+                <polygon
+                  key={`shadow-${item.id}`}
+                  points={item.polygon.map(point=>`${point.x*SCALE},${point.y*SCALE}`).join(' ')}
+                  fill="#334155"
+                  fillOpacity="0.22"
+                  stroke="#475569"
+                  strokeOpacity="0.26"
+                  strokeWidth="1"
+                  pointerEvents="none"
+                />
+              ))}
+
+              {tab==='water' && showRetentionOverlay2D && retentionCells.map((cell,index)=>(
+                <rect
+                  key={`retention-${index}`}
+                  x={cell.x*SCALE}
+                  y={cell.y*SCALE}
+                  width={cell.width*SCALE}
+                  height={cell.height*SCALE}
+                  fill="#7f1d1d"
+                  fillOpacity="0.14"
+                  stroke="#9f1239"
+                  strokeDasharray="4 4"
+                  strokeWidth="1"
+                  pointerEvents="none"
+                />
+              ))}
+
+              {tab==='water' && showFlowOverlay2D && flowVectors.map((vector,index)=>(
+                <g key={`flow-${index}`} pointerEvents="none">
+                  <line
+                    x1={vector.x*SCALE}
+                    y1={vector.y*SCALE}
+                    x2={vector.toX*SCALE}
+                    y2={vector.toY*SCALE}
+                    stroke="#9f1239"
+                    strokeWidth="2"
+                    strokeOpacity="0.7"
+                  />
+                  <circle cx={vector.toX*SCALE} cy={vector.toY*SCALE} r="2.5" fill="#be123c" />
+                </g>
+              ))}
+
+              {tab==='water' && showLowPoints2D && lowPoints.map((point,index)=>(
+                <g key={`low-${index}`} pointerEvents="none">
+                  <circle cx={point.x*SCALE} cy={point.y*SCALE} r="8" fill="#fef2f2" stroke="#881337" strokeWidth="2"/>
+                  <text x={point.x*SCALE+10} y={point.y*SCALE-10} fontSize="11" fill="#7f1d1d" paintOrder="stroke" stroke="#fff" strokeWidth="4">
+                    Tiefpunkt {point.z.toFixed(2)} m
+                  </text>
+                </g>
+              ))}
+
+              {tab==='climate' && (
+                <g pointerEvents="none">
+                  <line
+                    x1={-9*SCALE}
+                    y1={-5.7*SCALE}
+                    x2={(-9+Math.sin(degToRad(sunAzimuth))*1.4)*SCALE}
+                    y2={(-5.7-Math.cos(degToRad(sunAzimuth))*1.4)*SCALE}
+                    stroke="#f59e0b"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                  />
+                  <circle cx={-9*SCALE} cy={-5.7*SCALE} r="8" fill="#fbbf24" stroke="#fff" strokeWidth="2"/>
+                  <text x={-8.7*SCALE} y={-5.85*SCALE} fontSize="11" fill="#92400e" paintOrder="stroke" stroke="#fff" strokeWidth="4">
+                    Sonne {sunElevation.toFixed(0)}°
+                  </text>
+                </g>
+              )}
+
               {tab==='hardscape' && hardscapeDraftPoints.length>0 && (
                 <g pointerEvents="none">
                   <path
@@ -3863,7 +4643,7 @@ export default function LandscapePlatform() {
               {selectedObject && selectedObjectIds.length===1 && <ObjectTransformHandles obj={selectedObject} onScaleStart={startScaleObject} onRotateStart={startRotateObject}/>}
             </svg>
           ) : view === '3d' ? (
-            <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+            <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} enableShadows={enable3DShadows} performanceMode={performanceMode} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
               setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -3884,7 +4664,7 @@ export default function LandscapePlatform() {
                 <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={visibleObjectsForPlan} rooms={visibleRoomsForPlan} selectedRoomId={selectedRoomId} selectedId={selectedId} selectedKind={selectedKind} />
               </div>
               <div className="splitPane">
-                <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+                <Terrain3D terrainBlobs={terrainBlobs} elevationPoints={elevationPoints} zones={zones} objects={objects} levels={levels} rooms={rooms} importedModels={importedModels} selectedImportedModelId={selectedImportedModelId} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} enableShadows={enable3DShadows} performanceMode={performanceMode} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
                   setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
                 }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
@@ -4367,6 +5147,8 @@ function Terrain3D({
   sunElevation,
   showContours,
   showGrid3D,
+  enableShadows,
+  performanceMode,
   cameraMode,
   onObjectMove,
   onObjectSelect,
@@ -4390,6 +5172,8 @@ function Terrain3D({
   sunElevation: number;
   showContours: boolean;
   showGrid3D: boolean;
+  enableShadows: boolean;
+  performanceMode: PerformanceMode;
   cameraMode: 'orbit' | 'walk' | 'top';
   onObjectMove: (id: number, x: number, y: number) => void;
   onObjectSelect: (id: number) => void;
@@ -4397,6 +5181,17 @@ function Terrain3D({
   onStatus: (msg: string) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const onObjectMoveRef = useRef(onObjectMove);
+  const onObjectSelectRef = useRef(onObjectSelect);
+  const onImportedModelSelectRef = useRef(onImportedModelSelect);
+  const onStatusRef = useRef(onStatus);
+
+  useEffect(() => {
+    onObjectMoveRef.current = onObjectMove;
+    onObjectSelectRef.current = onObjectSelect;
+    onImportedModelSelectRef.current = onImportedModelSelect;
+    onStatusRef.current = onStatus;
+  }, [onObjectMove,onObjectSelect,onImportedModelSelect,onStatus]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -4405,13 +5200,32 @@ function Terrain3D({
     scene.background = new THREE.Color(nightMode ? 0x0f172a : season==='Winter' ? 0xe2e8f0 : 0xeaf2fb);
     const camera = new THREE.PerspectiveCamera(55, mount.clientWidth / mount.clientHeight, 0.1, 1000);
     camera.position.set(cameraMode==='top'?0:cameraMode==='walk'?7:16, cameraMode==='top'?24:cameraMode==='walk'?2.2:13, cameraMode==='top'?0.1:cameraMode==='walk'?9:18);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const resolvedPerformance: Exclude<PerformanceMode,'auto'> =
+      performanceMode==='auto'
+        ? (objects.length>90?'fast':objects.length>40?'balanced':'quality')
+        : performanceMode;
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: resolvedPerformance!=='fast',
+      powerPreference: 'high-performance'
+    });
+
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(
+      Math.min(
+        window.devicePixelRatio,
+        resolvedPerformance==='quality' ? 1.75 :
+        resolvedPerformance==='balanced' ? 1.35 :
+        1
+      )
+    );
+
+    renderer.shadowMap.enabled = enableShadows && resolvedPerformance!=='fast';
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    controls.enableDamping = resolvedPerformance!=='fast';
     controls.target.set(0, 0, 0);
 
     scene.add(new THREE.AmbientLight(nightMode ? 0x9db4ff : 0xffffff, nightMode ? 0.38 : 0.82));
@@ -4419,10 +5233,25 @@ function Terrain3D({
     const az = degToRad(sunAzimuth);
     const el = degToRad(sunElevation);
     sun.position.set(Math.cos(az)*Math.cos(el)*30, Math.sin(el)*30, Math.sin(az)*Math.cos(el)*30);
+    sun.castShadow = renderer.shadowMap.enabled;
+    if (sun.castShadow) {
+      const shadowSize = resolvedPerformance==='quality' ? 2048 : 1024;
+      sun.shadow.mapSize.set(shadowSize,shadowSize);
+      sun.shadow.camera.left = -22;
+      sun.shadow.camera.right = 22;
+      sun.shadow.camera.top = 18;
+      sun.shadow.camera.bottom = -18;
+      sun.shadow.camera.near = 0.5;
+      sun.shadow.camera.far = 90;
+      sun.shadow.bias = -0.0008;
+    }
     scene.add(sun);
     if (showGrid3D) scene.add(new THREE.GridHelper(28, 28, 0x94a3b8, nightMode ? 0x334155 : 0xd7e0eb));
 
-    const terrainSizeX = 24, terrainSizeY = 16, segX = 140, segY = 100;
+    const terrainSizeX = 24;
+    const terrainSizeY = 16;
+    const segX = resolvedPerformance==='quality' ? 140 : resolvedPerformance==='balanced' ? 92 : 56;
+    const segY = resolvedPerformance==='quality' ? 100 : resolvedPerformance==='balanced' ? 66 : 40;
     const geometry = new THREE.PlaneGeometry(terrainSizeX, terrainSizeY, segX, segY);
     geometry.rotateX(-Math.PI / 2);
     const pos = geometry.attributes.position;
@@ -4439,11 +5268,12 @@ function Terrain3D({
     geometry.computeVertexNormals();
     const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: false });
     const terrainMesh = new THREE.Mesh(geometry, terrainMat);
+    terrainMesh.receiveShadow = renderer.shadowMap.enabled;
     scene.add(terrainMesh);
     if (showContours) scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(geometry), new THREE.LineBasicMaterial({ color: nightMode ? 0x94a3b8 : 0x64748b, transparent: true, opacity: 0.12 })));
 
     zones.forEach(zone => {
-      const h = terrainHeightAt(zone.x, zone.y, terrainBlobs);
+      const h = terrainSurfaceHeight(zone.x, zone.y, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(zone.width, zone.kind === 'hardscape' ? 0.12 : 0.05, zone.depth), new THREE.MeshStandardMaterial({ color: zone.color, transparent: true, opacity: zone.kind === 'hardscape' ? 0.92 : 0.55 }));
       mesh.position.set(zone.x, h + (zone.kind === 'hardscape' ? 0.08 : 0.03), zone.y);
       scene.add(mesh);
@@ -4520,6 +5350,15 @@ function Terrain3D({
     });
 
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    if (renderer.shadowMap.enabled) {
+      scene.traverse(node => {
+        if (node instanceof THREE.Mesh && node !== terrainMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+    }
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const objectGroups: { id: number; group: THREE.Group }[] = [];
@@ -4953,14 +5792,14 @@ function Terrain3D({
         const y = terrainSurfaceHeight(x, z, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
         item.group.position.set(x, y, z);
         pendingDrag = { id: draggedId, x, z };
-        onStatus(`3D Position X ${x.toFixed(2)} m · Z ${z.toFixed(2)} m`);
+        onStatusRef.current(`3D Position X ${x.toFixed(2)} m · Z ${z.toFixed(2)} m`);
       }
     };
 
     const handleUp = (event?: PointerEvent) => {
       if (pendingDrag) {
-        onObjectMove(pendingDrag.id, pendingDrag.x, pendingDrag.z);
-        onStatus(`3D-Verschiebung abgeschlossen: X ${pendingDrag.x.toFixed(2)} m · Z ${pendingDrag.z.toFixed(2)} m`);
+        onObjectMoveRef.current(pendingDrag.id, pendingDrag.x, pendingDrag.z);
+        onStatusRef.current(`3D-Verschiebung abgeschlossen: X ${pendingDrag.x.toFixed(2)} m · Z ${pendingDrag.z.toFixed(2)} m`);
       }
       if (event) {
         try { renderer.domElement.releasePointerCapture?.(event.pointerId); } catch {}
@@ -4975,7 +5814,21 @@ function Terrain3D({
     window.addEventListener('pointerup', handleUp);
 
     let frame = 0;
-    const animate = () => { controls.update(); renderer.render(scene, camera); frame = requestAnimationFrame(animate); };
+    let lastRenderAt = 0;
+    const targetFrameMs =
+      resolvedPerformance==='quality' ? 0 :
+      resolvedPerformance==='balanced' ? 24 :
+      40;
+
+    const animate = (time = 0) => {
+      frame = requestAnimationFrame(animate);
+      if (document.visibilityState === 'hidden') return;
+      if (targetFrameMs && time-lastRenderAt < targetFrameMs) return;
+      lastRenderAt = time;
+      controls.update();
+      renderer.render(scene,camera);
+    };
+
     animate();
     const resize = () => {
       renderer.setSize(mount.clientWidth, mount.clientHeight);
@@ -4993,7 +5846,7 @@ function Terrain3D({
       controls.dispose(); renderer.dispose(); geometry.dispose(); terrainMat.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [terrainBlobs, elevationPoints, zones, objects, levels, rooms, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onImportedModelSelect, onStatus]);
+  }, [terrainBlobs, elevationPoints, zones, objects, levels, rooms, importedModels, selectedImportedModelId, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, enableShadows, performanceMode, cameraMode]);
 
   return <div ref={mountRef} className="three" />;
 }
