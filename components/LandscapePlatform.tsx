@@ -6,10 +6,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
-type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
+type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
 type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 type SelectedKind = 'terrain' | 'zone' | 'object' | null;
-type Drag2D = { kind: SelectedKind; id: number } | null;
+type Drag2D = { kind: SelectedKind; id: number; pointerId: number; offsetX: number; offsetY: number } | null;
 type ChatEngine = 'local' | 'openai';
 
 type TerrainBlob = {
@@ -74,12 +74,19 @@ function download(name: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function worldFromClient(svg: SVGSVGElement | null, clientX: number, clientY: number) {
+  if (!svg) return { x: 0, y: 0 };
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: 0, y: 0 };
+  const point = svg.createSVGPoint();
+  point.x = clientX;
+  point.y = clientY;
+  const local = point.matrixTransform(ctm.inverse());
+  return { x: local.x / SCALE, y: local.y / SCALE };
+}
+
 function worldFromEvent(svg: SVGSVGElement | null, e: React.MouseEvent<SVGSVGElement>) {
-  const rect = svg?.getBoundingClientRect();
-  if (!rect) return { x: 0, y: 0 };
-  const x = VIEWBOX.x + ((e.clientX - rect.left) / rect.width) * VIEWBOX.width;
-  const y = VIEWBOX.y + ((e.clientY - rect.top) / rect.height) * VIEWBOX.height;
-  return { x: Math.round(x * 2) / 2, y: Math.round(y * 2) / 2 };
+  return worldFromClient(svg, e.clientX, e.clientY);
 }
 
 function terrainHeightAt(x: number, y: number, blobs: TerrainBlob[]) {
@@ -111,13 +118,16 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.18 ARCHITECTURE + LIDAR – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.19 VIDEO TO 3D + PRECISION – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
   const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb OPENAI_API_KEY in Vercel setzen.');
   const [openAiLastAnswer, setOpenAiLastAnswer] = useState('');
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
+  const [imageApplied, setImageApplied] = useState(false);
+  const [imageOpacity, setImageOpacity] = useState(0.32);
+  const [imageFit, setImageFit] = useState<'stretch' | 'contain'>('contain');
   const [projectInfo, setProjectInfo] = useState({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [gridSize, setGridSize] = useState(0.5);
@@ -220,10 +230,32 @@ export default function LandscapePlatform() {
     setStatus('Wiederherstellen ausgeführt.');
   }
 
-  function snapValue(value: number) {
-    if (!snapEnabled) return value;
-    return Math.round(value / gridSize) * gridSize;
+  function snapValue(value: number, bypass = false) {
+    if (!snapEnabled || bypass) return Number(value.toFixed(4));
+    return Number((Math.round(value / gridSize) * gridSize).toFixed(4));
   }
+
+  function nudgeSelected(dx: number, dy: number) {
+    if (selectedKind === 'object' && selectedId !== null) setObjects(v => v.map(o => o.id === selectedId ? { ...o, x: snapValue(o.x + dx, true), y: snapValue(o.y + dy, true) } : o));
+    if (selectedKind === 'zone' && selectedId !== null) setZones(v => v.map(z => z.id === selectedId ? { ...z, x: snapValue(z.x + dx, true), y: snapValue(z.y + dy, true) } : z));
+    if (selectedKind === 'terrain' && selectedId !== null) setTerrainBlobs(v => v.map(b => b.id === selectedId ? { ...b, x: snapValue(b.x + dx, true), y: snapValue(b.y + dy, true) } : b));
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
+      event.preventDefault();
+      const step = event.shiftKey ? 0.01 : event.altKey ? 0.05 : 0.1;
+      if (event.key === 'ArrowLeft') nudgeSelected(-step, 0);
+      if (event.key === 'ArrowRight') nudgeSelected(step, 0);
+      if (event.key === 'ArrowUp') nudgeSelected(0, -step);
+      if (event.key === 'ArrowDown') nudgeSelected(0, step);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedId, selectedKind, gridSize, snapEnabled]);
 
   function objectLayer(obj: GardenObject) {
     if (['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(obj.type)) return 'buildings';
@@ -236,12 +268,12 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v018-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v019-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v018-project');
+    const raw = localStorage.getItem('al-green-v019-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
@@ -345,25 +377,33 @@ export default function LandscapePlatform() {
     addObject(tool as GardenObjectType, p.x, p.y);
   }
 
-  function handleSvgMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (!drag2D) return;
-    const p = worldFromEvent(svgRef.current, e);
-
-    if (drag2D.kind === 'object') {
-      setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x: snapValue(p.x), y: snapValue(p.y) } : o));
-    }
-
-    if (drag2D.kind === 'terrain') {
-      setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x: snapValue(p.x), y: snapValue(p.y) } : b));
-    }
-
-    if (drag2D.kind === 'zone') {
-      setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x: snapValue(p.x), y: snapValue(p.y) } : z));
-    }
+  function start2DDrag(e: React.PointerEvent<SVGGElement>, kind: Exclude<SelectedKind, null>, id: number, currentX: number, currentY: number, label: string) {
+    if (tool !== 'select') return;
+    e.stopPropagation();
+    const p = worldFromClient(svgRef.current, e.clientX, e.clientY);
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    setDrag2D({ kind, id, pointerId: e.pointerId, offsetX: currentX - p.x, offsetY: currentY - p.y });
+    setSelection(kind, id, `${label} wird präzise verschoben.`);
   }
 
-  function handleSvgUp() {
-    if (drag2D) setStatus('2D-Verschiebung abgeschlossen.');
+  function handleSvgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!drag2D || drag2D.pointerId !== e.pointerId) return;
+    const p = worldFromClient(svgRef.current, e.clientX, e.clientY);
+    const targetX = clamp(p.x + drag2D.offsetX, VIEWBOX.x, VIEWBOX.x + VIEWBOX.width);
+    const targetY = clamp(p.y + drag2D.offsetY, VIEWBOX.y, VIEWBOX.y + VIEWBOX.height);
+    const x = snapValue(targetX, e.altKey);
+    const y = snapValue(targetY, e.altKey);
+    if (drag2D.kind === 'object') setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x, y } : o));
+    if (drag2D.kind === 'terrain') setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x, y } : b));
+    if (drag2D.kind === 'zone') setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x, y } : z));
+    setStatus(`Position X ${x.toFixed(2)} m · Y ${y.toFixed(2)} m${e.altKey ? ' · Fang aus' : ''}`);
+  }
+
+  function handleSvgPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
+    if (drag2D) setStatus('2D-Verschiebung abgeschlossen. Pfeiltasten: 10 cm · Alt: 5 cm · Shift: 1 cm.');
+    if (e && drag2D?.pointerId === e.pointerId) {
+      try { svgRef.current?.releasePointerCapture?.(e.pointerId); } catch {}
+    }
     setDrag2D(null);
   }
 
@@ -375,11 +415,24 @@ export default function LandscapePlatform() {
       const img = new Image();
       img.onload = () => {
         setImage({ name: file.name, dataUrl, width: img.width, height: img.height });
-        setStatus('Bild hochgeladen. Jetzt KI-Bildanalyse starten.');
+        setImageApplied(false);
+        setStatus('Bild hochgeladen. Wähle jetzt: als Planhintergrund anwenden oder Bildanalyse anwenden.');
       };
       img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+  }
+
+  function applyImageAsPlanBackground() {
+    if (!image) { setStatus('Bitte zuerst ein Bild hochladen.'); return; }
+    setImageApplied(true);
+    setView('2d');
+    setStatus('Bild wurde als 2D-Planhintergrund angewendet.');
+  }
+
+  function removeAppliedImage() {
+    setImageApplied(false);
+    setStatus('Bildhintergrund ausgeblendet. Das Bild bleibt für Analysen verfügbar.');
   }
 
   function analyzeImageToSoftTerrain() {
@@ -416,9 +469,12 @@ export default function LandscapePlatform() {
           else if (brightness > 160 && Math.abs(r - g) < 35 && Math.abs(r - b) < 45) newZones.push({ id:id++, kind:'hardscape', name:'KI Belagszone', x:worldX, y:worldY, width:2.2, depth:1.6, color:'#d8c8a8' });
         }
       }
+      snapshot();
       setTerrainBlobs(blobs.length ? blobs : terrainBlobs);
       if (newZones.length) setZones(newZones.slice(0, 18));
-      setSelection('terrain', blobs[0]?.id ?? null, `KI-Bildanalyse fertig: ${blobs.length} Terrain-Formen und ${newZones.length} Zonen erzeugt.`);
+      setImageApplied(true);
+      setView('2d');
+      setSelection('terrain', blobs[0]?.id ?? null, `Bildanalyse angewendet: ${blobs.length} Terrain-Formen und ${newZones.length} Zonen erzeugt.`);
     };
     img.src = image.dataUrl;
   }
@@ -595,12 +651,12 @@ export default function LandscapePlatform() {
       ...terrainBlobs.map(b=>['Gelände',b.name,b.height>=0?'Erhebung':'Senke',b.x,b.y,b.radius*2,b.radius*2,b.height,'Erde',48])
     ];
     const csv = rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n');
-    download('al-green-design-v018-bericht.csv', csv, 'text/csv;charset=utf-8');
+    download('al-green-design-v019-bericht.csv', csv, 'text/csv;charset=utf-8');
     setStatus('CSV-Bericht exportiert.');
   }
 
   function exportProject() {
-    download('al-green-design-v018-pro-studio.algreen', JSON.stringify({ version:'0.17.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -622,7 +678,7 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
+            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['video3d','Video → 3D'],['terrain','Terrain'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
@@ -691,13 +747,32 @@ export default function LandscapePlatform() {
           </>
         )}
 
+
         {tab === 'image' && (
           <>
-            <h2>Bild-Upload und KI-Bildanalyse</h2>
+            <h2>Bild anwenden und analysieren</h2>
             <label className="file">Bild hochladen<input type="file" accept="image/*" onChange={e=>uploadImage(e.target.files?.[0] ?? null)} /></label>
-            <button className="btn primary" style={{marginTop:8}} onClick={analyzeImageToSoftTerrain}>KI-Bildanalyse → weiches Terrain erzeugen</button>
-            <div className="hint" style={{marginTop:8}}>Die Analyse erzeugt weiche Erhöhungen und Senken sowie grobe Pflanz- und Belagszonen.</div>
+            <div className="grid2" style={{marginTop:8}}>
+              <button className="btn primary" disabled={!image} onClick={applyImageAsPlanBackground}>Als Planhintergrund anwenden</button>
+              <button className="btn blue" disabled={!image} onClick={analyzeImageToSoftTerrain}>Bildanalyse anwenden</button>
+              <button className="btn" disabled={!imageApplied} onClick={removeAppliedImage}>Hintergrund ausblenden</button>
+            </div>
+            <label style={{marginTop:10}}>Bildtransparenz<input type="range" min="0.05" max="1" step="0.05" value={imageOpacity} onChange={e=>setImageOpacity(Number(e.target.value))}/><span>{Math.round(imageOpacity*100)}%</span></label>
+            <label>Einpassung<select value={imageFit} onChange={e=>setImageFit(e.target.value as 'stretch'|'contain')}><option value="contain">Seitenverhältnis behalten</option><option value="stretch">Planfläche füllen</option></select></label>
             <div className="preview">{image ? <img src={image.dataUrl} alt="Upload" /> : <span className="small">Noch kein Bild geladen</span>}</div>
+            <div className="hint" style={{marginTop:8}}>Planhintergrund anwenden zeigt das Foto tatsächlich im 2D-Plan. Bildanalyse anwenden erzeugt zusätzlich Terrainformen und Zonen.</div>
+          </>
+        )}
+
+        {tab === 'video3d' && (
+          <>
+            <h2>VIDEO → 3D</h2>
+            <div className="list">
+              <div className="item"><strong>Video laden</strong><span>Frames direkt im Browser extrahieren.</span></div>
+              <div className="item"><strong>Schnelle 3D-Vorschau</strong><span>Tiefenrelief aus einem Videoframe.</span></div>
+              <div className="item"><strong>Präzisions-Pipeline</strong><span>Mehrbild-Rekonstruktion für einen separaten 3D-Worker vorbereitet.</span></div>
+            </div>
+            <a className="btn primary" style={{display:'block',marginTop:10,textAlign:'center',textDecoration:'none'}} href="/video-to-3d">VIDEO → 3D Studio öffnen</a>
           </>
         )}
 
@@ -875,10 +950,12 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.18 ARCHITECTURE + LIDAR</span>
+          <span className="pill">V0.19 VIDEO TO 3D + PRECISION</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
+          <label className="compactControl">Raster <select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value={0.01}>1 cm</option><option value={0.05}>5 cm</option><option value={0.1}>10 cm</option><option value={0.25}>25 cm</option><option value={0.5}>50 cm</option><option value={1}>1 m</option></select></label>
+          <button className={`pill ${snapEnabled?'active':''}`} onClick={()=>setSnapEnabled(v=>!v)}>Fang {snapEnabled?'AN':'AUS'}</button>
           <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D</button>
           <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D</button>
           <button className={`pill ${view==='splitVertical'?'active':''}`} onClick={()=>setView('splitVertical')}>Split ↔</button>
@@ -891,9 +968,9 @@ export default function LandscapePlatform() {
               className="canvas"
               viewBox={`${VIEWBOX.x * SCALE} ${VIEWBOX.y * SCALE} ${VIEWBOX.width * SCALE} ${VIEWBOX.height * SCALE}`}
               onClick={handleCanvasClick}
-              onMouseMove={handleSvgMove}
-              onMouseUp={handleSvgUp}
-              onMouseLeave={handleSvgUp}
+              onPointerMove={handleSvgPointerMove}
+              onPointerUp={handleSvgPointerUp}
+              onPointerCancel={handleSvgPointerUp}
             >
               <defs>
                 {layers.terrain && terrainBlobs.map(blob => (
@@ -905,17 +982,17 @@ export default function LandscapePlatform() {
                 ))}
               </defs>
               <Grid />
-              {image && <image href={image.dataUrl} x={-10 * SCALE} y={-6.5 * SCALE} width={20 * SCALE} height={13 * SCALE} opacity="0.22" preserveAspectRatio="none" />}
+              {image && imageApplied && <image href={image.dataUrl} x={-10 * SCALE} y={-6.5 * SCALE} width={20 * SCALE} height={13 * SCALE} opacity={imageOpacity} preserveAspectRatio={imageFit==='contain'?'xMidYMid meet':'none'} pointerEvents="none" />}
 
               {layers.zones && zones.map(zone => (
-                <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'zone', id:zone.id}); setSelection('zone', zone.id, `${zone.name} wird in 2D verschoben.`); }}}>
+                <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}} onPointerDown={(e)=>start2DDrag(e,'zone',zone.id,zone.x,zone.y,zone.name)}>
                   <rect x={(zone.x - zone.width/2) * SCALE} y={(zone.y - zone.depth/2) * SCALE} width={zone.width * SCALE} height={zone.depth * SCALE} fill={zone.color} fillOpacity="0.42" stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':'#334155'} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : 1.5} rx="6" />
                   <text x={zone.x * SCALE} y={zone.y * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{zone.name}</text>
                 </g>
               ))}
 
               {terrainBlobs.map(blob => (
-                <g key={blob.id} onClick={(e)=>{e.stopPropagation(); setSelection('terrain', blob.id, `${blob.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'terrain', id:blob.id}); setSelection('terrain', blob.id, `${blob.name} wird in 2D verschoben.`); }}}>
+                <g key={blob.id} onClick={(e)=>{e.stopPropagation(); setSelection('terrain', blob.id, `${blob.name} ausgewählt.`);}} onPointerDown={(e)=>start2DDrag(e,'terrain',blob.id,blob.x,blob.y,blob.name)}>
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={blob.radius * SCALE * blob.softness} fill={`url(#g-${blob.id})`} />
                   {showContours && [0.35,0.55,0.75,0.95].map(level=><circle key={level} cx={blob.x*SCALE} cy={blob.y*SCALE} r={blob.radius*SCALE*blob.softness*level} fill="none" stroke={blob.height>=0?'#4d7c0f':'#2563eb'} strokeOpacity="0.32" strokeWidth="1"/>) }
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={Math.max(6, blob.radius * SCALE * 0.25)} fill={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stroke={selectedKind==='terrain' && selectedId===blob.id ? '#f59e0b' : '#ffffff'} strokeWidth={selectedKind==='terrain' && selectedId===blob.id ? 3 : 1.5} />
@@ -928,7 +1005,7 @@ export default function LandscapePlatform() {
                   obj={obj}
                   selected={selectedKind==='object' && selectedId===obj.id}
                   onClick={(e)=>{e.stopPropagation(); setSelection('object', obj.id, `${obj.name} ausgewählt.`);}}
-                  onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'object', id:obj.id}); setSelection('object', obj.id, `${obj.name} wird in 2D verschoben.`); }}}
+                  onPointerDown={(e)=>start2DDrag(e,'object',obj.id,obj.x,obj.y,obj.name)}
                 />
               ))}
             </svg>
@@ -1026,7 +1103,7 @@ function Grid() {
   return <g>{lines}</g>;
 }
 
-function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenObject; selected: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onMouseDown: (e: React.MouseEvent<SVGGElement>) => void }) {
+function GardenObject2D({ obj, selected, onClick, onPointerDown }: { obj: GardenObject; selected: boolean; onClick: (e: React.MouseEvent<SVGGElement>) => void; onPointerDown: (e: React.PointerEvent<SVGGElement>) => void }) {
   const stroke = selected ? '#f59e0b' : '#1f2937';
   const sw = selected ? 3 : 1.5;
   const tx = obj.x * SCALE;
@@ -1034,7 +1111,7 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
   const rot = obj.rotation;
   if (['window','door','slidingDoor'].includes(obj.type)) {
     return (
-      <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         <rect x={(-obj.width/2)*SCALE} y={(-Math.max(obj.depth,0.08)/2)*SCALE} width={obj.width*SCALE} height={Math.max(obj.depth,0.08)*SCALE} fill={obj.type==='door'?'#92400e':'#7dd3fc'} fillOpacity={obj.type==='door'?0.85:0.55} stroke={stroke} strokeWidth={sw}/>
         {obj.type==='door' && <path d={`M ${-obj.width/2*SCALE} 0 A ${obj.width*SCALE} ${obj.width*SCALE} 0 0 1 ${obj.width/2*SCALE} ${-obj.width*SCALE}`} fill="none" stroke="#92400e" strokeWidth="1.5"/>}
         <text x="0" y={-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
@@ -1043,7 +1120,7 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
   }
   if (obj.type === 'roof') {
     return (
-      <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         <rect x={(-obj.width/2)*SCALE} y={(-obj.depth/2)*SCALE} width={obj.width*SCALE} height={obj.depth*SCALE} fill={obj.color} fillOpacity="0.18" stroke={stroke} strokeDasharray="8 5" strokeWidth={sw}/>
         <line x1={0} y1={(-obj.depth/2)*SCALE} x2={0} y2={(obj.depth/2)*SCALE} stroke="#7c2d12" strokeWidth="2"/>
         <text x="0" y="0" fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
@@ -1052,14 +1129,14 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
   }
   if (['tree','shrub','rock','firepit','light'].includes(obj.type)) {
     return (
-      <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         <circle cx="0" cy="0" r={(obj.width / 2) * SCALE} fill={obj.color} fillOpacity="0.85" stroke={stroke} strokeWidth={sw} />
         <text x="0" y={(obj.width / 2 + 0.3) * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
       </g>
     );
   }
   return (
-    <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+    <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
       <rect x={(-obj.width/2) * SCALE} y={(-obj.depth/2) * SCALE} width={obj.width * SCALE} height={obj.depth * SCALE} rx={obj.type === 'pool' ? 8 : 3} fill={obj.color} fillOpacity={obj.type === 'pool' ? 0.75 : 0.8} stroke={stroke} strokeWidth={sw} />
       <text x="0" y="0" fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
     </g>
@@ -1201,6 +1278,9 @@ function Terrain3D({
     const pointer = new THREE.Vector2();
     const objectGroups: { id: number; group: THREE.Group }[] = [];
     let draggedId: number | null = null;
+    let dragOffsetX = 0;
+    let dragOffsetZ = 0;
+    let pendingDrag: { id: number; x: number; z: number } | null = null;
 
     const addEdge = (mesh: THREE.Mesh, color = 0x334155) => {
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color }));
@@ -1418,7 +1498,17 @@ function Terrain3D({
           draggedId = g.userData.objectId as number;
           onObjectSelect(draggedId);
           controls.enabled = false;
-          onStatus('3D-Verschiebung aktiv. Objekt über das Gelände ziehen.');
+          renderer.domElement.setPointerCapture?.(event.pointerId);
+          const planeHit = new THREE.Vector3();
+          if (raycaster.ray.intersectPlane(plane, planeHit)) {
+            dragOffsetX = g.position.x - planeHit.x;
+            dragOffsetZ = g.position.z - planeHit.z;
+          } else {
+            dragOffsetX = 0;
+            dragOffsetZ = 0;
+          }
+          pendingDrag = { id: draggedId, x: g.position.x, z: g.position.z };
+          onStatus('3D-Verschiebung aktiv. Objekt bleibt unter dem Griffpunkt und springt nicht mehr.');
         }
       }
     };
@@ -1431,16 +1521,24 @@ function Terrain3D({
       if (raycaster.ray.intersectPlane(plane, hit)) {
         const item = objectGroups.find(o => o.id === draggedId);
         if (!item) return;
-        const x = clamp(hit.x, -11, 11);
-        const z = clamp(hit.z, -7, 7);
+        const x = clamp(hit.x + dragOffsetX, -11, 11);
+        const z = clamp(hit.z + dragOffsetZ, -7, 7);
         const y = terrainHeightAt(x, z, terrainBlobs);
         item.group.position.set(x, y, z);
-        onObjectMove(draggedId, x, z);
+        pendingDrag = { id: draggedId, x, z };
+        onStatus(`3D Position X ${x.toFixed(2)} m · Z ${z.toFixed(2)} m`);
       }
     };
 
-    const handleUp = () => {
-      if (draggedId !== null) onStatus('3D-Verschiebung abgeschlossen.');
+    const handleUp = (event?: PointerEvent) => {
+      if (pendingDrag) {
+        onObjectMove(pendingDrag.id, pendingDrag.x, pendingDrag.z);
+        onStatus(`3D-Verschiebung abgeschlossen: X ${pendingDrag.x.toFixed(2)} m · Z ${pendingDrag.z.toFixed(2)} m`);
+      }
+      if (event) {
+        try { renderer.domElement.releasePointerCapture?.(event.pointerId); } catch {}
+      }
+      pendingDrag = null;
       draggedId = null;
       controls.enabled = true;
     };

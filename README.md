@@ -1,101 +1,65 @@
-# AL Green Design – V0.18.1 NATIVE LIDAR
+# AL Green Design – V0.19 VIDEO TO 3D + PRECISION
 
-Diese Version korrigiert den bisherigen Scan-Workflow:
+## Behoben: Bild wird wirklich angewendet
 
-- Die normale Browser-Kamera wird klar als Kamera-Fallback bezeichnet.
-- Ein echter LiDAR-Scan startet nur, wenn eine native iOS-/iPadOS-Bridge vorhanden ist.
-- Eine native ARKit-Scanner-Struktur ist im Ordner `ios/ALGreenScanner` enthalten.
-- Mesh-, Punktwolken- und Tiefendaten-Export sind als echte native Pipeline vorbereitet.
+Nach dem Upload gibt es jetzt getrennte Aktionen:
 
-## Web-Studio
+- **Als Planhintergrund anwenden** – das Bild erscheint tatsächlich im 2D-Plan.
+- **Bildanalyse anwenden** – erzeugt Terrainformen und Zonen und zeigt das Bild als Referenz.
+- Transparenz einstellbar.
+- Seitenverhältnis behalten oder Planfläche füllen.
+- Hintergrund ausblenden, ohne den Upload zu verlieren.
 
-Weiter enthalten:
+## Behoben: präzises Verschieben
 
-- 2D-Planung
-- 3D-Planung
-- Split View
-- detailliertere Architektur-Bauteile
-- Gelände
-- Pflanzen
-- KI
-- Scan-Import
+### 2D
 
-## Scan-Modi
+- echte SVG-Koordinaten über `getScreenCTM().inverse()`
+- kein Versatz durch unterschiedliche Seitenverhältnisse
+- Drag-Offset bleibt erhalten: Objekte springen nicht mehr unter den Cursor
+- Pointer Events für Maus und Touch
+- Raster: 1 cm, 5 cm, 10 cm, 25 cm, 50 cm, 1 m
+- Alt beim Ziehen: Raster temporär umgehen
+- Pfeiltasten: 10 cm
+- Alt + Pfeiltaste: 5 cm
+- Shift + Pfeiltaste: 1 cm
 
-### 1. Echter LiDAR-Scan
-Nur aktiv, wenn die native iOS-App bzw. App-Hülle die Bridge bereitstellt.
+### 3D
 
-### 2. Kamera-Fallback
-Öffnet nur die Kamera. Das ist kein LiDAR-Scan.
+- Drag-Offset bleibt erhalten
+- kein Sprung beim Start
+- Zustand wird erst beim Loslassen endgültig aktualisiert
+- Live-Koordinaten während der Bewegung
 
-### 3. Scan-Dateiimport
-Unterstützte Grundlage:
+## VIDEO → 3D Studio
 
-- PLY
-- OBJ
-- GLB
-- GLTF
-- USDZ
-- JSON
-- ZIP
-- Bilder
-
-## Native iOS-/iPadOS-Struktur
+Neue Seite:
 
 ```text
-ios/
-  ALGreenScanner/
-    ALGreenScannerApp.swift
-    ContentView.swift
-    LiDARScannerView.swift
-    LiDARSessionManager.swift
-    MeshCollector.swift
-    MeshExporter.swift
-    ScanQualityManager.swift
-    WebBridge.swift
-    Info.plist.example
+/video-to-3d
 ```
 
-## ARKit-Scanner
+Funktionen:
 
-Die native App prüft:
+- Video hochladen
+- 6–48 Frames extrahieren
+- Frame-Vorschau
+- schnelle 3D-Tiefen-/Reliefvorschau direkt im Browser
+- Orbit-/Zoom-Ansicht
+- Präzisions-Rekonstruktionsauftrag vorbereiten
 
-```swift
-ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification)
-```
+### Technische Trennung
 
-und aktiviert danach:
-
-```swift
-configuration.sceneReconstruction = .meshWithClassification
-```
-
-Der Scanner sammelt:
-
-- ARMeshAnchor
-- Mesh-Geometrie
-- Weltkoordinaten
-- grobe Scanqualität
-- Export-Metadaten
-
-## Wichtiger Hinweis
-
-Die Swift-Dateien sind eine native Xcode-Grundlage. Zum echten Ausführen auf iPhone/iPad muss daraus in Xcode ein iOS-Projekt erstellt bzw. die Dateien in ein bestehendes Xcode-Projekt übernommen werden.
-
-## Vercel
-
-Für die Web-App bleibt der Upload gleich:
+Die schnelle 3D-Vorschau ist eine bildbasierte Tiefen-/Reliefschätzung.
+Eine präzise Mehrbild-Photogrammetrie benötigt einen separaten 3D-Worker:
 
 ```text
-.gitignore
-app
-components
-lib
-types
-next.config.mjs
-next-env.d.ts
-package.json
-README.md
-tsconfig.json
-ios
+Kamerapositionen
+→ Punktwolke
+→ dichte Rekonstruktion
+→ Mesh
+→ Textur
+→ GLB
 ```
+
+Die API-Grundlage ist unter `/api/video-to-3d/create` enthalten.

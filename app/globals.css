@@ -71,3 +71,23 @@ input[type=range]{padding:0;height:28px}
 .scanProgress{position:absolute;left:20px;right:20px;bottom:20px;height:38px;border-radius:999px;background:rgba(15,23,42,.82);overflow:hidden;border:1px solid rgba(255,255,255,.15)}
 .scanProgressBar{position:absolute;left:0;top:0;bottom:0;background:#22c55e;transition:width .25s ease}
 .scanProgress span{position:relative;z-index:2;display:grid;place-items:center;height:100%;color:#fff;font-weight:700}
+
+.compactControl{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;background:#fff;border:1px solid #dbe3ec;font-size:12px;color:#334155}
+.compactControl select{width:auto;padding:4px 22px 4px 8px;border-radius:999px}
+.canvas{touch-action:none;user-select:none}
+.video3dPage{min-height:100vh;background:#f1f5f9}
+.video3dHero{padding:30px 24px;background:linear-gradient(135deg,#172554,#0f766e);color:#fff}
+.video3dHero h1{margin:7px 0 10px;font-size:clamp(34px,5vw,62px)}
+.video3dHero p{max-width:920px;line-height:1.55}
+.video3dLayout{display:grid;grid-template-columns:330px minmax(0,1fr) 360px;gap:16px;padding:16px}
+.video3dMain{display:grid;grid-template-rows:minmax(280px,42vh) minmax(420px,1fr);gap:16px;min-width:0}
+.video3dVideoWrap,.video3dPreview{position:relative;min-height:300px;background:#020617;border-radius:18px;overflow:hidden;border:1px solid #1e293b}
+.video3dVideoWrap video{width:100%;height:100%;object-fit:contain;background:#020617}
+.video3dPreview canvas{display:block;width:100%;height:100%}
+.frameGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:72vh;overflow:auto}
+.frameButton{padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:#e2e8f0;cursor:pointer;text-align:left}
+.frameButton.active{border-color:#0ea5e9;box-shadow:0 0 0 2px rgba(14,165,233,.18)}
+.frameButton img{width:100%;aspect-ratio:16/10;object-fit:cover;display:block}
+.frameButton span{display:block;padding:5px 7px;font-size:11px;color:#334155}
+@media(max-width:1200px){.video3dLayout{grid-template-columns:1fr}.video3dMain{grid-template-rows:360px 500px}.frameGrid{grid-template-columns:repeat(4,1fr);max-height:none}}
+@media(max-width:700px){.frameGrid{grid-template-columns:repeat(2,1fr)}.video3dMain{grid-template-rows:300px 430px}}
