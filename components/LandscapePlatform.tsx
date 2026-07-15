@@ -16,6 +16,26 @@ type Drag2D =
   | { mode: 'scale'; kind: 'object'; id: number; pointerId: number; startWidth: number; startDepth: number; startX: number; startY: number; rotation: number }
   | { mode: 'rotate'; kind: 'object'; id: number; pointerId: number; centerX: number; centerY: number; startAngle: number; startRotation: number }
   | null;
+
+type EditorSnapshot = {
+  terrainBlobs: TerrainBlob[];
+  zones: Zone[];
+  objects: GardenObject[];
+  importedModels: ImportedReliefModel[];
+  projectInfo: ProjectInfo;
+  createdAt: string;
+  label: string;
+};
+
+type ContextMenuState = {
+  x: number;
+  y: number;
+  worldX: number;
+  worldY: number;
+  targetKind: SelectedKind;
+  targetId: number | null;
+} | null;
+
 type ChatEngine = 'local' | 'openai';
 
 type TerrainBlob = {
@@ -151,7 +171,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.19.2.1 STABLE FRAME EXTRACTION – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.19.3 STABILITY + UX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -224,6 +244,11 @@ export default function LandscapePlatform() {
   const [selectedId, setSelectedId] = useState<number | null>(201);
   const [selectedObjectIds, setSelectedObjectIds] = useState<number[]>([201]);
   const [snapGuides, setSnapGuides] = useState<{x?:number;y?:number} | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
+  const [autosaveState, setAutosaveState] = useState<'idle'|'saving'|'saved'|'error'>('idle');
+  const [versionSnapshots, setVersionSnapshots] = useState<EditorSnapshot[]>([]);
+  const editorClipboardRef = useRef<GardenObject[]>([]);
 
   const selectedBlob = selectedKind === 'terrain' ? terrainBlobs.find(b => b.id === selectedId) || null : null;
   const selectedZone = selectedKind === 'zone' ? zones.find(z => z.id === selectedId) || null : null;
@@ -292,6 +317,61 @@ export default function LandscapePlatform() {
     setStatus('Importiertes 3D-Modell dupliziert.');
   }
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('al-green-v0193-versions');
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) setVersionSnapshots(parsed);
+    } catch {
+      setVersionSnapshots([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+    const timer = window.setTimeout(() => {
+      try {
+        setAutosaveState('saving');
+        localStorage.setItem('al-green-v0193-autosave', JSON.stringify({
+          projectInfo,
+          terrainBlobs,
+          zones,
+          objects,
+          importedModels,
+          layers,
+          gridSize,
+          snapEnabled,
+          savedAt: new Date().toISOString()
+        }));
+        setAutosaveState('saved');
+        window.setTimeout(() => setAutosaveState('idle'), 1200);
+      } catch {
+        setAutosaveState('error');
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [autosaveEnabled, projectInfo, terrainBlobs, zones, objects, importedModels, layers, gridSize, snapEnabled]);
+
+  function restoreAutosave() {
+    try {
+      const raw = localStorage.getItem('al-green-v0193-autosave');
+      if (!raw) { setStatus('Kein Autosave vorhanden.'); return; }
+      const data = JSON.parse(raw);
+      snapshot();
+      if (data.projectInfo) setProjectInfo(data.projectInfo);
+      if (Array.isArray(data.terrainBlobs)) setTerrainBlobs(data.terrainBlobs);
+      if (Array.isArray(data.zones)) setZones(data.zones);
+      if (Array.isArray(data.objects)) setObjects(data.objects);
+      if (Array.isArray(data.importedModels)) setImportedModels(data.importedModels);
+      if (data.layers) setLayers(data.layers);
+      if (typeof data.gridSize === 'number') setGridSize(data.gridSize);
+      if (typeof data.snapEnabled === 'boolean') setSnapEnabled(data.snapEnabled);
+      setStatus('Autosave wiederhergestellt.');
+    } catch {
+      setStatus('Autosave konnte nicht geladen werden.');
+    }
+  }
+
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
 
   const metrics = useMemo(() => {
@@ -304,31 +384,81 @@ export default function LandscapePlatform() {
   }, [zones, objects]);
 
 
+  function createEditorSnapshot(label = 'Arbeitsstand'): EditorSnapshot {
+    return {
+      terrainBlobs: structuredClone(terrainBlobs),
+      zones: structuredClone(zones),
+      objects: structuredClone(objects),
+      importedModels: structuredClone(importedModels),
+      projectInfo: structuredClone(projectInfo),
+      createdAt: new Date().toISOString(),
+      label
+    };
+  }
+
   function snapshot() {
-    setHistory(v => [...v.slice(-29), { terrainBlobs, zones, objects }]);
-    setFuture([]);
+    setUndoStack(current => [...current.slice(-49), JSON.stringify(createEditorSnapshot('Undo'))]);
+    setRedoStack([]);
+  }
+
+  function restoreEditorSnapshot(data: EditorSnapshot) {
+    setTerrainBlobs(data.terrainBlobs || []);
+    setZones(data.zones || []);
+    setObjects(data.objects || []);
+    setImportedModels(data.importedModels || []);
+    if (data.projectInfo) setProjectInfo(data.projectInfo);
+  }
+
+  function createNamedVersion() {
+    const label = `Version ${versionSnapshots.length + 1}`;
+    const next = [createEditorSnapshot(label), ...versionSnapshots].slice(0, 20);
+    setVersionSnapshots(next);
+    localStorage.setItem('al-green-v0193-versions', JSON.stringify(next));
+    setStatus(`${label} gespeichert.`);
+  }
+
+  function restoreNamedVersion(index: number) {
+    const version = versionSnapshots[index];
+    if (!version) return;
+    snapshot();
+    restoreEditorSnapshot(version);
+    setStatus(`${version.label} wiederhergestellt.`);
+  }
+
+  function deleteNamedVersion(index: number) {
+    const next = versionSnapshots.filter((_, i) => i !== index);
+    setVersionSnapshots(next);
+    localStorage.setItem('al-green-v0193-versions', JSON.stringify(next));
   }
 
   function undo() {
-    const last = history[history.length - 1];
-    if (!last) return;
-    setFuture(v => [{ terrainBlobs, zones, objects }, ...v.slice(0, 29)]);
-    setTerrainBlobs(last.terrainBlobs);
-    setZones(last.zones);
-    setObjects(last.objects);
-    setHistory(v => v.slice(0, -1));
-    setStatus('Rückgängig ausgeführt.');
+    setUndoStack(current => {
+      if (!current.length) return current;
+      const previous = current[current.length - 1];
+      setRedoStack(redo => [...redo.slice(-49), JSON.stringify(createEditorSnapshot('Redo'))]);
+      try {
+        restoreEditorSnapshot(JSON.parse(previous));
+        setStatus('Rückgängig.');
+      } catch {
+        setStatus('Undo-Stand konnte nicht wiederhergestellt werden.');
+      }
+      return current.slice(0, -1);
+    });
   }
 
   function redo() {
-    const next = future[0];
-    if (!next) return;
-    setHistory(v => [...v, { terrainBlobs, zones, objects }]);
-    setTerrainBlobs(next.terrainBlobs);
-    setZones(next.zones);
-    setObjects(next.objects);
-    setFuture(v => v.slice(1));
-    setStatus('Wiederherstellen ausgeführt.');
+    setRedoStack(current => {
+      if (!current.length) return current;
+      const nextState = current[current.length - 1];
+      setUndoStack(undo => [...undo.slice(-49), JSON.stringify(createEditorSnapshot('Undo'))]);
+      try {
+        restoreEditorSnapshot(JSON.parse(nextState));
+        setStatus('Wiederholt.');
+      } catch {
+        setStatus('Redo-Stand konnte nicht wiederhergestellt werden.');
+      }
+      return current.slice(0, -1);
+    });
   }
 
   function snapValue(value: number, bypass = false) {
@@ -347,23 +477,70 @@ export default function LandscapePlatform() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target=event.target as HTMLElement|null;
-      if (target && ['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
-      if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='a') { event.preventDefault(); setSelectedKind('object'); setSelectedObjectIds(objects.map(o=>o.id)); setSelectedId(objects[0]?.id??null); setStatus('Alle Objekte ausgewählt.'); return; }
-      if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='d') { event.preventDefault(); duplicateSelected(); return; }
-      if (event.key.toLowerCase()==='g' && !event.shiftKey) { event.preventDefault(); groupSelected(); return; }
-      if (event.key.toLowerCase()==='g' && event.shiftKey) { event.preventDefault(); ungroupSelected(); return; }
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) {
+        if (event.key === 'Escape') target.blur();
+        return;
+      }
+
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+
+      if (mod && key === 'z' && !event.shiftKey) { event.preventDefault(); undo(); return; }
+      if ((mod && key === 'y') || (mod && event.shiftKey && key === 'z')) { event.preventDefault(); redo(); return; }
+      if (mod && key === 'c') { event.preventDefault(); copySelectedObjects(); return; }
+      if (mod && key === 'x') { event.preventDefault(); cutSelectedObjects(); return; }
+      if (mod && key === 'v') { event.preventDefault(); pasteObjects(); return; }
+      if (mod && key === 'a') {
+        event.preventDefault();
+        setSelectedKind('object');
+        setSelectedObjectIds(objects.map(o => o.id));
+        setSelectedId(objects[0]?.id ?? null);
+        setStatus('Alle Objekte ausgewählt.');
+        return;
+      }
+      if (mod && key === 'd') { event.preventDefault(); duplicateSelected(); return; }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (selectedKind && selectedId !== null) {
+          event.preventDefault();
+          deleteSelection();
+        }
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setDrag2D(null);
+        setSnapGuides(null);
+        setContextMenu(null);
+        setSelectedObjectIds([]);
+        setSelectedKind(null);
+        setSelectedId(null);
+        setStatus('Aktion abgebrochen.');
+        return;
+      }
+
+      if (key === 'g' && !event.shiftKey) { event.preventDefault(); groupSelected(); return; }
+      if (key === 'g' && event.shiftKey) { event.preventDefault(); ungroupSelected(); return; }
+
       if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
       event.preventDefault();
-      const step=event.shiftKey?0.01:event.altKey?0.05:0.1;
-      if (event.key==='ArrowLeft') nudgeSelected(-step,0);
-      if (event.key==='ArrowRight') nudgeSelected(step,0);
-      if (event.key==='ArrowUp') nudgeSelected(0,-step);
-      if (event.key==='ArrowDown') nudgeSelected(0,step);
+      const step = event.shiftKey ? 0.01 : event.altKey ? 0.05 : 0.1;
+      if (event.key === 'ArrowLeft') nudgeSelected(-step,0);
+      if (event.key === 'ArrowRight') nudgeSelected(step,0);
+      if (event.key === 'ArrowUp') nudgeSelected(0,-step);
+      if (event.key === 'ArrowDown') nudgeSelected(0,step);
     };
+
+    const onPointerDown = () => closeContextMenu();
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedId, selectedKind, gridSize, snapEnabled]);
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [selectedId, selectedKind, selectedObjectIds, objects, zones, terrainBlobs, importedModels, projectInfo, gridSize, snapEnabled]);
 
   function objectLayer(obj: GardenObject) {
     if (['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(obj.type)) return 'buildings';
@@ -546,6 +723,57 @@ export default function LandscapePlatform() {
     snapshot();
     setObjects(current=>current.map(o=>o.id===selectedObject.id?{...o,x:o.x+best!.dx,y:o.y+best!.dy}:o));
     setStatus(`Wand-Endpunkt verbunden · ${best.distance.toFixed(2)} m korrigiert.`);
+  }
+
+  function copySelectedObjects() {
+    if (!selectedObjectIds.length) return;
+    editorClipboardRef.current = structuredClone(objects.filter(o => selectedObjectIds.includes(o.id)));
+    setStatus(`${editorClipboardRef.current.length} Objekt(e) kopiert.`);
+  }
+
+  function pasteObjects(targetX?: number, targetY?: number) {
+    const source = editorClipboardRef.current;
+    if (!source.length) return;
+    snapshot();
+    const minX = Math.min(...source.map(o => o.x));
+    const minY = Math.min(...source.map(o => o.y));
+    const offsetX = targetX !== undefined ? targetX - minX : 0.4;
+    const offsetY = targetY !== undefined ? targetY - minY : 0.4;
+    const base = Date.now();
+    const copies = source.map((o, index) => ({
+      ...structuredClone(o),
+      id: base + index + 1,
+      x: o.x + offsetX,
+      y: o.y + offsetY,
+      name: `${o.name} Kopie`,
+      groupId: undefined
+    }));
+    setObjects(current => [...current, ...copies]);
+    setSelectedKind('object');
+    setSelectedId(copies[0]?.id ?? null);
+    setSelectedObjectIds(copies.map(o => o.id));
+    setStatus(`${copies.length} Objekt(e) eingefügt.`);
+  }
+
+  function cutSelectedObjects() {
+    copySelectedObjects();
+    deleteSelection();
+  }
+
+  function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const p = worldFromClient(svgRef.current, e.clientX, e.clientY);
+    const hit = [...objects].reverse().find(obj => objectHit(p, obj));
+    if (hit) {
+      selectObject(hit.id, false);
+      setContextMenu({ x: e.clientX, y: e.clientY, worldX: p.x, worldY: p.y, targetKind: 'object', targetId: hit.id });
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY, worldX: p.x, worldY: p.y, targetKind: null, targetId: null });
+    }
+  }
+
+  function closeContextMenu() {
+    setContextMenu(null);
   }
 
   function addObject(type: GardenObjectType, x: number, y: number) {
@@ -948,7 +1176,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.2.1', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.19.3', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -1005,6 +1233,27 @@ export default function LandscapePlatform() {
               <label>Raster<select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value="0.1">0,1 m</option><option value="0.25">0,25 m</option><option value="0.5">0,5 m</option><option value="1">1 m</option></select></label>
               <label><input type="checkbox" checked={snapEnabled} onChange={e=>setSnapEnabled(e.target.checked)}/> Fangfunktion aktiv</label>
             </div>
+            <div className="cadSelectionPanel" style={{marginTop:12}}>
+              <h2>Stabilität & Versionen</h2>
+              <div className="grid2">
+                <button className="btn primary" onClick={createNamedVersion}>Version speichern</button>
+                <button className="btn" onClick={restoreAutosave}>Autosave laden</button>
+              </div>
+              <div className="versionList" style={{marginTop:8}}>
+                {versionSnapshots.map((version,index)=>(
+                  <div className="item versionItem" key={`${version.createdAt}-${index}`}>
+                    <strong>{version.label}</strong>
+                    <span>{new Date(version.createdAt).toLocaleString()}</span>
+                    <div className="grid2" style={{marginTop:6}}>
+                      <button className="btn blue" onClick={()=>restoreNamedVersion(index)}>Laden</button>
+                      <button className="btn danger" onClick={()=>deleteNamedVersion(index)}>Löschen</button>
+                    </div>
+                  </div>
+                ))}
+                {!versionSnapshots.length && <div className="hint">Noch keine manuelle Version gespeichert.</div>}
+              </div>
+            </div>
+
           </>
         )}
 
@@ -1260,13 +1509,15 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.19.2.1 STABLE FRAME EXTRACTION</span>
+          <span className="pill">V0.19.3 STABILITY + UX</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
           <label className="compactControl">Raster <select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value={0.01}>1 cm</option><option value={0.05}>5 cm</option><option value={0.1}>10 cm</option><option value={0.25}>25 cm</option><option value={0.5}>50 cm</option><option value={1}>1 m</option></select></label>
           <button className={`pill ${snapEnabled?'active':''}`} onClick={()=>setSnapEnabled(v=>!v)}>Fang {snapEnabled?'AN':'AUS'}</button>
           <span className="pill">Auswahl {selectedObjectIds.length}</span>
+          <button className={`pill ${autosaveEnabled?'active':''}`} onClick={()=>setAutosaveEnabled(v=>!v)}>Autosave {autosaveEnabled?'AN':'AUS'}</button>
+          <span className="pill">Speicher {autosaveState==='saving'?'…':autosaveState==='saved'?'✓':autosaveState==='error'?'!':'bereit'}</span>
           <button className="pill" disabled={selectedObjectIds.length<2} onClick={groupSelected}>Gruppieren</button>
           <button className="pill" disabled={!selectedObjectIds.length} onClick={duplicateSelected}>Duplizieren</button>
           <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D</button>
@@ -1284,6 +1535,7 @@ export default function LandscapePlatform() {
               onPointerMove={handleSvgPointerMove}
               onPointerUp={handleSvgPointerUp}
               onPointerCancel={handleSvgPointerUp}
+              onContextMenu={handleContextMenu}
             >
               <defs>
                 {layers.terrain && terrainBlobs.map(blob => (
@@ -1476,6 +1728,28 @@ export default function LandscapePlatform() {
         )}
         {!selectedBlob && !selectedZone && !selectedObject && <p className="small">Objekt, Zone oder Terrain anklicken.</p>}
       </aside>
+
+      {contextMenu && (
+        <div
+          className="editorContextMenu"
+          style={{left:contextMenu.x,top:contextMenu.y}}
+          onPointerDown={e=>e.stopPropagation()}
+        >
+          {contextMenu.targetKind==='object' ? (
+            <>
+              <button onClick={()=>{copySelectedObjects();closeContextMenu();}}>Kopieren</button>
+              <button onClick={()=>{cutSelectedObjects();closeContextMenu();}}>Ausschneiden</button>
+              <button onClick={()=>{duplicateSelected();closeContextMenu();}}>Duplizieren</button>
+              <button onClick={()=>{deleteSelection();closeContextMenu();}}>Löschen</button>
+            </>
+          ) : (
+            <>
+              <button disabled={!editorClipboardRef.current.length} onClick={()=>{pasteObjects(contextMenu.worldX,contextMenu.worldY);closeContextMenu();}}>Hier einfügen</button>
+              <button onClick={()=>{setTool('select');closeContextMenu();}}>Auswahlwerkzeug</button>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

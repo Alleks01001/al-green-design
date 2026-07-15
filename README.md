@@ -1,39 +1,84 @@
-# AL Green Design – V0.19.2.1 STABLE FRAME EXTRACTION
+# AL Green Design – V0.19.3 STABILITY + UX
 
-Diese Version behebt gezielt die unzuverlässige Frame-Extraktion im Video → 3D Studio.
+Diese Version konzentriert sich auf Stabilität, Rückgängig-Funktionen und eine angenehmere tägliche Bedienung.
 
-## Neuer Ablauf der Frame-Extraktion
+## Neu
 
-```text
-Video-Upload
-→ separates unsichtbares Extraktions-Video
-→ loadedmetadata abwarten
-→ loadeddata abwarten
-→ robuste Seek-Vorgänge
-→ dargestellten Videoframe abwarten
-→ Canvas-Frame erzeugen
-```
+### Undo / Redo
 
-## Stabilitätsverbesserungen
+Editor-Snapshots enthalten:
 
-- eigener Video-Player nur für die Extraktion
-- funktioniert unabhängig von der Position des sichtbaren Video-Players
-- Seek-Timeout
-- bis zu 3 automatische Wiederholungsversuche pro Frame
-- requestVideoFrameCallback, wenn der Browser es unterstützt
-- erste und letzte 4 % des Videos werden nicht verwendet
-- maximale Frame-Breite 720 px
-- JPEG-Qualität 0,8
-- maximal 24 Frames pro Durchlauf
-- einzelne fehlerhafte Frames werden übersprungen
-- klare Fehlermeldung, wenn kein Frame gelesen werden kann
-
-## Empfohlener Test
+- Gelände
+- Zonen
+- Objekte
+- importierte Video-3D-Modelle
+- Projektinformationen
 
 ```text
-12 Frames
-→ Frames extrahieren
-→ Frame auswählen
-→ 3D-Modell erzeugen
-→ In Projekt übernehmen
+Strg/Cmd + Z
+Strg/Cmd + Y
+Strg/Cmd + Shift + Z
 ```
+
+### Autosave
+
+Änderungen werden nach kurzer Ruhezeit automatisch im Browser gespeichert.
+
+- Autosave AN/AUS
+- Speicherstatus
+- Autosave wiederherstellen
+
+### Manuelle Projektversionen
+
+Bis zu 20 Arbeitsstände können gespeichert, geladen und gelöscht werden.
+
+### Copy / Cut / Paste
+
+```text
+Strg/Cmd + C
+Strg/Cmd + X
+Strg/Cmd + V
+```
+
+Mehrfach ausgewählte Objekte werden gemeinsam kopiert.
+
+### Weitere Tastaturbefehle
+
+```text
+Entf / Backspace = Auswahl löschen
+Esc = Aktion abbrechen
+Strg/Cmd + A = alle Objekte auswählen
+Strg/Cmd + D = duplizieren
+G = gruppieren
+Shift + G = Gruppierung lösen
+```
+
+### Rechtsklick-Menü
+
+Auf Objekt:
+
+- Kopieren
+- Ausschneiden
+- Duplizieren
+- Löschen
+
+Auf freie Fläche:
+
+- Hier einfügen
+- Auswahlwerkzeug
+
+## Weiter enthalten
+
+- stabile Frame-Extraktion
+- Video → 3D → Projekt
+- GLB-/OBJ-Export
+- CAD-Griffe
+- Mehrfachauswahl
+- Gruppierung
+- Ausrichten
+- Bildanwendung
+- 2D/3D/Split View
+
+## Nächste Version
+
+V0.20: Architekturmodul mit stärker verbundenem Wandsystem und echten Wandöffnungs-Grundlagen.
