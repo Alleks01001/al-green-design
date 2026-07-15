@@ -67,3 +67,7 @@ input[type=range]{padding:0;height:28px}
 .scanVideo{width:100%;height:100%;object-fit:cover;display:block}
 .scanPlaceholder{position:absolute;inset:0;display:grid;place-items:center;color:#94a3b8;font-size:20px}
 @media(max-width:1200px){.scanGrid{grid-template-columns:1fr}.scanViewer{min-height:420px}.splitWorkspace{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+
+.scanProgress{position:absolute;left:20px;right:20px;bottom:20px;height:38px;border-radius:999px;background:rgba(15,23,42,.82);overflow:hidden;border:1px solid rgba(255,255,255,.15)}
+.scanProgressBar{position:absolute;left:0;top:0;bottom:0;background:#22c55e;transition:width .25s ease}
+.scanProgress span{position:relative;z-index:2;display:grid;place-items:center;height:100%;color:#fff;font-weight:700}

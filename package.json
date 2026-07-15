@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v018-architecture-lidar",
-  "version": "0.18.0",
+  "name": "al-green-design-landscape-architecture-v0181-native-lidar",
+  "version": "0.18.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

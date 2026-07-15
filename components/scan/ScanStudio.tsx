@@ -3,10 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { detectLiDARBridge, startNativeLiDARScan } from '@/lib/mobile/lidarBridge';
 
+type NativeResult = {
+  type?: string;
+  sessionId?: string;
+  progress?: number;
+  fileUrl?: string;
+  message?: string;
+};
+
 export default function ScanStudio() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [status, setStatus] = useState('Scan-Modul bereit.');
+  const [progress, setProgress] = useState(0);
   const [bridge, setBridge] = useState(() => ({
     available: false,
     platform: 'web-fallback' as const,
@@ -16,9 +25,31 @@ export default function ScanStudio() {
 
   useEffect(() => {
     setBridge(detectLiDARBridge());
+
+    window.ALGreenNativeScanResult = (payload: unknown) => {
+      const result = payload as NativeResult;
+
+      if (result?.type === 'scan-progress') {
+        setProgress(Math.max(0, Math.min(100, Number(result.progress || 0))));
+        setStatus(`LiDAR-Scan läuft: ${Math.round(Number(result.progress || 0))}%`);
+      }
+
+      if (result?.type === 'scan-completed') {
+        setProgress(100);
+        setStatus(`LiDAR-Scan abgeschlossen${result.fileUrl ? ` · ${result.fileUrl}` : ''}`);
+      }
+
+      if (result?.type === 'scan-error') {
+        setStatus(`LiDAR-Fehler: ${result.message || 'Unbekannter Fehler'}`);
+      }
+    };
+
+    return () => {
+      delete window.ALGreenNativeScanResult;
+    };
   }, []);
 
-  async function startCamera() {
+  async function startCameraFallback() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
@@ -31,7 +62,7 @@ export default function ScanStudio() {
       }
 
       setCameraActive(true);
-      setStatus('Kamera aktiv. Diese Browseransicht dient als visueller Fallback.');
+      setStatus('Kamera-Fallback aktiv. Achtung: Das ist kein LiDAR-Scan.');
     } catch (error) {
       setStatus(`Kamera konnte nicht gestartet werden: ${String(error)}`);
     }
@@ -42,16 +73,23 @@ export default function ScanStudio() {
     stream?.getTracks().forEach(track => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
-    setStatus('Kamera beendet.');
+    setStatus('Kamera-Fallback beendet.');
   }
 
   function startLiDAR() {
+    if (!bridge.available) {
+      setStatus('Echter LiDAR-Scan nicht verfügbar: Es wurde keine native iOS-/Android-Bridge erkannt.');
+      return;
+    }
+
     const ok = startNativeLiDARScan('current-project');
-    setStatus(
-      ok
-        ? 'Native Scan-Anforderung gesendet. Die App-Bridge kann jetzt Mesh, Punktwolke und Tiefendaten erfassen.'
-        : 'Keine native LiDAR-Bridge vorhanden. Nutze Kamera oder importiere eine Scan-Datei.'
-    );
+
+    if (ok) {
+      setProgress(0);
+      setStatus('Native LiDAR-/Depth-Scan-Anforderung gesendet.');
+    } else {
+      setStatus('Native Bridge wurde erkannt, Scan konnte aber nicht gestartet werden.');
+    }
   }
 
   function onFiles(selected: FileList | null) {
@@ -64,28 +102,40 @@ export default function ScanStudio() {
   return (
     <main className="scanPage">
       <section className="scanHero">
-        <p>AL Green Design · V0.18</p>
+        <p>AL Green Design · V0.18.1 NATIVE LIDAR</p>
         <h1>Mobile Scan / LiDAR Studio</h1>
-        <p>Bestandsaufnahme vorbereiten, Kamera nutzen oder native LiDAR-/Depth-Daten über eine App-Bridge übernehmen.</p>
+        <p>Echter LiDAR-/Depth-Scan über native Bridge. Kamera nur als visueller Fallback.</p>
       </section>
 
       <section className="scanGrid">
         <aside className="panel">
           <h2>Gerätestatus</h2>
+
           <div className="item">
-            <strong>{bridge.available ? 'Native Bridge verfügbar' : 'Web-Fallback'}</strong>
+            <strong>{bridge.available ? 'Native Scan-Bridge verfügbar' : 'Kein nativer LiDAR-Zugriff'}</strong>
             <span>{bridge.message}</span>
           </div>
 
-          <h2 style={{ marginTop: 16 }}>Aktionen</h2>
-          <div className="grid2">
-            <button className="btn primary" onClick={startLiDAR}>LiDAR/Depth Scan starten</button>
-            <button className="btn" onClick={cameraActive ? stopCamera : startCamera}>
-              {cameraActive ? 'Kamera stoppen' : 'Kamera öffnen'}
-            </button>
-          </div>
+          <h2 style={{ marginTop: 16 }}>Scan-Modi</h2>
 
-          <label className="file" style={{ marginTop: 12 }}>
+          <button
+            className="btn primary"
+            style={{ width: '100%', marginBottom: 8 }}
+            onClick={startLiDAR}
+            disabled={!bridge.available}
+          >
+            Echter LiDAR-/Depth-Scan
+          </button>
+
+          <button
+            className="btn"
+            style={{ width: '100%', marginBottom: 8 }}
+            onClick={cameraActive ? stopCamera : startCameraFallback}
+          >
+            {cameraActive ? 'Kamera-Fallback stoppen' : 'Kamera-Fallback öffnen'}
+          </button>
+
+          <label className="file">
             Scan-Dateien importieren
             <input
               type="file"
@@ -96,18 +146,28 @@ export default function ScanStudio() {
           </label>
 
           <div className="hint" style={{ marginTop: 12 }}>
-            Unterstützte Import-Grundlage: PLY, OBJ, GLB, GLTF, USDZ, JSON, ZIP und Bilder.
-            Die native Bridge ist für spätere iOS-/Android-Scans vorgesehen.
+            Die normale Browser-Kamera liefert kein vollständiges LiDAR-Mesh. Für echten Scan muss die Web-App in einer nativen iOS-/Android-Hülle mit Bridge laufen.
           </div>
         </aside>
 
         <section className="scanViewer">
           <video ref={videoRef} className="scanVideo" playsInline muted />
-          {!cameraActive && <div className="scanPlaceholder">Kamera- oder Scan-Vorschau</div>}
+          {!cameraActive && (
+            <div className="scanPlaceholder">
+              {bridge.available ? 'Native LiDAR-/Depth-Scan bereit' : 'Kamera-/Datei-Fallback'}
+            </div>
+          )}
+
+          {progress > 0 && (
+            <div className="scanProgress">
+              <div className="scanProgressBar" style={{ width: `${progress}%` }} />
+              <span>{Math.round(progress)}%</span>
+            </div>
+          )}
         </section>
 
         <aside className="panel">
-          <h2>Scan-Status</h2>
+          <h2>Status</h2>
           <div className="hint">{status}</div>
 
           <h2 style={{ marginTop: 16 }}>Ausgewählte Dateien</h2>
@@ -116,15 +176,15 @@ export default function ScanStudio() {
             {files.map(file => <div className="item" key={file}><span>{file}</span></div>)}
           </div>
 
-          <h2 style={{ marginTop: 16 }}>Zielverarbeitung</h2>
+          <h2 style={{ marginTop: 16 }}>Native Zielausgabe</h2>
           <div className="list">
             {[
-              'Punktwolke',
-              'Oberflächen-Mesh',
-              'Geländehöhen',
-              'Gebäudekanten',
-              'Mauern / Wege',
-              'Import in 2D/3D-Projekt'
+              'ARKit Scene Mesh',
+              'Punktwolke / Vertices',
+              'Tiefendaten',
+              'Kamera-Frames',
+              'Geländemodell',
+              'Import in 2D/3D'
             ].map(item => <div className="item" key={item}><strong>{item}</strong></div>)}
           </div>
         </aside>

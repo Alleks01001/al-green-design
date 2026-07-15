@@ -4,12 +4,18 @@ export type LiDARBridgeStatus = {
   message: string;
 };
 
+export type NativeScanRequest = {
+  action: 'start';
+  projectId: string;
+  requestedOutputs: Array<'mesh' | 'pointCloud' | 'depth' | 'cameraFrames'>;
+};
+
 declare global {
   interface Window {
     webkit?: {
       messageHandlers?: {
         ALGreenLiDAR?: {
-          postMessage: (payload: unknown) => void;
+          postMessage: (payload: NativeScanRequest) => void;
         };
       };
     };
@@ -17,6 +23,7 @@ declare global {
       startScan?: (payload: string) => void;
       stopScan?: () => void;
     };
+    ALGreenNativeScanResult?: (payload: unknown) => void;
   }
 }
 
@@ -29,7 +36,7 @@ export function detectLiDARBridge(): LiDARBridgeStatus {
     return {
       available: true,
       platform: 'ios-native',
-      message: 'Native iOS-LiDAR-Bridge erkannt.'
+      message: 'Native iOS-/iPadOS-LiDAR-Bridge erkannt.'
     };
   }
 
@@ -44,12 +51,12 @@ export function detectLiDARBridge(): LiDARBridgeStatus {
   return {
     available: false,
     platform: 'web-fallback',
-    message: 'Keine native LiDAR-Bridge erkannt. Kamera-/Datei-Fallback ist verfügbar.'
+    message: 'Keine native LiDAR-/Depth-Bridge erkannt. Nur Kamera-Fallback und Dateiimport verfügbar.'
   };
 }
 
 export function startNativeLiDARScan(projectId: string) {
-  const payload = {
+  const payload: NativeScanRequest = {
     action: 'start',
     projectId,
     requestedOutputs: ['mesh', 'pointCloud', 'depth', 'cameraFrames']

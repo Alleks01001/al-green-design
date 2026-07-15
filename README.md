@@ -1,91 +1,101 @@
-# AL Green Design – V0.18 ARCHITECTURE + LIDAR
+# AL Green Design – V0.18.1 NATIVE LIDAR
 
-V0.18 ist der erste größere Architektur-/Scan-Sprung.
+Diese Version korrigiert den bisherigen Scan-Workflow:
 
-## Architektur-Engine
+- Die normale Browser-Kamera wird klar als Kamera-Fallback bezeichnet.
+- Ein echter LiDAR-Scan startet nur, wenn eine native iOS-/iPadOS-Bridge vorhanden ist.
+- Eine native ARKit-Scanner-Struktur ist im Ordner `ios/ALGreenScanner` enthalten.
+- Mesh-, Punktwolken- und Tiefendaten-Export sind als echte native Pipeline vorbereitet.
 
-Neu als eigene editierbare Bauteile:
+## Web-Studio
 
-- Bodenplatte
-- Außenwand
-- Innenwand
-- Flachdach
-- Satteldach / Dachkörper
-- Fenster
-- Tür
-- Schiebetür
-- Balkon
-- Geländer
-- Stütze
-- Carport
-- Wintergarten
+Weiter enthalten:
 
-Jedes Bauteil kann in 2D ausgewählt, verschoben, gedreht, skaliert und in seinen Eigenschaften verändert werden.
-Die Bauteile werden auch in 3D dargestellt.
+- 2D-Planung
+- 3D-Planung
+- Split View
+- detailliertere Architektur-Bauteile
+- Gelände
+- Pflanzen
+- KI
+- Scan-Import
 
-## Split View
+## Scan-Modi
 
-- 2D
-- 3D
-- Split vertikal
-- Split horizontal
+### 1. Echter LiDAR-Scan
+Nur aktiv, wenn die native iOS-App bzw. App-Hülle die Bridge bereitstellt.
 
-Damit kann der Plan gleichzeitig in 2D und 3D kontrolliert werden.
+### 2. Kamera-Fallback
+Öffnet nur die Kamera. Das ist kein LiDAR-Scan.
 
-## Gelände
+### 3. Scan-Dateiimport
+Unterstützte Grundlage:
 
-- weiche Erhebungen
-- Mulden / Senken
-- Höhenlinien
-- Auftrag / Abtrag
-- Objekte folgen der Geländehöhe
-- bestehende Terrain-Werkzeuge bleiben erhalten
+- PLY
+- OBJ
+- GLB
+- GLTF
+- USDZ
+- JSON
+- ZIP
+- Bilder
 
-## KI
-
-Das strukturierte KI-Schema wurde erweitert.
-Die KI kann jetzt zusätzlich Architektur-Bauteile liefern:
-
-- building
-- floor
-- wall
-- interior_wall
-- roof
-- window
-- door
-- sliding_door
-- balcony
-- railing
-- column
-- carport
-- winter_garden
-- pool
-- pergola
-- tree
-- shrub
-
-## Mobile Scan / LiDAR Grundlage
-
-Neue Route und neue Scan-Seite:
-
-- `/scan`
-- Kamera-Vorschau im Browser
-- Fotoaufnahme als Fallback
-- Erkennung einer nativen iOS-/Android-LiDAR-Bridge
-- Scan-Dateiimport für PLY, OBJ, GLB, GLTF, USDZ, JSON und ZIP
-- API-Grundlage für Scan-Verarbeitung
-- Typen und Bridge-Definitionen
-
-Wichtig:
-Ein normaler Browser kann nicht zuverlässig direkt alle nativen LiDAR-Rohdaten eines Telefons auslesen.
-Die V0.18 enthält deshalb die Web-Oberfläche und die Bridge-Schnittstelle für eine spätere native iOS-/Android-Scan-App bzw. App-Hülle.
-
-## OpenAI
-
-Für echten OpenAI-Betrieb in Vercel:
+## Native iOS-/iPadOS-Struktur
 
 ```text
-OPENAI_API_KEY=dein_key
+ios/
+  ALGreenScanner/
+    ALGreenScannerApp.swift
+    ContentView.swift
+    LiDARScannerView.swift
+    LiDARSessionManager.swift
+    MeshCollector.swift
+    MeshExporter.swift
+    ScanQualityManager.swift
+    WebBridge.swift
+    Info.plist.example
 ```
 
-Ohne Key bleibt der lokale Fallback aktiv.
+## ARKit-Scanner
+
+Die native App prüft:
+
+```swift
+ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification)
+```
+
+und aktiviert danach:
+
+```swift
+configuration.sceneReconstruction = .meshWithClassification
+```
+
+Der Scanner sammelt:
+
+- ARMeshAnchor
+- Mesh-Geometrie
+- Weltkoordinaten
+- grobe Scanqualität
+- Export-Metadaten
+
+## Wichtiger Hinweis
+
+Die Swift-Dateien sind eine native Xcode-Grundlage. Zum echten Ausführen auf iPhone/iPad muss daraus in Xcode ein iOS-Projekt erstellt bzw. die Dateien in ein bestehendes Xcode-Projekt übernommen werden.
+
+## Vercel
+
+Für die Web-App bleibt der Upload gleich:
+
+```text
+.gitignore
+app
+components
+lib
+types
+next.config.mjs
+next-env.d.ts
+package.json
+README.md
+tsconfig.json
+ios
+```
