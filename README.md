@@ -1,56 +1,107 @@
-# AL Green Design – V0.27 WATER + FLOW + BRAND
+# AL Green Design – V0.30 AI PLANNING + AUDIT
 
-V0.27 erweitert das Projekt um Wasser-, Gefälle- und Fließrichtungsanalyse und bringt gleichzeitig ein neues visuelles Branding.
+V0.30 ergänzt einen strukturierten Planungsworkflow und eine automatische Projektprüfung.
 
-## Neues Branding
+## AI Planning Studio
 
-Die bisherige moosgrüne Grundanmutung wurde in Richtung Weinrot / Burgundy überarbeitet.
+Ablauf:
 
-Zusätzlich wurde ein passendes integriertes Markenlogo für die Oberfläche ergänzt:
+```text
+Projektbeschreibung
+→ Planungsbrief ableiten
+→ offene Fragen erkennen
+→ Varianten A/B/C erzeugen
+→ Konzept vergleichen
+→ Variante übernehmen
+```
 
-- Monogramm-/Blatt-Signet
-- geometrischer Planungsbezug
-- markanter Studio-Look
-- ohne externe Bilddatei direkt im UI nutzbar
+## Planungsbrief
 
-## Wasser- und Abflussanalyse
+Enthält:
 
-Neu:
+- Stil
+- Priorität
+- Budget
+- Pool
+- Terrasse
+- Pergola
+- Familien-/Spielfläche
+- Sichtschutz
+- Pflegeaufwand
+- Biodiversität
+- Ziel-Pflanzenanzahl
 
-- Fließanalyse berechnen
-- lokale Tiefpunkte
-- Retentionszellen
-- dominierende Abflussrichtung
-- durchschnittliches Gefälle
-- maximales Gefälle
-- Rückhaltepotenzial
+## Varianten
 
-## 2D-Overlays
+Automatisch erzeugt:
 
-Optional einblendbar:
+```text
+A · Ausgewogen
+B · Budget & Pflege
+C · Natur & Erlebnis
+```
 
-- Fließrichtungen
-- Tiefpunkte
-- Retentionsbereiche
+Jede Variante besitzt:
 
-## Logik
+- Konzept
+- Bewertung
+- Objekte
+- Zonen
+- Geländemodellierung
 
-Die Analyse rastert das Gelände, bewertet die umliegenden Nachbarzellen und ermittelt:
+## Projektprüfung
 
-- stärkste Falllinie
-- lokale Tiefpunkte
-- potenzielle Sammelstellen
-- grobes Retentionspotenzial
+Bewertet werden:
 
-## Bestehende Funktionen bleiben erhalten
+- Geometrie
+- Gelände
+- Bepflanzung
+- Wasser
+- Sonne
+- Materialien
+- Budget
+- Architektur
 
-- 2D-Editor
-- 3D-Szene
-- Pflanzenbibliothek
-- Wachstum
-- Sonne/Schatten
-- Performance-Modi
+Ergebnis:
+
+```text
+0–100 Punkte
+Note A–E
+Kategorie-Scores
+Konflikte
+Stärken
+Empfehlungen
+```
+
+## Erkannte Konflikte
+
+Unter anderem:
+
+- starke Objektüberschneidungen
+- Objekte außerhalb der Planfläche
+- fehlende Geländedefinition
+- Tiefpunkte ohne Drainage
+- Pflanzenkonflikte
+- Bewässerungskonflikte
+- unvollständiges Materialkonzept
+- Budgetüberschreitung
+- unvollständige Gebäudeausarbeitung
+- geringe Besonnung
+
+## Sichere Optimierungen
+
+Automatisch möglich:
+
+- Bibliotheksmaterialien ergänzen
+- Objekte in die Planfläche zurückschieben
+- bei erkannten Tiefpunkten einfache Drainagepunkte ergänzen
+
+Bewusst nicht automatisch verändert werden komplexe gestalterische oder sicherheitskritische Entscheidungen.
+
+## Bestehende KI
+
+Der frühere Schnellentwurf bleibt als einklappbarer Bereich erhalten.
 
 ## Nächste Version
 
-V0.28: Bewässerungszonen, Regnerreichweiten, Tropfkreise und automatische Leitungslogik.
+V0.31: Präsentation, Mengen/Kosten, finaler Bericht und Gesamtintegration.

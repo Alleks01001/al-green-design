@@ -177,3 +177,60 @@ input[type=range]{padding:0;height:28px}
 .waterAnalysisPanel h3{margin:0;font-size:14px;color:#6b1024}
 .waterKpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media(max-width:700px){.waterKpis{grid-template-columns:1fr}}
+
+.irrigationPanel{display:grid;gap:10px;margin-top:12px;padding:10px;border:1px solid #fecdd3;border-radius:14px;background:#fff7f7}
+.irrigationPanel h3{margin:0;font-size:14px;color:#6b1024}
+.irrigationZoneList{display:grid;gap:8px}
+.irrigationZoneCard{padding:9px;border:1px solid #ead7dc;border-radius:12px;background:#fff}
+.irrigationZoneCard.active{border-color:#be123c;box-shadow:0 0 0 2px rgba(190,24,93,.14)}
+.irrigationZoneHeader{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;width:100%;padding:0 0 8px;border:0;background:transparent;text-align:left}
+.irrigationZoneHeader span:last-child{font-size:10px;color:#9f3952}
+.zoneDot{width:12px;height:12px;border-radius:50%}
+
+.materialFilterPanel{display:grid;gap:8px;padding:10px;margin-top:10px;border:1px solid #fecdd3;border-radius:14px;background:#fff7f7}
+.materialLibraryGrid{display:grid;gap:10px;margin-top:10px;max-height:590px;overflow:auto}
+.materialCard{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:10px;border:1px solid #ead7dc;border-radius:14px;background:#fff}
+.materialCard.active{border-color:#be123c;box-shadow:0 0 0 2px rgba(190,24,93,.14)}
+.materialCard .btn{grid-column:1/-1}
+.materialSwatch{width:54px;height:54px;border:2px solid #fff;border-radius:14px;box-shadow:0 0 0 1px #d8c1c7;cursor:pointer}
+.materialCardBody{display:grid;gap:4px}
+.materialCardBody>span{font-size:10px;color:#9f3952}
+.materialCardBody p{margin:0;font-size:11px;line-height:1.45;color:#7c2d3f}
+.materialTags{display:flex;flex-wrap:wrap;gap:5px}
+.materialTags span{font-size:10px;padding:3px 6px;border-radius:999px;background:#fff1f2;color:#881337}
+.materialUsageList{display:grid;gap:8px}
+.objectMaterialPanel{display:grid;gap:10px;margin-top:8px;padding:10px;border:1px solid #fecdd3;border-radius:14px;background:#fff7f7}
+.objectMaterialPanel h3{margin:4px 0 0;font-size:14px;color:#6b1024}
+.surfaceLayerList{display:grid;gap:8px}
+.surfaceLayerCard{display:grid;gap:7px;padding:9px;border:1px solid #ead7dc;border-radius:12px;background:#fff}
+
+.planningBriefPanel,.planningQuestions{display:grid;gap:10px;margin-top:10px;padding:10px;border:1px solid #fecdd3;border-radius:14px;background:#fff7f7}
+.planningBriefPanel h3,.planningQuestions h3{margin:0;font-size:14px;color:#6b1024}
+.planningFlags{display:flex;flex-wrap:wrap;gap:6px}
+.planningFlags label{display:flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid #ead7dc;border-radius:999px;background:#fff}
+.planningVariantList{display:grid;gap:10px;margin-top:10px}
+.planningVariantCard{display:grid;gap:8px;padding:10px;border:1px solid #ead7dc;border-radius:14px;background:#fff}
+.planningVariantCard.active{border-color:#be123c;box-shadow:0 0 0 2px rgba(190,24,93,.14)}
+.planningVariantCard p{margin:0;font-size:11px;color:#7c2d3f}
+.planningVariantHeader{display:flex;justify-content:space-between;gap:10px;width:100%;padding:0;border:0;background:transparent;text-align:left}
+.planningVariantHeader span{font-weight:800;color:#9f1239}
+.legacyAiPanel{margin-top:12px;padding:10px;border:1px solid #ead7dc;border-radius:12px;background:#fff}
+.legacyAiPanel summary{cursor:pointer;font-weight:800;color:#6b1024}
+.auditScoreCard{display:flex;align-items:center;gap:14px;margin-top:12px;padding:14px;border:1px solid #fecdd3;border-radius:16px;background:linear-gradient(135deg,#fff1f2,#fff7f7)}
+.auditScoreCard strong{display:block;font-size:24px;color:#6b1024}
+.auditScoreCard span{font-size:11px;color:#9f3952}
+.auditGrade{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:linear-gradient(135deg,#7f1d1d,#be123c);color:#fff;font-size:28px;font-weight:900}
+.auditCategoryGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.auditCategory{display:grid;grid-template-columns:1fr auto;gap:5px;padding:8px;border:1px solid #ead7dc;border-radius:12px;background:#fff}
+.auditCategory span{font-size:10px;text-transform:capitalize;color:#7c2d3f}
+.auditCategory strong{color:#6b1024}
+.auditBar{grid-column:1/-1;height:5px;border-radius:999px;background:#f3e2e6;overflow:hidden}
+.auditBar i{display:block;height:100%;background:linear-gradient(90deg,#881337,#fb7185)}
+.auditIssueList{display:grid;gap:8px}
+.auditIssue{display:grid;gap:4px;padding:9px;text-align:left;border:1px solid #ead7dc;border-radius:12px;background:#fff;cursor:pointer}
+.auditIssue span{font-size:11px;color:#7c2d3f}
+.auditIssue small{font-size:9px;color:#9f3952}
+.auditIssue.warning{border-color:#f59e0b;background:#fffbeb}
+.auditIssue.critical{border-color:#ef4444;background:#fef2f2}
+.auditIssue.info{border-color:#fda4af;background:#fff1f2}
+@media(max-width:700px){.auditCategoryGrid{grid-template-columns:1fr}}

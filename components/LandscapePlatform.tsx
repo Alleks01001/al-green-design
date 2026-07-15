@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importedModel';
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
-type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'hardscape' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
+type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'hardscape' | 'architecture' | 'building' | 'scan' | 'library' | 'materials' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
 type Tool = 'select' | 'terrain' | 'gardenWall' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 
 type ElevationPoint = {
@@ -101,6 +101,108 @@ type RetentionCell = {
   depthPotential: number;
 };
 
+type IrrigationZone = {
+  id: string;
+  name: string;
+  color: string;
+  emitterType: 'sprinkler' | 'drip';
+  targetPressureBar: number;
+  maxFlowLMin: number;
+  enabled: boolean;
+};
+
+type IrrigationCheck = {
+  id: string;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  objectIds: number[];
+};
+
+type MaterialCategory =
+  | 'stone'
+  | 'wood'
+  | 'concrete'
+  | 'metal'
+  | 'glass'
+  | 'plaster'
+  | 'paving'
+  | 'gravel'
+  | 'soil'
+  | 'water';
+
+type SurfaceLayer = {
+  id: string;
+  name: string;
+  thicknessMm: number;
+  materialId: string;
+};
+
+type MaterialDefinition = {
+  id: string;
+  name: string;
+  category: MaterialCategory;
+  baseColor: string;
+  roughness: number;
+  metalness: number;
+  opacity: number;
+  texturePattern: 'none' | 'stone' | 'wood' | 'concrete' | 'brick' | 'gravel' | 'planks' | 'water';
+  textureScale: number;
+  unitCostM2: number;
+  description: string;
+  recommendedFor: GardenObjectType[];
+};
+
+type PlanningPriority = 'design' | 'budget' | 'maintenance' | 'ecology' | 'family';
+
+type PlanningBrief = {
+  style: 'modern' | 'natural' | 'mediterranean' | 'minimal' | 'family';
+  budget: number;
+  priority: PlanningPriority;
+  needsPool: boolean;
+  needsTerrace: boolean;
+  needsPergola: boolean;
+  needsPlayArea: boolean;
+  needsPrivacy: boolean;
+  needsLowMaintenance: boolean;
+  needsBiodiversity: boolean;
+  targetPlantCount: number;
+  notes: string;
+};
+
+type PlanningVariant = {
+  id: string;
+  name: string;
+  concept: string;
+  score: number;
+  objects: GardenObject[];
+  zones: Zone[];
+  terrainBlobs: TerrainBlob[];
+};
+
+type AuditSeverity = 'info' | 'warning' | 'critical';
+
+type ProjectAuditIssue = {
+  id: string;
+  severity: AuditSeverity;
+  category: 'geometry' | 'terrain' | 'planting' | 'water' | 'sun' | 'materials' | 'budget' | 'architecture';
+  title: string;
+  message: string;
+  objectIds: number[];
+  fixable: boolean;
+};
+
+type ProjectAudit = {
+  score: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'E';
+  issues: ProjectAuditIssue[];
+  strengths: string[];
+  recommendations: string[];
+  categoryScores: Record<string,number>;
+};
+
+
+
 type SelectedKind = 'terrain' | 'zone' | 'object' | 'room' | null;
 type MoveStart = { id: number; x: number; y: number };
 type Drag2D =
@@ -112,6 +214,7 @@ type Drag2D =
 type EditorSnapshot = {
   terrainBlobs: TerrainBlob[];
   elevationPoints: ElevationPoint[];
+  irrigationZones?: IrrigationZone[];
   zones: Zone[];
   objects: GardenObject[];
   rooms: Room[];
@@ -236,7 +339,42 @@ type GardenObject = {
   plantingYear?: number;
   installationHeight?: number;
   installationWidth?: number;
+  irrigationZoneId?: string;
+  emitterType?: 'sprinkler' | 'drip';
+  irrigationRadius?: number;
+  irrigationArc?: number;
+  irrigationFlowLMin?: number;
+  pipeDiameterMm?: number;
+  autoRouted?: boolean;
+  sourceObjectId?: number;
+  materialId?: string;
+  textureScale?: number;
+  roughnessOverride?: number;
+  metalnessOverride?: number;
+  surfaceLayers?: SurfaceLayer[];
 };
+
+const MATERIAL_LIBRARY: MaterialDefinition[] = [
+  {id:'stone-gneiss',name:'Naturstein Gneis',category:'stone',baseColor:'#8b8178',roughness:0.9,metalness:0,opacity:1,texturePattern:'stone',textureScale:1.2,unitCostM2:135,description:'Lebendige Natursteinoberfläche für Wege, Mauern und Terrassen.',recommendedFor:['path','gardenWall','wall','stairs','floor']},
+  {id:'stone-limestone',name:'Kalkstein hell',category:'stone',baseColor:'#d6c9b5',roughness:0.82,metalness:0,opacity:1,texturePattern:'stone',textureScale:1.4,unitCostM2:150,description:'Helle, elegante Natursteinoberfläche.',recommendedFor:['path','gardenWall','stairs','floor']},
+  {id:'paving-anthracite',name:'Pflaster Anthrazit',category:'paving',baseColor:'#4b5563',roughness:0.86,metalness:0,opacity:1,texturePattern:'brick',textureScale:0.9,unitCostM2:92,description:'Modernes dunkles Betonpflaster.',recommendedFor:['path','floor']},
+  {id:'paving-brick-red',name:'Ziegelpflaster Weinrot',category:'paving',baseColor:'#7f1d1d',roughness:0.88,metalness:0,opacity:1,texturePattern:'brick',textureScale:0.8,unitCostM2:108,description:'Warmtoniges Ziegelpflaster passend zum Burgundy-Branding.',recommendedFor:['path','floor']},
+  {id:'gravel-light',name:'Kies hell',category:'gravel',baseColor:'#c9c2b8',roughness:1,metalness:0,opacity:1,texturePattern:'gravel',textureScale:0.55,unitCostM2:48,description:'Helle lose Kiesoberfläche.',recommendedFor:['path','floor']},
+  {id:'gravel-dark',name:'Splitt Basalt',category:'gravel',baseColor:'#4a4a4a',roughness:1,metalness:0,opacity:1,texturePattern:'gravel',textureScale:0.5,unitCostM2:54,description:'Dunkler Basaltsplitt.',recommendedFor:['path','floor']},
+  {id:'wood-larch',name:'Lärche natur',category:'wood',baseColor:'#a87345',roughness:0.72,metalness:0,opacity:1,texturePattern:'wood',textureScale:1.3,unitCostM2:115,description:'Natürliche Holzoberfläche für Terrassen und Pergolen.',recommendedFor:['floor','pergola','bench','fence','gate']},
+  {id:'wood-thermo',name:'Thermoholz dunkel',category:'wood',baseColor:'#5b3a29',roughness:0.68,metalness:0,opacity:1,texturePattern:'planks',textureScale:1.1,unitCostM2:145,description:'Dunkles thermisch behandeltes Holz.',recommendedFor:['floor','pergola','bench','fence']},
+  {id:'concrete-fairface',name:'Sichtbeton',category:'concrete',baseColor:'#a7a7a2',roughness:0.78,metalness:0,opacity:1,texturePattern:'concrete',textureScale:1.7,unitCostM2:125,description:'Ruhige moderne Sichtbetonoberfläche.',recommendedFor:['wall','gardenWall','floor','stairs','column']},
+  {id:'concrete-warm',name:'Beton warmgrau',category:'concrete',baseColor:'#b7afa6',roughness:0.8,metalness:0,opacity:1,texturePattern:'concrete',textureScale:1.5,unitCostM2:98,description:'Warmer Betonfarbton für moderne Außenräume.',recommendedFor:['path','floor','gardenWall','stairs']},
+  {id:'plaster-white',name:'Putz Weiß',category:'plaster',baseColor:'#f3f0ea',roughness:0.93,metalness:0,opacity:1,texturePattern:'concrete',textureScale:2.4,unitCostM2:52,description:'Feinkörniger heller Fassadenputz.',recommendedFor:['wall','interiorWall','building']},
+  {id:'plaster-burgundy',name:'Putz Burgundy Akzent',category:'plaster',baseColor:'#7f1d1d',roughness:0.9,metalness:0,opacity:1,texturePattern:'concrete',textureScale:2.2,unitCostM2:68,description:'Weinroter Akzentputz passend zum Markenauftritt.',recommendedFor:['wall','building']},
+  {id:'metal-anthracite',name:'Aluminium Anthrazit',category:'metal',baseColor:'#30343b',roughness:0.35,metalness:0.72,opacity:1,texturePattern:'none',textureScale:1,unitCostM2:190,description:'Pulverbeschichtetes Metall für Rahmen, Geländer und Pergolen.',recommendedFor:['railing','pergola','window','slidingDoor','gate','fence','column']},
+  {id:'metal-burgundy',name:'Metall Weinrot',category:'metal',baseColor:'#6b1024',roughness:0.4,metalness:0.65,opacity:1,texturePattern:'none',textureScale:1,unitCostM2:205,description:'Dunkles Burgundy-Metall als charakteristischer Akzent.',recommendedFor:['railing','pergola','gate','fence']},
+  {id:'glass-clear',name:'Glas klar',category:'glass',baseColor:'#bde8f4',roughness:0.08,metalness:0.05,opacity:0.34,texturePattern:'none',textureScale:1,unitCostM2:265,description:'Transparentes Architekturglas.',recommendedFor:['window','slidingDoor','winterGarden','railing']},
+  {id:'soil-dark',name:'Humoser Oberboden',category:'soil',baseColor:'#4b3527',roughness:1,metalness:0,opacity:1,texturePattern:'gravel',textureScale:0.42,unitCostM2:24,description:'Dunkler humoser Boden für Pflanzflächen.',recommendedFor:['planter']},
+  {id:'water-deep',name:'Wasser tiefblau',category:'water',baseColor:'#0f6f8f',roughness:0.16,metalness:0.05,opacity:0.72,texturePattern:'water',textureScale:1.8,unitCostM2:0,description:'Transparente Wasseroberfläche.',recommendedFor:['pool','pond']}
+];
+
+const proceduralTextureCache = new Map<string,THREE.CanvasTexture>();
 
 const PLANT_CATALOG: PlantSpecies[] = [
   {id:'acer-palmatum',botanicalName:'Acer palmatum',commonName:'Japanischer Fächerahorn',category:'tree',objectType:'tree',matureHeight:5,matureWidth:4,recommendedSpacing:3.5,growthRate:'langsam',evergreen:false,bloomMonths:[4,5],bloomColor:'rot',foliageColor:'#b91c1c',light:['Halbschatten','Sonne'],waterNeed:3,soil:['humos','durchlässig','frisch'],hardinessMin:5,hardinessMax:9,unitCost:190,plantForm:'multiStem',notes:'Geschützter Standort; Staunässe und starke Mittagshitze vermeiden.'},
@@ -773,6 +911,341 @@ function analyzeWaterFlowGrid(
   };
 }
 
+
+
+
+
+function objectBounds2D(obj: GardenObject) {
+  const halfW=Math.max(0.05,obj.width/2);
+  const halfD=Math.max(0.05,obj.depth/2);
+  return {
+    minX:obj.x-halfW,
+    maxX:obj.x+halfW,
+    minY:obj.y-halfD,
+    maxY:obj.y+halfD
+  };
+}
+
+function boundsOverlapArea(a: ReturnType<typeof objectBounds2D>, b: ReturnType<typeof objectBounds2D>) {
+  const width=Math.max(0,Math.min(a.maxX,b.maxX)-Math.max(a.minX,b.minX));
+  const depth=Math.max(0,Math.min(a.maxY,b.maxY)-Math.max(a.minY,b.minY));
+  return width*depth;
+}
+
+function estimateObjectCost(obj: GardenObject) {
+  const unit=Number(obj.unitCost || 0);
+  if(obj.type==='tree' || obj.type==='shrub' || obj.type==='hedge') return unit;
+  if(obj.type==='wall' || obj.type==='interiorWall' || obj.type==='gardenWall') return Math.max(0.1,obj.width)*Math.max(0.1,obj.height)*unit;
+  if(obj.type==='path' || obj.type==='floor' || obj.type==='pool' || obj.type==='pond') return Math.max(0.1,obj.width)*Math.max(0.1,obj.depth)*unit;
+  return unit*Math.max(1,obj.width*obj.depth*0.25);
+}
+
+function auditGrade(score:number):ProjectAudit['grade'] {
+  if(score>=90)return 'A';
+  if(score>=78)return 'B';
+  if(score>=65)return 'C';
+  if(score>=50)return 'D';
+  return 'E';
+}
+
+function planningStyleFromText(text:string):PlanningBrief['style'] {
+  const lower=text.toLowerCase();
+  if(lower.includes('mediterran'))return 'mediterranean';
+  if(lower.includes('naturnah') || lower.includes('natur'))return 'natural';
+  if(lower.includes('minimal'))return 'minimal';
+  if(lower.includes('famil'))return 'family';
+  return 'modern';
+}
+
+function planningPriorityFromText(text:string):PlanningPriority {
+  const lower=text.toLowerCase();
+  if(lower.includes('günstig') || lower.includes('budget') || lower.includes('kosten'))return 'budget';
+  if(lower.includes('pflegeleicht') || lower.includes('wenig pflege'))return 'maintenance';
+  if(lower.includes('ökologisch') || lower.includes('biodivers') || lower.includes('insekten'))return 'ecology';
+  if(lower.includes('kind') || lower.includes('famil'))return 'family';
+  return 'design';
+}
+
+function materialDefinitionById(id?: string) {
+  return MATERIAL_LIBRARY.find(material=>material.id===id) || null;
+}
+
+function defaultMaterialIdForObject(obj: Pick<GardenObject,'type'|'material'>) {
+  const materialName=(obj.material || '').toLowerCase();
+
+  if (obj.type==='pool' || obj.type==='pond') return 'water-deep';
+  if (obj.type==='window' || obj.type==='slidingDoor' || obj.type==='winterGarden') return 'glass-clear';
+  if (obj.type==='railing' || obj.type==='gate') return 'metal-anthracite';
+  if (obj.type==='pergola') return materialName.includes('holz') ? 'wood-larch' : 'metal-anthracite';
+  if (obj.type==='path') {
+    if (materialName.includes('kies') || materialName.includes('splitt')) return 'gravel-light';
+    if (materialName.includes('ziegel')) return 'paving-brick-red';
+    if (materialName.includes('beton')) return 'concrete-warm';
+    return 'stone-gneiss';
+  }
+  if (obj.type==='gardenWall') return materialName.includes('beton') ? 'concrete-fairface' : 'stone-gneiss';
+  if (obj.type==='floor') return materialName.includes('holz') ? 'wood-larch' : 'concrete-warm';
+  if (obj.type==='wall' || obj.type==='interiorWall' || obj.type==='building') return 'plaster-white';
+  if (obj.type==='stairs' || obj.type==='column') return 'concrete-fairface';
+  if (obj.type==='fence') return materialName.includes('holz') ? 'wood-larch' : 'metal-anthracite';
+  return undefined;
+}
+
+function ensureObjectMaterial(obj: GardenObject) {
+  const materialId=obj.materialId || defaultMaterialIdForObject(obj);
+  return materialId ? {...obj,materialId} : obj;
+}
+
+function proceduralTextureForMaterial(
+  definition: MaterialDefinition,
+  repeatScale = definition.textureScale
+) {
+  if (definition.texturePattern==='none') return null;
+
+  const cacheKey=`${definition.id}:${repeatScale.toFixed(2)}`;
+  const cached=proceduralTextureCache.get(cacheKey);
+  if(cached) return cached;
+
+  const canvas=document.createElement('canvas');
+  canvas.width=128;
+  canvas.height=128;
+  const ctx=canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle=definition.baseColor;
+  ctx.fillRect(0,0,128,128);
+
+  const random=(seed:number)=>{
+    const value=Math.sin(seed*12.9898)*43758.5453;
+    return value-Math.floor(value);
+  };
+
+  if (definition.texturePattern==='stone') {
+    for(let i=0;i<90;i++){
+      const value=Math.round(80+random(i)*80);
+      ctx.fillStyle=`rgba(${value},${Math.max(0,value-5)},${Math.max(0,value-10)},${0.06+random(i+4)*0.12})`;
+      ctx.beginPath();
+      ctx.arc(random(i+1)*128,random(i+2)*128,1+random(i+3)*5,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  if (definition.texturePattern==='concrete') {
+    for(let i=0;i<420;i++){
+      const alpha=0.025+random(i+2)*0.07;
+      ctx.fillStyle=random(i)>0.5?`rgba(255,255,255,${alpha})`:`rgba(20,20,20,${alpha})`;
+      ctx.fillRect(random(i+1)*128,random(i+3)*128,1,1);
+    }
+  }
+
+  if (definition.texturePattern==='wood' || definition.texturePattern==='planks') {
+    ctx.strokeStyle='rgba(70,35,18,.26)';
+    ctx.lineWidth=1;
+    for(let y=8;y<128;y+=10){
+      ctx.beginPath();
+      for(let x=0;x<=128;x+=8){
+        const offset=Math.sin((x+y)*0.11)*2.4;
+        if(x===0)ctx.moveTo(x,y+offset);else ctx.lineTo(x,y+offset);
+      }
+      ctx.stroke();
+    }
+    if(definition.texturePattern==='planks'){
+      ctx.strokeStyle='rgba(35,20,12,.35)';
+      for(let x=0;x<128;x+=32){
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,128);ctx.stroke();
+      }
+    }
+  }
+
+  if (definition.texturePattern==='brick') {
+    ctx.strokeStyle='rgba(255,255,255,.24)';
+    ctx.lineWidth=2;
+    for(let y=0;y<=128;y+=24){
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(128,y);ctx.stroke();
+      const offset=(Math.floor(y/24)%2)*20;
+      for(let x=offset;x<=128;x+=40){
+        ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+24);ctx.stroke();
+      }
+    }
+  }
+
+  if (definition.texturePattern==='gravel') {
+    for(let i=0;i<260;i++){
+      const light=Math.round(125+random(i)*90);
+      ctx.fillStyle=`rgba(${light},${Math.max(0,light-7)},${Math.max(0,light-14)},${0.18+random(i+5)*0.35})`;
+      ctx.beginPath();
+      ctx.ellipse(random(i+1)*128,random(i+2)*128,1+random(i+3)*2.6,1+random(i+4)*1.7,random(i+6)*Math.PI,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  if (definition.texturePattern==='water') {
+    ctx.strokeStyle='rgba(255,255,255,.18)';
+    for(let y=8;y<128;y+=12){
+      ctx.beginPath();
+      for(let x=0;x<=128;x+=6){
+        const wave=Math.sin(x*0.13+y*0.04)*2.2;
+        if(x===0)ctx.moveTo(x,y+wave);else ctx.lineTo(x,y+wave);
+      }
+      ctx.stroke();
+    }
+  }
+
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.wrapS=THREE.RepeatWrapping;
+  texture.wrapT=THREE.RepeatWrapping;
+  texture.repeat.set(Math.max(0.2,repeatScale),Math.max(0.2,repeatScale));
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.needsUpdate=true;
+  proceduralTextureCache.set(cacheKey,texture);
+  return texture;
+}
+
+function threeMaterialForObject(
+  obj: GardenObject,
+  fallbackColor?: string | number,
+  overrides?: Partial<THREE.MeshStandardMaterialParameters>
+) {
+  const definition=materialDefinitionById(obj.materialId || defaultMaterialIdForObject(obj));
+  const baseColor=definition?.baseColor || obj.color || fallbackColor || '#9ca3af';
+  const texture=definition ? proceduralTextureForMaterial(definition,obj.textureScale || definition.textureScale) : null;
+
+  const material=new THREE.MeshStandardMaterial({
+    color:baseColor as THREE.ColorRepresentation,
+    roughness:obj.roughnessOverride ?? definition?.roughness ?? 0.82,
+    metalness:obj.metalnessOverride ?? definition?.metalness ?? 0,
+    transparent:(definition?.opacity ?? 1)<0.999,
+    opacity:definition?.opacity ?? 1,
+    map:texture || undefined,
+    side:THREE.DoubleSide,
+    ...overrides
+  });
+
+  if(definition?.category==='glass') material.depthWrite=false;
+  return material;
+}
+
+function defaultSurfaceLayersForMaterial(materialId:string):SurfaceLayer[] {
+  const definition=materialDefinitionById(materialId);
+  if(!definition) return [];
+
+  if(definition.category==='paving' || definition.category==='stone'){
+    return [
+      {id:`${materialId}-surface`,name:'Oberbelag',thicknessMm:50,materialId},
+      {id:`${materialId}-bedding`,name:'Bettung',thicknessMm:40,materialId:'gravel-light'},
+      {id:`${materialId}-base`,name:'Tragschicht',thicknessMm:180,materialId:'gravel-dark'}
+    ];
+  }
+
+  if(definition.category==='wood'){
+    return [
+      {id:`${materialId}-surface`,name:'Holzbelag',thicknessMm:28,materialId},
+      {id:`${materialId}-sub`,name:'Unterkonstruktion',thicknessMm:80,materialId:'wood-thermo'}
+    ];
+  }
+
+  if(definition.category==='concrete'){
+    return [
+      {id:`${materialId}-surface`,name:'Betonbauteil',thicknessMm:160,materialId},
+      {id:`${materialId}-base`,name:'Frostschutz',thicknessMm:200,materialId:'gravel-dark'}
+    ];
+  }
+
+  return [{id:`${materialId}-surface`,name:'Oberfläche',thicknessMm:20,materialId}];
+}
+
+function circleOverlapArea(radiusA: number, radiusB: number, distance: number) {
+  if (distance >= radiusA + radiusB) return 0;
+  if (distance <= Math.abs(radiusA - radiusB)) {
+    const r = Math.min(radiusA, radiusB);
+    return Math.PI * r * r;
+  }
+
+  const a = radiusA * radiusA * Math.acos(
+    clamp((distance * distance + radiusA * radiusA - radiusB * radiusB) / (2 * distance * radiusA), -1, 1)
+  );
+  const b = radiusB * radiusB * Math.acos(
+    clamp((distance * distance + radiusB * radiusB - radiusA * radiusA) / (2 * distance * radiusB), -1, 1)
+  );
+  const c = 0.5 * Math.sqrt(
+    Math.max(
+      0,
+      (-distance + radiusA + radiusB) *
+      (distance + radiusA - radiusB) *
+      (distance - radiusA + radiusB) *
+      (distance + radiusA + radiusB)
+    )
+  );
+
+  return a + b - c;
+}
+
+function irrigationCoverageArea(obj: GardenObject) {
+  const radius = Math.max(0.1, obj.irrigationRadius || 2.5);
+  const arc = clamp(obj.irrigationArc || 360, 15, 360);
+  return Math.PI * radius * radius * (arc / 360);
+}
+
+function irrigationArcPath(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  arcDegrees: number,
+  rotationDegrees: number
+) {
+  const arc = clamp(arcDegrees, 15, 360);
+  if (arc >= 359.9) return '';
+
+  const start = degToRad(rotationDegrees - arc/2);
+  const end = degToRad(rotationDegrees + arc/2);
+  const x1 = centerX + Math.cos(start) * radius;
+  const y1 = centerY + Math.sin(start) * radius;
+  const x2 = centerX + Math.cos(end) * radius;
+  const y2 = centerY + Math.sin(end) * radius;
+  const largeArc = arc > 180 ? 1 : 0;
+
+  return [
+    `M ${centerX*SCALE} ${centerY*SCALE}`,
+    `L ${x1*SCALE} ${y1*SCALE}`,
+    `A ${radius*SCALE} ${radius*SCALE} 0 ${largeArc} 1 ${x2*SCALE} ${y2*SCALE}`,
+    'Z'
+  ].join(' ');
+}
+
+function nearestPointOnPolyline(
+  point: {x:number;y:number},
+  polyline: {x:number;y:number}[]
+) {
+  if (!polyline.length) return point;
+  let best = {x:polyline[0].x,y:polyline[0].y,distance:Infinity};
+
+  for (let i=1;i<polyline.length;i++) {
+    const a = polyline[i-1];
+    const b = polyline[i];
+    const dx = b.x-a.x;
+    const dy = b.y-a.y;
+    const lengthSq = dx*dx+dy*dy || 1;
+    const t = clamp(((point.x-a.x)*dx+(point.y-a.y)*dy)/lengthSq,0,1);
+    const projected = {x:a.x+dx*t,y:a.y+dy*t};
+    const distance = Math.hypot(projected.x-point.x,projected.y-point.y);
+
+    if (distance<best.distance) best={...projected,distance};
+  }
+
+  return {x:best.x,y:best.y};
+}
+
+function simpleOrthogonalRoute(
+  start: {x:number;y:number},
+  end: {x:number;y:number},
+  preferHorizontalFirst = true
+) {
+  if (preferHorizontalFirst) {
+    return [start,{x:end.x,y:start.y},end];
+  }
+  return [start,{x:start.x,y:end.y},end];
+}
+
 function flowDirectionLabel(vector: FlowVectorCell) {
   const angle = (Math.atan2(vector.toY - vector.y, vector.toX - vector.x) * 180 / Math.PI + 360) % 360;
   if (angle >= 337.5 || angle < 22.5) return 'Ost';
@@ -1198,11 +1671,7 @@ function buildWallWithOpenings3D(
   selected: boolean,
   baseElevation = 0
 ) {
-  const material = new THREE.MeshStandardMaterial({
-    color: wall.color,
-    roughness: 0.82,
-    metalness: 0
-  });
+  const material = threeMaterialForObject(wall,wall.color);
   const edgeColor = selected ? 0xf59e0b : (wall.type === 'interiorWall' ? 0x94a3b8 : 0x475569);
   const baseY = baseElevation;
   const wallHeight = Math.max(0.2, wall.height);
@@ -1265,7 +1734,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.27 WATER + FLOW + BRAND – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.30 AI PLANNING + AUDIT – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -1317,6 +1786,40 @@ export default function LandscapePlatform() {
   const [retentionCells, setRetentionCells] = useState<RetentionCell[]>([]);
   const [runoffAverageSlope, setRunoffAverageSlope] = useState(0);
   const [runoffMaxSlope, setRunoffMaxSlope] = useState(0);
+  const [irrigationZones, setIrrigationZones] = useState<IrrigationZone[]>([
+    {id:'zone-lawn',name:'Rasen',color:'#be123c',emitterType:'sprinkler',targetPressureBar:2.8,maxFlowLMin:32,enabled:true},
+    {id:'zone-beds',name:'Beete',color:'#9f1239',emitterType:'drip',targetPressureBar:1.8,maxFlowLMin:18,enabled:true}
+  ]);
+  const [activeIrrigationZoneId, setActiveIrrigationZoneId] = useState('zone-lawn');
+  const [defaultSprinklerRadius, setDefaultSprinklerRadius] = useState(4);
+  const [defaultSprinklerArc, setDefaultSprinklerArc] = useState(360);
+  const [defaultSprinklerFlow, setDefaultSprinklerFlow] = useState(8);
+  const [defaultDripRadius, setDefaultDripRadius] = useState(1.1);
+  const [showIrrigationCoverage2D, setShowIrrigationCoverage2D] = useState(true);
+  const [showIrrigationPipes2D, setShowIrrigationPipes2D] = useState(true);
+  const [irrigationSourcePoint, setIrrigationSourcePoint] = useState<{x:number;y:number}>({x:-8.5,y:5.2});
+  const [materialSearch, setMaterialSearch] = useState('');
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState<'all'|MaterialCategory>('all');
+  const [selectedMaterialId, setSelectedMaterialId] = useState('stone-gneiss');
+  const [planningBrief, setPlanningBrief] = useState<PlanningBrief>({
+    style:'modern',
+    budget:projectInfo.budget,
+    priority:'design',
+    needsPool:false,
+    needsTerrace:true,
+    needsPergola:true,
+    needsPlayArea:false,
+    needsPrivacy:true,
+    needsLowMaintenance:false,
+    needsBiodiversity:true,
+    targetPlantCount:12,
+    notes:''
+  });
+  const [planningVariants, setPlanningVariants] = useState<PlanningVariant[]>([]);
+  const [selectedPlanningVariantId, setSelectedPlanningVariantId] = useState<string | null>(null);
+  const [planningQuestions, setPlanningQuestions] = useState<string[]>([]);
+  const [projectAudit, setProjectAudit] = useState<ProjectAudit | null>(null);
+  const [auditBusy, setAuditBusy] = useState(false);
   const [showContours, setShowContours] = useState(true);
   const [showGrid3D, setShowGrid3D] = useState(true);
   const [cameraMode, setCameraMode] = useState<'orbit' | 'walk' | 'top'>('orbit');
@@ -1527,6 +2030,7 @@ export default function LandscapePlatform() {
           projectInfo,
           terrainBlobs,
           elevationPoints,
+          irrigationZones,
           zones,
           objects,
           rooms,
@@ -1545,7 +2049,7 @@ export default function LandscapePlatform() {
       }
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [autosaveEnabled, projectInfo, terrainBlobs, elevationPoints, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled]);
+  }, [autosaveEnabled, projectInfo, terrainBlobs, elevationPoints, irrigationZones, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled]);
 
   function restoreAutosave() {
     try {
@@ -1556,6 +2060,7 @@ export default function LandscapePlatform() {
       if (data.projectInfo) setProjectInfo(data.projectInfo);
       if (Array.isArray(data.terrainBlobs)) setTerrainBlobs(data.terrainBlobs);
       if (Array.isArray(data.elevationPoints)) setElevationPoints(data.elevationPoints);
+      if (Array.isArray(data.irrigationZones) && data.irrigationZones.length) setIrrigationZones(data.irrigationZones);
       if (Array.isArray(data.zones)) setZones(data.zones);
       if (Array.isArray(data.objects)) setObjects(data.objects);
       if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -1621,6 +2126,116 @@ export default function LandscapePlatform() {
   );
 
   const stats = useMemo(() => terrainStats(terrainBlobs), [terrainBlobs]);
+
+  const filteredMaterialLibrary = useMemo(() => {
+    const query=materialSearch.trim().toLowerCase();
+    return MATERIAL_LIBRARY.filter(material => {
+      const matchesSearch=!query
+        || material.name.toLowerCase().includes(query)
+        || material.description.toLowerCase().includes(query);
+      const matchesCategory=materialCategoryFilter==='all' || material.category===materialCategoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [materialSearch,materialCategoryFilter]);
+
+  const materialUsageStats = useMemo(() => {
+    return MATERIAL_LIBRARY.map(material => ({
+      material,
+      count:objects.filter(object=>(object.materialId || defaultMaterialIdForObject(object))===material.id).length
+    })).filter(item=>item.count>0);
+  }, [objects]);
+
+  const irrigationEmitters = useMemo(
+    () => objects.filter(object=>object.type==='irrigation' && object.emitterType),
+    [objects]
+  );
+
+  const irrigationPipes = useMemo(
+    () => objects.filter(object=>object.type==='irrigation' && object.points?.length && !object.emitterType),
+    [objects]
+  );
+
+  const irrigationChecks = useMemo((): IrrigationCheck[] => {
+    const checks: IrrigationCheck[] = [];
+
+    irrigationEmitters.forEach(emitter => {
+      const zone = irrigationZones.find(item=>item.id===emitter.irrigationZoneId);
+      if (!zone) {
+        checks.push({
+          id:`zone-${emitter.id}`,
+          severity:'warning',
+          title:'Bewässerungszone fehlt',
+          message:`${emitter.name} ist keiner gültigen Zone zugeordnet.`,
+          objectIds:[emitter.id]
+        });
+      }
+    });
+
+    for (let i=0;i<irrigationEmitters.length;i++) {
+      const a = irrigationEmitters[i];
+      if (a.emitterType!=='sprinkler') continue;
+      const radiusA = Math.max(0.1,a.irrigationRadius || 2.5);
+
+      for (let j=i+1;j<irrigationEmitters.length;j++) {
+        const b = irrigationEmitters[j];
+        if (b.emitterType!=='sprinkler') continue;
+        if (a.irrigationZoneId!==b.irrigationZoneId) continue;
+
+        const radiusB = Math.max(0.1,b.irrigationRadius || 2.5);
+        const distance = Math.hypot(a.x-b.x,a.y-b.y);
+        const overlap = circleOverlapArea(radiusA,radiusB,distance);
+        const smaller = Math.PI*Math.min(radiusA,radiusB)**2;
+        const ratio = smaller ? overlap/smaller : 0;
+
+        if (distance>radiusA+radiusB*1.15) {
+          checks.push({
+            id:`gap-${a.id}-${b.id}`,
+            severity:'warning',
+            title:'Mögliche Bewässerungslücke',
+            message:`${a.name} und ${b.name} liegen ${distance.toFixed(2)} m auseinander. Reichweiten überdecken sich kaum.`,
+            objectIds:[a.id,b.id]
+          });
+        } else if (ratio>0.72) {
+          checks.push({
+            id:`overlap-${a.id}-${b.id}`,
+            severity:'info',
+            title:'Starke Regnerüberlappung',
+            message:`${a.name} und ${b.name} überdecken sich stark. Durchfluss und Laufzeit prüfen.`,
+            objectIds:[a.id,b.id]
+          });
+        }
+      }
+    }
+
+    irrigationZones.forEach(zone => {
+      const zoneObjects = irrigationEmitters.filter(object=>object.irrigationZoneId===zone.id);
+      const totalFlow = zoneObjects.reduce((sum,object)=>sum+(object.irrigationFlowLMin || 0),0);
+
+      if (totalFlow>zone.maxFlowLMin) {
+        checks.push({
+          id:`flow-${zone.id}`,
+          severity:'critical',
+          title:'Zonendurchfluss zu hoch',
+          message:`${zone.name}: ${totalFlow.toFixed(1)} l/min geplant, maximal ${zone.maxFlowLMin.toFixed(1)} l/min hinterlegt.`,
+          objectIds:zoneObjects.map(object=>object.id)
+        });
+      }
+    });
+
+    return checks;
+  }, [irrigationEmitters,irrigationZones]);
+
+  const irrigationZoneStats = useMemo(() => {
+    return irrigationZones.map(zone => {
+      const emitters = irrigationEmitters.filter(object=>object.irrigationZoneId===zone.id);
+      return {
+        zone,
+        count:emitters.length,
+        flow:emitters.reduce((sum,object)=>sum+(object.irrigationFlowLMin || 0),0),
+        coverage:emitters.reduce((sum,object)=>sum+irrigationCoverageArea(object),0)
+      };
+    });
+  }, [irrigationZones,irrigationEmitters]);
 
   const dominantRunoffDirection = useMemo(() => {
     if (!flowVectors.length) return '—';
@@ -1734,6 +2349,7 @@ export default function LandscapePlatform() {
     return {
       terrainBlobs: structuredClone(terrainBlobs),
       elevationPoints: structuredClone(elevationPoints),
+      irrigationZones: structuredClone(irrigationZones),
       zones: structuredClone(zones),
       objects: structuredClone(objects),
       rooms: structuredClone(rooms),
@@ -1754,6 +2370,7 @@ export default function LandscapePlatform() {
   function restoreEditorSnapshot(data: EditorSnapshot) {
     setTerrainBlobs(data.terrainBlobs || []);
     setElevationPoints(data.elevationPoints || []);
+    if (data.irrigationZones?.length) setIrrigationZones(data.irrigationZones);
     setZones(data.zones || []);
     setObjects(data.objects || []);
     setRooms(data.rooms || []);
@@ -1910,12 +2527,12 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v022-project', JSON.stringify({ projectInfo, terrainBlobs, elevationPoints, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v028-project', JSON.stringify({ projectInfo, terrainBlobs, elevationPoints, irrigationZones, zones, objects, rooms, levels, activeLevel, importedModels, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v022-project') || localStorage.getItem('al-green-v021-project') || localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
+    const raw = localStorage.getItem('al-green-v028-project') || localStorage.getItem('al-green-v022-project') || localStorage.getItem('al-green-v021-project') || localStorage.getItem('al-green-v0192-project') || localStorage.getItem('al-green-v019-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
@@ -1923,6 +2540,7 @@ export default function LandscapePlatform() {
       if (data.projectInfo) setProjectInfo(data.projectInfo);
       if (data.terrainBlobs) setTerrainBlobs(data.terrainBlobs);
       if (Array.isArray(data.elevationPoints)) setElevationPoints(data.elevationPoints);
+      if (Array.isArray(data.irrigationZones) && data.irrigationZones.length) setIrrigationZones(data.irrigationZones);
       if (data.zones) setZones(data.zones);
       if (data.objects) setObjects(data.objects);
       if (Array.isArray(data.rooms)) setRooms(data.rooms);
@@ -2016,6 +2634,24 @@ export default function LandscapePlatform() {
         <circle cx={(-obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
         <circle cx={(obj.width/2)*SCALE} cy="0" r="4" fill="#fff" stroke="#475569" strokeWidth="1.5"/>
         <text x="0" y={-thickness*SCALE/2-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name} · {obj.width.toFixed(2)} m</text>
+      </g>
+    );
+  }
+
+  if (obj.type==='irrigation' && obj.emitterType) {
+    return (
+      <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <circle cx="0" cy="0" r="8" fill={obj.color} stroke={stroke} strokeWidth={sw}/>
+        {obj.emitterType==='sprinkler' ? (
+          <>
+            <circle cx="0" cy="0" r="3" fill="#fff"/>
+            <line x1="-6" y1="0" x2="6" y2="0" stroke="#fff" strokeWidth="1.5"/>
+            <line x1="0" y1="-6" x2="0" y2="6" stroke="#fff" strokeWidth="1.5"/>
+          </>
+        ) : (
+          <circle cx="0" cy="0" r="3.5" fill="#fff"/>
+        )}
+        <text x="0" y="22" fontSize="10" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
       </g>
     );
   }
@@ -2520,6 +3156,7 @@ export default function LandscapePlatform() {
           rotation:0,
           color:'#cbbba0',
           material:smartPathMaterial,
+          materialId:smartPathMaterial.includes('Kies')?'gravel-light':smartPathMaterial.includes('Beton')?'concrete-warm':smartPathMaterial.includes('Ziegel')?'paving-brick-red':smartPathMaterial.includes('Holz')?'wood-larch':'stone-gneiss',
           unitCost:95,
           points:relative,
           pathWidth:smartPathWidth,
@@ -2540,6 +3177,7 @@ export default function LandscapePlatform() {
           rotation:0,
           color:'#9ca3af',
           material:'Naturstein / Beton',
+          materialId:'stone-gneiss',
           unitCost:340,
           points:relative,
           thickness:gardenWallThickness,
@@ -2626,6 +3264,621 @@ export default function LandscapePlatform() {
     setStatus(`${metrics.count} Stufen berechnet · Steigung ${metrics.riser.toFixed(3)} m · Auftritt ${metrics.tread.toFixed(3)} m.`);
   }
 
+
+  function syncPlanningBriefFromPrompt() {
+    const text=chat.trim();
+    const lower=text.toLowerCase();
+
+    const next:PlanningBrief={
+      ...planningBrief,
+      style:planningStyleFromText(text),
+      budget:projectInfo.budget,
+      priority:planningPriorityFromText(text),
+      needsPool:lower.includes('pool') || lower.includes('schwimm'),
+      needsTerrace:lower.includes('terrasse') || !lower.includes('keine terrasse'),
+      needsPergola:lower.includes('pergola') || lower.includes('beschattung'),
+      needsPlayArea:lower.includes('spiel') || lower.includes('kind'),
+      needsPrivacy:lower.includes('sichtschutz') || lower.includes('privat'),
+      needsLowMaintenance:lower.includes('pflegeleicht') || lower.includes('wenig pflege'),
+      needsBiodiversity:lower.includes('biodivers') || lower.includes('insekten') || lower.includes('naturnah'),
+      targetPlantCount:lower.includes('wenig pflanzen')?6:lower.includes('viele pflanzen')?22:12,
+      notes:text
+    };
+
+    const questions:string[]=[];
+    if(!text)questions.push('Welche Stilrichtung soll das Projekt haben?');
+    if(!/(pool|schwimm|teich)/.test(lower))questions.push('Ist ein Wasserobjekt wie Pool oder Teich gewünscht?');
+    if(!/(terrasse|sitzplatz|pergola)/.test(lower))questions.push('Welche Aufenthaltsbereiche sollen vorgesehen werden?');
+    if(!/(pflege|wartung)/.test(lower))questions.push('Wie wichtig ist ein geringer Pflegeaufwand?');
+    if(!/(budget|€|euro|kosten)/.test(lower))questions.push(`Soll mit dem hinterlegten Budget von ${projectInfo.budget.toLocaleString('de-DE')} € geplant werden?`);
+
+    setPlanningBrief(next);
+    setPlanningQuestions(questions.slice(0,5));
+    setStatus(`Planungsbrief aus Beschreibung abgeleitet · ${questions.length} offene Frage(n).`);
+  }
+
+  function createLocalPlanningVariants() {
+    const brief=planningBrief;
+    const base=Date.now();
+
+    const makeObjects=(variant:'A'|'B'|'C')=>{
+      const objs:GardenObject[]=[];
+      const terraceMaterial=variant==='B'?'wood-larch':variant==='C'?'paving-brick-red':'stone-gneiss';
+
+      if(brief.needsTerrace){
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+1,
+          type:'floor',
+          name:`Variante ${variant} Terrasse`,
+          x:variant==='B'?-2.5:variant==='C'?2.8:0,
+          y:3.6,
+          width:variant==='B'?5.2:6,
+          depth:variant==='C'?2.8:3.4,
+          height:0.12,
+          rotation:0,
+          color:materialDefinitionById(terraceMaterial)?.baseColor || '#b7afa6',
+          material:materialDefinitionById(terraceMaterial)?.name,
+          materialId:terraceMaterial,
+          unitCost:110,
+          surfaceLayers:defaultSurfaceLayersForMaterial(terraceMaterial)
+        });
+      }
+
+      if(brief.needsPergola){
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+2,
+          type:'pergola',
+          name:`Variante ${variant} Pergola`,
+          x:variant==='C'?3.2:-3,
+          y:3.4,
+          width:3.2,
+          depth:2.6,
+          height:2.7,
+          rotation:variant==='B'?12:0,
+          color:'#30343b',
+          material:'Aluminium Anthrazit',
+          materialId:'metal-anthracite',
+          unitCost:420
+        });
+      }
+
+      if(brief.needsPool){
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+3,
+          type:'pool',
+          name:`Variante ${variant} Pool`,
+          x:variant==='A'?4.3:variant==='B'?3.8:-4.2,
+          y:variant==='C'?1.0:0.6,
+          width:variant==='B'?5.5:4.8,
+          depth:2.6,
+          height:1.35,
+          rotation:variant==='B'?8:0,
+          color:'#0f6f8f',
+          material:'Wasser tiefblau',
+          materialId:'water-deep',
+          unitCost:1250
+        });
+      }
+
+      if(brief.needsPrivacy){
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+4,
+          type:'hedge',
+          name:`Variante ${variant} Sichtschutz`,
+          x:0,
+          y:-5.1,
+          width:variant==='C'?9:12,
+          depth:0.7,
+          height:1.8,
+          rotation:0,
+          color:'#14532d',
+          material:'Pflanze',
+          unitCost:48
+        });
+      }
+
+      const plantCount=Math.max(4,Math.round(brief.targetPlantCount*(variant==='B'?0.8:variant==='C'?1.25:1)));
+      for(let i=0;i<plantCount;i++){
+        const angle=(i/plantCount)*Math.PI*2;
+        const radius=variant==='C'?5.1:4.5;
+        const tree=i%5===0;
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+20+i,
+          type:tree?'tree':'shrub',
+          name:tree?`Variante ${variant} Solitärbaum`:`Variante ${variant} Pflanzung`,
+          x:Number((Math.cos(angle)*radius+(variant==='B'?0.8:0)).toFixed(2)),
+          y:Number((Math.sin(angle)*radius*0.68-(variant==='C'?0.4:0)).toFixed(2)),
+          width:tree?1.8:0.9,
+          depth:tree?1.8:0.9,
+          height:tree?4.2:1.1,
+          rotation:0,
+          color:tree?'#4d7c0f':'#22c55e',
+          material:'Pflanze',
+          unitCost:tree?165:28
+        });
+      }
+
+      if(brief.needsPlayArea){
+        objs.push({
+          id:base+(variant.charCodeAt(0))*100+90,
+          type:'planter',
+          name:`Variante ${variant} flexible Familienfläche`,
+          x:-4.6,
+          y:1.8,
+          width:3.2,
+          depth:3,
+          height:0.12,
+          rotation:0,
+          color:'#d9c7a8',
+          material:'Rasen / Spielbereich',
+          unitCost:55
+        });
+      }
+
+      return objs.map(ensureObjectMaterial);
+    };
+
+    const makeZones=(variant:'A'|'B'|'C'):Zone[]=>[
+      {id:base+variant.charCodeAt(0)*1000+1,kind:'hardscape',name:`Variante ${variant} Aufenthaltszone`,x:variant==='C'?2.5:0,y:3.3,width:7,depth:3.7,color:'#ead7dc'},
+      {id:base+variant.charCodeAt(0)*1000+2,kind:'plantZone',name:`Variante ${variant} Pflanzzone`,x:variant==='B'?-3.8:3.8,y:-1.8,width:variant==='C'?6:4.4,depth:4,color:'#d1fae5'}
+    ];
+
+    const makeTerrain=(variant:'A'|'B'|'C'):TerrainBlob[]=>{
+      if(variant==='A')return [{id:base+11001,name:'Sanfte Modellierung',x:-2.5,y:-1.5,radius:3.2,height:0.28,softness:1.7,source:'AI Planner'}];
+      if(variant==='B')return [{id:base+12001,name:'Klare Ebene',x:2.5,y:1.2,radius:4,height:0.12,softness:1.9,source:'AI Planner'}];
+      return [
+        {id:base+13001,name:'Naturnahe Mulde',x:2,y:-1.8,radius:2.8,height:-0.32,softness:1.8,source:'AI Planner'},
+        {id:base+13002,name:'Sanfte Erhebung',x:-3.2,y:1.4,radius:2.6,height:0.36,softness:1.7,source:'AI Planner'}
+      ];
+    };
+
+    const variants:PlanningVariant[]=[
+      {id:`A-${base}`,name:'Variante A · Ausgewogen',concept:'Klare Zonierung, ausgewogene Kosten und gute Nutzbarkeit.',score:88,objects:makeObjects('A'),zones:makeZones('A'),terrainBlobs:makeTerrain('A')},
+      {id:`B-${base}`,name:'Variante B · Budget & Pflege',concept:'Reduzierte Elemente, klare Geometrie und geringerer Pflegeaufwand.',score:brief.priority==='budget'||brief.needsLowMaintenance?93:84,objects:makeObjects('B'),zones:makeZones('B'),terrainBlobs:makeTerrain('B')},
+      {id:`C-${base}`,name:'Variante C · Natur & Erlebnis',concept:'Mehr Pflanzung, weichere Geländemodellierung und höhere ökologische Vielfalt.',score:brief.priority==='ecology'||brief.needsBiodiversity?94:86,objects:makeObjects('C'),zones:makeZones('C'),terrainBlobs:makeTerrain('C')}
+    ];
+
+    setPlanningVariants(variants);
+    setSelectedPlanningVariantId(variants.sort((a,b)=>b.score-a.score)[0].id);
+    setStatus('Drei Planungsvarianten erzeugt.');
+  }
+
+  function applyPlanningVariant(variantId:string) {
+    const variant=planningVariants.find(item=>item.id===variantId);
+    if(!variant)return;
+
+    snapshot();
+    setObjects(variant.objects);
+    setZones(variant.zones);
+    setTerrainBlobs(variant.terrainBlobs);
+    setSelectedPlanningVariantId(variant.id);
+    setView('splitVertical');
+    setSelection('object',variant.objects[0]?.id || null,`${variant.name} übernommen.`);
+  }
+
+  function runProjectAudit() {
+    if(auditBusy)return;
+    setAuditBusy(true);
+    setStatus('Projektprüfung läuft …');
+
+    window.setTimeout(()=>{
+      try{
+        const issues:ProjectAuditIssue[]=[];
+        const strengths:string[]=[];
+        const recommendations:string[]=[];
+        const categoryScores:Record<string,number>={
+          geometry:100,terrain:100,planting:100,water:100,sun:100,materials:100,budget:100,architecture:100
+        };
+
+        // Geometry collisions
+        for(let i=0;i<objects.length;i++){
+          const a=objects[i];
+          if(['tree','shrub','hedge','irrigation','light','drainage'].includes(a.type))continue;
+          for(let j=i+1;j<objects.length;j++){
+            const b=objects[j];
+            if(['tree','shrub','hedge','irrigation','light','drainage'].includes(b.type))continue;
+            if(a.parentId===b.id || b.parentId===a.id)continue;
+            const overlap=boundsOverlapArea(objectBounds2D(a),objectBounds2D(b));
+            if(overlap>Math.min(a.width*a.depth,b.width*b.depth)*0.28){
+              issues.push({
+                id:`collision-${a.id}-${b.id}`,severity:'warning',category:'geometry',
+                title:'Geometrische Überschneidung',
+                message:`${a.name} und ${b.name} überschneiden sich deutlich.`,
+                objectIds:[a.id,b.id],fixable:true
+              });
+              categoryScores.geometry-=6;
+            }
+          }
+        }
+
+        // Site bounds
+        objects.forEach(object=>{
+          const bounds=objectBounds2D(object);
+          if(bounds.minX<-10 || bounds.maxX>10 || bounds.minY<-6.5 || bounds.maxY>6.5){
+            issues.push({
+              id:`bounds-${object.id}`,severity:'warning',category:'geometry',
+              title:'Objekt außerhalb der Planfläche',
+              message:`${object.name} ragt über die definierte Planfläche hinaus.`,
+              objectIds:[object.id],fixable:true
+            });
+            categoryScores.geometry-=5;
+          }
+        });
+
+        // Terrain/drainage
+        if(!elevationPoints.length && !terrainBlobs.length){
+          issues.push({id:'terrain-empty',severity:'warning',category:'terrain',title:'Gelände nicht definiert',message:'Es sind keine Höhenpunkte oder Geländemodellierungen vorhanden.',objectIds:[],fixable:false});
+          categoryScores.terrain-=20;
+        }else{
+          strengths.push('Geländemodellierung ist vorhanden.');
+        }
+
+        if(lowPoints.length>0 && !objects.some(object=>object.type==='drainage')){
+          issues.push({id:'drainage-lowpoints',severity:'warning',category:'water',title:'Tiefpunkte ohne Entwässerung',message:`${lowPoints.length} Tiefpunkte erkannt, aber keine Drainage eingeplant.`,objectIds:[],fixable:true});
+          categoryScores.water-=18;
+        }
+
+        // Planting
+        const concretePlants=objects.filter(object=>object.speciesId);
+        if(concretePlants.length>=6)strengths.push('Konkrete Pflanzenarten sind im Projekt hinterlegt.');
+        if(objects.filter(object=>['tree','shrub','hedge'].includes(object.type)).length<4){
+          issues.push({id:'planting-low',severity:'info',category:'planting',title:'Geringe Bepflanzungsdichte',message:'Für Mikroklima und räumliche Wirkung könnten zusätzliche Pflanzflächen sinnvoll sein.',objectIds:[],fixable:false});
+          categoryScores.planting-=12;
+        }
+
+        plantChecks.forEach(check=>{
+          issues.push({
+            id:`plant-${check.id}`,
+            severity:check.severity,
+            category:'planting',
+            title:check.title,
+            message:check.message,
+            objectIds:check.objectIds,
+            fixable:false
+          });
+          categoryScores.planting-=check.severity==='critical'?8:4;
+        });
+
+        // Irrigation
+        irrigationChecks.forEach(check=>{
+          issues.push({
+            id:`irrigation-${check.id}`,
+            severity:check.severity,
+            category:'water',
+            title:check.title,
+            message:check.message,
+            objectIds:check.objectIds,
+            fixable:false
+          });
+          categoryScores.water-=check.severity==='critical'?10:5;
+        });
+
+        // Materials
+        const materialized=objects.filter(object=>object.materialId || defaultMaterialIdForObject(object));
+        if(objects.length && materialized.length/objects.length<0.45){
+          issues.push({id:'materials-low',severity:'info',category:'materials',title:'Materialkonzept unvollständig',message:'Weniger als die Hälfte der Objekte besitzt ein definiertes Bibliotheksmaterial.',objectIds:[],fixable:true});
+          categoryScores.materials-=15;
+        }else if(objects.length){
+          strengths.push('Materialkonzept ist weitgehend definiert.');
+        }
+
+        // Budget
+        const estimated=objects.reduce((sum,object)=>sum+estimateObjectCost(object),0);
+        if(projectInfo.budget>0 && estimated>projectInfo.budget*1.15){
+          issues.push({id:'budget-over',severity:'critical',category:'budget',title:'Budget voraussichtlich überschritten',message:`Grobe Objektkosten ${estimated.toLocaleString('de-DE',{maximumFractionDigits:0})} € liegen über dem Budget von ${projectInfo.budget.toLocaleString('de-DE')} €.`,objectIds:[],fixable:true});
+          categoryScores.budget-=28;
+        }else if(projectInfo.budget>0){
+          strengths.push('Grobe Objektkosten liegen im hinterlegten Budgetrahmen.');
+        }
+
+        // Architecture
+        const walls=objects.filter(isWallObject);
+        if(objects.some(object=>object.type==='building') && walls.length<4){
+          issues.push({id:'architecture-shell',severity:'warning',category:'architecture',title:'Gebäude noch nicht konstruktiv ausgearbeitet',message:'Ein Gebäudekörper ist vorhanden, aber weniger als vier Wandobjekte sind definiert.',objectIds:[],fixable:false});
+          categoryScores.architecture-=18;
+        }
+
+        // Sun
+        if(sunHoursGrid.length){
+          if(sunHoursSummary.average<4){
+            issues.push({id:'sun-low',severity:'info',category:'sun',title:'Geringe mittlere Besonnung',message:`Die berechnete mittlere Besonnung liegt bei ${sunHoursSummary.average.toFixed(1)} h.`,objectIds:[],fixable:false});
+            categoryScores.sun-=10;
+          }else{
+            strengths.push('Besonnung ist analysiert und im Mittel ausreichend.');
+          }
+        }else{
+          recommendations.push('Sonnenstundenanalyse ausführen, bevor Terrasse, Pool und Pflanzflächen finalisiert werden.');
+          categoryScores.sun-=8;
+        }
+
+        Object.keys(categoryScores).forEach(key=>{
+          categoryScores[key]=clamp(categoryScores[key],0,100);
+        });
+
+        const score=Math.round(
+          Object.values(categoryScores).reduce((sum,value)=>sum+value,0) /
+          Object.values(categoryScores).length
+        );
+
+        if(!issues.some(issue=>issue.severity==='critical'))strengths.push('Keine kritischen geometrischen oder technischen Konflikte erkannt.');
+        if(!objects.length)recommendations.push('Mit einer Planungsvariante oder einem ersten Grundlayout beginnen.');
+        if(!flowVectors.length)recommendations.push('Fließanalyse durchführen, um Entwässerung und Tiefpunkte zu überprüfen.');
+        if(concretePlants.length<4)recommendations.push('Konkrete Pflanzenarten aus der Bibliothek zuordnen.');
+        if(materialized.length<Math.max(1,objects.length*0.7))recommendations.push('Materialbibliothek konsequent auf Hauptoberflächen anwenden.');
+
+        const audit:ProjectAudit={
+          score,
+          grade:auditGrade(score),
+          issues,
+          strengths,
+          recommendations,
+          categoryScores
+        };
+
+        setProjectAudit(audit);
+        setStatus(`Projektprüfung abgeschlossen · ${score}/100 · Note ${audit.grade}.`);
+      }finally{
+        setAuditBusy(false);
+      }
+    },30);
+  }
+
+  function applySafeAuditFixes() {
+    if(!projectAudit)return;
+    snapshot();
+
+    setObjects(current=>current.map(object=>{
+      let next=ensureObjectMaterial(object);
+
+      const bounds=objectBounds2D(next);
+      if(bounds.minX<-10)next={...next,x:next.x+(-10-bounds.minX)};
+      if(bounds.maxX>10)next={...next,x:next.x-(bounds.maxX-10)};
+      if(bounds.minY<-6.5)next={...next,y:next.y+(-6.5-bounds.minY)};
+      if(bounds.maxY>6.5)next={...next,y:next.y-(bounds.maxY-6.5)};
+
+      return next;
+    }));
+
+    if(lowPoints.length && !objects.some(object=>object.type==='drainage')){
+      const base=Date.now();
+      setObjects(current=>[
+        ...current,
+        ...lowPoints.slice(0,3).map((point,index):GardenObject=>({
+          id:base+index+1,
+          type:'drainage',
+          name:`Auto-Drainage ${index+1}`,
+          x:point.x,
+          y:point.y,
+          width:1.2,
+          depth:0.18,
+          height:0.08,
+          rotation:0,
+          color:'#475569',
+          material:'Drainage',
+          unitCost:45
+        }))
+      ]);
+    }
+
+    setStatus('Sichere Optimierungen angewendet: Materialzuordnung, Begrenzung und optionale Drainagepunkte.');
+  }
+
+  function applyMaterialToObject(objectId:number, materialId:string) {
+    const definition=materialDefinitionById(materialId);
+    if(!definition) return;
+
+    snapshot();
+    setObjects(current=>current.map(object=>{
+      if(object.id!==objectId) return object;
+      return {
+        ...object,
+        materialId,
+        material:definition.name,
+        color:definition.baseColor,
+        textureScale:definition.textureScale,
+        roughnessOverride:undefined,
+        metalnessOverride:undefined,
+        surfaceLayers:object.surfaceLayers?.length
+          ? object.surfaceLayers.map((layer,index)=>index===0?{...layer,materialId}:layer)
+          : defaultSurfaceLayersForMaterial(materialId)
+      };
+    }));
+
+    setSelectedMaterialId(materialId);
+    setStatus(`${definition.name} auf Objekt angewendet.`);
+  }
+
+  function applyMaterialToSelectedObjects(materialId:string) {
+    if(!selectedObjectIds.length) {
+      setStatus('Zuerst mindestens ein Objekt auswählen.');
+      return;
+    }
+
+    const definition=materialDefinitionById(materialId);
+    if(!definition) return;
+
+    snapshot();
+    setObjects(current=>current.map(object=>selectedObjectIds.includes(object.id)
+      ? {
+          ...object,
+          materialId,
+          material:definition.name,
+          color:definition.baseColor,
+          textureScale:definition.textureScale,
+          surfaceLayers:object.surfaceLayers?.length
+            ? object.surfaceLayers.map((layer,index)=>index===0?{...layer,materialId}:layer)
+            : defaultSurfaceLayersForMaterial(materialId)
+        }
+      : object
+    ));
+
+    setSelectedMaterialId(materialId);
+    setStatus(`${definition.name} auf ${selectedObjectIds.length} Objekt(e) angewendet.`);
+  }
+
+  function addSurfaceLayer(objectId:number) {
+    const layer:SurfaceLayer={
+      id:`layer-${Date.now()}`,
+      name:'Neue Schicht',
+      thicknessMm:50,
+      materialId:selectedMaterialId
+    };
+
+    setObjects(current=>current.map(object=>object.id===objectId
+      ? {...object,surfaceLayers:[...(object.surfaceLayers || []),layer]}
+      : object
+    ));
+  }
+
+  function updateSurfaceLayer(objectId:number, layerId:string, patch:Partial<SurfaceLayer>) {
+    setObjects(current=>current.map(object=>object.id===objectId
+      ? {...object,surfaceLayers:(object.surfaceLayers || []).map(layer=>layer.id===layerId?{...layer,...patch}:layer)}
+      : object
+    ));
+  }
+
+  function deleteSurfaceLayer(objectId:number, layerId:string) {
+    setObjects(current=>current.map(object=>object.id===objectId
+      ? {...object,surfaceLayers:(object.surfaceLayers || []).filter(layer=>layer.id!==layerId)}
+      : object
+    ));
+  }
+
+  function addIrrigationZone() {
+    const id=`zone-${Date.now()}`;
+    const zone:IrrigationZone={
+      id,
+      name:`Zone ${irrigationZones.length+1}`,
+      color:'#be123c',
+      emitterType:'sprinkler',
+      targetPressureBar:2.5,
+      maxFlowLMin:24,
+      enabled:true
+    };
+    setIrrigationZones(current=>[...current,zone]);
+    setActiveIrrigationZoneId(id);
+    setStatus(`${zone.name} angelegt.`);
+  }
+
+  function updateIrrigationZone(id:string, patch:Partial<IrrigationZone>) {
+    setIrrigationZones(current=>current.map(zone=>zone.id===id?{...zone,...patch}:zone));
+  }
+
+  function deleteIrrigationZone(id:string) {
+    if (irrigationZones.length<=1) {
+      setStatus('Mindestens eine Bewässerungszone muss bestehen bleiben.');
+      return;
+    }
+    snapshot();
+    setIrrigationZones(current=>current.filter(zone=>zone.id!==id));
+    setObjects(current=>current.map(object=>object.irrigationZoneId===id?{...object,irrigationZoneId:undefined}:object));
+    const next=irrigationZones.find(zone=>zone.id!==id);
+    if (next) setActiveIrrigationZoneId(next.id);
+    setStatus('Bewässerungszone gelöscht.');
+  }
+
+  function createIrrigationEmitter(
+    x:number,
+    y:number,
+    emitterType:'sprinkler'|'drip'
+  ) {
+    snapshot();
+    const zone=irrigationZones.find(item=>item.id===activeIrrigationZoneId) || irrigationZones[0];
+    const id=Date.now();
+    const radius=emitterType==='sprinkler'?defaultSprinklerRadius:defaultDripRadius;
+
+    const object:GardenObject={
+      id,
+      type:'irrigation',
+      name:emitterType==='sprinkler'?'Regner':'Tropfpunkt',
+      x,
+      y,
+      width:0.28,
+      depth:0.28,
+      height:0.18,
+      rotation:0,
+      color:zone?.color || '#be123c',
+      material:'Bewässerung',
+      unitCost:emitterType==='sprinkler'?55:14,
+      irrigationZoneId:zone?.id,
+      emitterType,
+      irrigationRadius:radius,
+      irrigationArc:emitterType==='sprinkler'?defaultSprinklerArc:360,
+      irrigationFlowLMin:emitterType==='sprinkler'?defaultSprinklerFlow:2,
+      pipeDiameterMm:20,
+      note:''
+    };
+
+    setObjects(current=>[...current,object]);
+    setSelectedKind('object');
+    setSelectedId(id);
+    setSelectedObjectIds([id]);
+    setStatus(`${object.name} in ${zone?.name || 'Bewässerungszone'} gesetzt.`);
+  }
+
+  function autoRouteIrrigationPipes() {
+    const emitters=objects.filter(object=>object.type==='irrigation' && object.emitterType);
+    if (!emitters.length) {
+      setStatus('Keine Regner oder Tropfpunkte vorhanden.');
+      return;
+    }
+
+    snapshot();
+
+    const routed:GardenObject[]=[];
+    const base=Date.now();
+
+    irrigationZones.forEach((zone,zoneIndex)=>{
+      const zoneEmitters=emitters.filter(object=>object.irrigationZoneId===zone.id);
+      if (!zoneEmitters.length) return;
+
+      const sorted=[...zoneEmitters].sort(
+        (a,b)=>Math.hypot(a.x-irrigationSourcePoint.x,a.y-irrigationSourcePoint.y)
+             -Math.hypot(b.x-irrigationSourcePoint.x,b.y-irrigationSourcePoint.y)
+      );
+
+      let previous=irrigationSourcePoint;
+
+      sorted.forEach((emitter,index)=>{
+        const points=simpleOrthogonalRoute(previous,{x:emitter.x,y:emitter.y},index%2===0);
+        const center=polylineCenter(points);
+        routed.push({
+          id:base+zoneIndex*1000+index+1,
+          type:'irrigation',
+          name:`Leitung ${zone.name} ${index+1}`,
+          x:center.x,
+          y:center.y,
+          width:Math.max(0.2,Math.abs(points[points.length-1].x-points[0].x)),
+          depth:Math.max(0.2,Math.abs(points[points.length-1].y-points[0].y)),
+          height:0.05,
+          rotation:0,
+          color:zone.color,
+          material:'PE-Leitung',
+          unitCost:8,
+          points:relativePolyline(points,center),
+          pipeDiameterMm:20,
+          irrigationZoneId:zone.id,
+          autoRouted:true,
+          sourceObjectId:emitter.id,
+          note:'Automatisch geroutete Bewässerungsleitung'
+        });
+        previous={x:emitter.x,y:emitter.y};
+      });
+    });
+
+    setObjects(current=>[
+      ...current.filter(object=>!(object.type==='irrigation' && object.autoRouted && object.points?.length)),
+      ...routed
+    ]);
+
+    setStatus(`${routed.length} Bewässerungsleitungen automatisch erstellt.`);
+  }
+
+  function clearAutoRoutedIrrigationPipes() {
+    snapshot();
+    setObjects(current=>current.filter(object=>!(object.type==='irrigation' && object.autoRouted && object.points?.length)));
+    setStatus('Automatisch erzeugte Bewässerungsleitungen entfernt.');
+  }
 
   function runWaterFlowAnalysis() {
     if (waterAnalysisBusy) return;
@@ -3076,6 +4329,11 @@ export default function LandscapePlatform() {
       const species=PLANT_CATALOG.find(item=>item.id===selectedPlantSpeciesId);
       if (species && species.objectType===type) obj=applySpeciesToPlant(obj,species);
     }
+
+    obj=ensureObjectMaterial(obj);
+    if(obj.materialId && !obj.surfaceLayers?.length && ['path','floor','stairs','gardenWall'].includes(obj.type)){
+      obj={...obj,surfaceLayers:defaultSurfaceLayersForMaterial(obj.materialId)};
+    }
     setObjects(v => [...v, obj]);
     setSelection('object', id, `${obj.name} gesetzt.`);
   }
@@ -3083,6 +4341,12 @@ export default function LandscapePlatform() {
   function handleCanvasClick(e: React.MouseEvent<SVGSVGElement>) {
     const rawPoint = worldFromEvent(svgRef.current, e);
     const p = snapPointToWallEndpoints(rawPoint);
+
+    if (tab === 'water' && tool === 'irrigation') {
+      const activeZone=irrigationZones.find(zone=>zone.id===activeIrrigationZoneId);
+      createIrrigationEmitter(p.x,p.y,activeZone?.emitterType || 'sprinkler');
+      return;
+    }
 
     if (tab === 'hardscape' && (tool === 'path' || tool === 'gardenWall')) {
       setHardscapeDraftType(tool);
@@ -3487,7 +4751,7 @@ export default function LandscapePlatform() {
   }
 
   function exportProject() {
-    download('al-green-design-v019-pro-studio.algreen', JSON.stringify({ version:'0.27.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v030-ai-planning.algreen', JSON.stringify({ version:'0.30.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel, planningBrief, projectAudit }, null, 2), 'application/json');
   }
 
 
@@ -3519,7 +4783,7 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['video3d','Video → 3D'],['terrain','Terrain'],['hardscape','Wege/Mauern/Treppen'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
+            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['video3d','Video → 3D'],['terrain','Terrain'],['hardscape','Wege/Mauern/Treppen'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['materials','Materialien'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
@@ -3580,32 +4844,100 @@ export default function LandscapePlatform() {
 
         {tab === 'chat' && (
           <>
-            <h2>KI-Garten grob erzeugen</h2>
-            <label>
-              Chat-Engine
-              <select value={chatEngine} onChange={e => setChatEngine(e.target.value as ChatEngine)}>
-                <option value="local">Lokale KI</option>
-                <option value="openai">OpenAI vorbereitet</option>
-              </select>
+            <h2>AI Planning Studio</h2>
+
+            <label>Projektbeschreibung
+              <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} placeholder="Beispiel: Moderner pflegeleichter Garten mit Terrasse, Pergola, Sichtschutz, Pool und naturnaher Bepflanzung."/>
             </label>
-            <label>
-              OpenAI-Modell
-              <select value={openAiModel} onChange={e => setOpenAiModel(e.target.value)}>
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="gpt-4.1">gpt-4.1</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-5">gpt-5</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="o4-mini">o4-mini</option>
-                <option value="o3">o3</option>
-                <option value="custom">custom / eigenes Modell unten</option>
-              </select>
-              <input value={openAiModel} onChange={e => setOpenAiModel(e.target.value)} placeholder="Modellname frei eingeben" />
-            </label>
-            <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} />
-            <button className="btn primary" style={{marginTop:8}} onClick={generateFromChat}>Entwurf generieren</button>
-            <div className="hint" style={{marginTop:8}}>{openAiNote}</div>{openAiLastAnswer && <div className="hint" style={{marginTop:8}}>OpenAI/JSON-Schema: {openAiLastAnswer}</div>}
+
+            <div className="grid2">
+              <button className="btn primary" onClick={syncPlanningBriefFromPrompt}>1. Planungsbrief analysieren</button>
+              <button className="btn blue" onClick={createLocalPlanningVariants}>2. Varianten A/B/C erzeugen</button>
+            </div>
+
+            <div className="planningBriefPanel">
+              <h3>Planungsbrief</h3>
+              <div className="grid2">
+                <label>Stil<select value={planningBrief.style} onChange={e=>setPlanningBrief({...planningBrief,style:e.target.value as PlanningBrief['style']})}>
+                  <option value="modern">Modern</option>
+                  <option value="natural">Naturnah</option>
+                  <option value="mediterranean">Mediterran</option>
+                  <option value="minimal">Minimal</option>
+                  <option value="family">Familie</option>
+                </select></label>
+                <label>Priorität<select value={planningBrief.priority} onChange={e=>setPlanningBrief({...planningBrief,priority:e.target.value as PlanningPriority})}>
+                  <option value="design">Design</option>
+                  <option value="budget">Budget</option>
+                  <option value="maintenance">Pflege</option>
+                  <option value="ecology">Ökologie</option>
+                  <option value="family">Familie</option>
+                </select></label>
+                <label>Budget<input type="number" step="1000" value={planningBrief.budget} onChange={e=>setPlanningBrief({...planningBrief,budget:Number(e.target.value)})}/></label>
+                <label>Ziel Pflanzenanzahl<input type="number" min="0" step="1" value={planningBrief.targetPlantCount} onChange={e=>setPlanningBrief({...planningBrief,targetPlantCount:Number(e.target.value)})}/></label>
+              </div>
+
+              <div className="planningFlags">
+                {([
+                  ['needsPool','Pool'],
+                  ['needsTerrace','Terrasse'],
+                  ['needsPergola','Pergola'],
+                  ['needsPlayArea','Familien-/Spielfläche'],
+                  ['needsPrivacy','Sichtschutz'],
+                  ['needsLowMaintenance','Pflegeleicht'],
+                  ['needsBiodiversity','Biodiversität']
+                ] as [keyof PlanningBrief,string][]).map(([key,label])=>(
+                  <label key={String(key)}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(planningBrief[key])}
+                      onChange={e=>setPlanningBrief({...planningBrief,[key]:e.target.checked})}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {planningQuestions.length>0 && (
+              <div className="planningQuestions">
+                <h3>Offene Planungsfragen</h3>
+                {planningQuestions.map((question,index)=><div className="item" key={index}><strong>{index+1}.</strong><span>{question}</span></div>)}
+              </div>
+            )}
+
+            <div className="planningVariantList">
+              {planningVariants.map(variant=>(
+                <article key={variant.id} className={`planningVariantCard ${selectedPlanningVariantId===variant.id?'active':''}`}>
+                  <button className="planningVariantHeader" onClick={()=>setSelectedPlanningVariantId(variant.id)}>
+                    <strong>{variant.name}</strong>
+                    <span>{variant.score}/100</span>
+                  </button>
+                  <p>{variant.concept}</p>
+                  <div className="materialTags">
+                    <span>{variant.objects.length} Objekte</span>
+                    <span>{variant.zones.length} Zonen</span>
+                    <span>{variant.terrainBlobs.length} Geländeformen</span>
+                  </div>
+                  <button className="btn primary" onClick={()=>applyPlanningVariant(variant.id)}>Variante übernehmen</button>
+                </article>
+              ))}
+            </div>
+
+            <details className="legacyAiPanel">
+              <summary>Schnellentwurf / bestehende KI-Engine</summary>
+              <label>Chat-Engine
+                <select value={chatEngine} onChange={e=>setChatEngine(e.target.value as ChatEngine)}>
+                  <option value="local">Lokale KI</option>
+                  <option value="openai">OpenAI vorbereitet</option>
+                </select>
+              </label>
+              <label>Modell
+                <input value={openAiModel} onChange={e=>setOpenAiModel(e.target.value)} placeholder="Modellname"/>
+              </label>
+              <button className="btn" onClick={generateFromChat}>Schnellentwurf generieren</button>
+              <div className="hint">{openAiNote}</div>
+              {openAiLastAnswer && <div className="hint">JSON-Schema: {openAiLastAnswer}</div>}
+            </details>
           </>
         )}
 
@@ -4139,19 +5471,107 @@ export default function LandscapePlatform() {
         {tab === 'water' && (
           <>
             <h2>Wasser und Entwässerung</h2>
+
             <div className="grid2">
               <button className={`tool ${tool==='pool'?'active':''}`} onClick={()=>setTool('pool')}>Pool</button>
               <button className={`tool ${tool==='pond'?'active':''}`} onClick={()=>setTool('pond')}>Teich</button>
-              <button className={`tool ${tool==='irrigation'?'active':''}`} onClick={()=>setTool('irrigation')}>Bewässerung</button>
+              <button className={`tool ${tool==='irrigation'?'active':''}`} onClick={()=>setTool('irrigation')}>Bewässerung setzen</button>
               <button className={`tool ${tool==='drainage'?'active':''}`} onClick={()=>setTool('drainage')}>Drainage</button>
               <button className={`tool ${tool==='depression'?'active':''}`} onClick={()=>setTool('depression')}>Retentionsmulde</button>
             </div>
 
             <div className="kpis" style={{marginTop:10}}>
-              <div className="kpi"><small>Wasserobjekte</small><strong>{objects.filter(o=>['pool','pond'].includes(o.type)).length}</strong></div>
-              <div className="kpi"><small>Leitungen</small><strong>{objects.filter(o=>['irrigation','drainage'].includes(o.type)).length}</strong></div>
+              <div className="kpi"><small>Regner/Tropfer</small><strong>{irrigationEmitters.length}</strong></div>
+              <div className="kpi"><small>Auto-Leitungen</small><strong>{irrigationPipes.filter(pipe=>pipe.autoRouted).length}</strong></div>
               <div className="kpi"><small>Tiefpunkte</small><strong>{lowPoints.length || terrainBlobs.filter(b=>b.height<0).length}</strong></div>
               <div className="kpi"><small>Rückhalt grob</small><strong>{(retentionCells.length ? retentionVolumeEstimate : Math.max(0,(stats.cut*0.65))).toFixed(1)} m³</strong></div>
+            </div>
+
+            <div className="irrigationPanel">
+              <h3>Smart Irrigation</h3>
+
+              <div className="grid2">
+                <label>Aktive Zone
+                  <select value={activeIrrigationZoneId} onChange={e=>setActiveIrrigationZoneId(e.target.value)}>
+                    {irrigationZones.map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                  </select>
+                </label>
+                <button className="btn primary" onClick={addIrrigationZone}>Zone hinzufügen</button>
+              </div>
+
+              <div className="irrigationZoneList">
+                {irrigationZones.map(zone=>{
+                  const stat=irrigationZoneStats.find(item=>item.zone.id===zone.id);
+                  return (
+                    <div key={zone.id} className={`irrigationZoneCard ${activeIrrigationZoneId===zone.id?'active':''}`}>
+                      <button className="irrigationZoneHeader" onClick={()=>setActiveIrrigationZoneId(zone.id)}>
+                        <span className="zoneDot" style={{background:zone.color}}></span>
+                        <strong>{zone.name}</strong>
+                        <span>{stat?.count || 0} Verbraucher · {(stat?.flow || 0).toFixed(1)} l/min</span>
+                      </button>
+
+                      <div className="grid2">
+                        <label>Name<input value={zone.name} onChange={e=>updateIrrigationZone(zone.id,{name:e.target.value})}/></label>
+                        <label>Typ<select value={zone.emitterType} onChange={e=>updateIrrigationZone(zone.id,{emitterType:e.target.value as 'sprinkler'|'drip'})}>
+                          <option value="sprinkler">Regner</option>
+                          <option value="drip">Tropfbewässerung</option>
+                        </select></label>
+                        <label>Max. Durchfluss l/min<input type="number" step="1" min="1" value={zone.maxFlowLMin} onChange={e=>updateIrrigationZone(zone.id,{maxFlowLMin:Number(e.target.value)})}/></label>
+                        <label>Zieldruck bar<input type="number" step="0.1" min="0.5" value={zone.targetPressureBar} onChange={e=>updateIrrigationZone(zone.id,{targetPressureBar:Number(e.target.value)})}/></label>
+                      </div>
+
+                      {irrigationZones.length>1 && (
+                        <button className="btn danger" onClick={()=>deleteIrrigationZone(zone.id)}>Zone löschen</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {irrigationZones.find(zone=>zone.id===activeIrrigationZoneId)?.emitterType==='sprinkler' ? (
+                <div className="grid3">
+                  <label>Reichweite<input type="number" min="0.5" step="0.25" value={defaultSprinklerRadius} onChange={e=>setDefaultSprinklerRadius(Number(e.target.value))}/></label>
+                  <label>Sektor °<input type="number" min="15" max="360" step="15" value={defaultSprinklerArc} onChange={e=>setDefaultSprinklerArc(Number(e.target.value))}/></label>
+                  <label>Durchfluss l/min<input type="number" min="0.5" step="0.5" value={defaultSprinklerFlow} onChange={e=>setDefaultSprinklerFlow(Number(e.target.value))}/></label>
+                </div>
+              ) : (
+                <label>Tropf-Wirkbereich<input type="number" min="0.2" step="0.1" value={defaultDripRadius} onChange={e=>setDefaultDripRadius(Number(e.target.value))}/></label>
+              )}
+
+              <div className="grid2">
+                <button className="btn primary" onClick={()=>setTool('irrigation')}>Verbraucher im Plan setzen</button>
+                <button className="btn blue" onClick={autoRouteIrrigationPipes}>Leitungen automatisch routen</button>
+                <button className="btn" onClick={clearAutoRoutedIrrigationPipes}>Auto-Leitungen löschen</button>
+              </div>
+
+              <div className="grid2">
+                <label><input type="checkbox" checked={showIrrigationCoverage2D} onChange={e=>setShowIrrigationCoverage2D(e.target.checked)}/> Reichweiten anzeigen</label>
+                <label><input type="checkbox" checked={showIrrigationPipes2D} onChange={e=>setShowIrrigationPipes2D(e.target.checked)}/> Leitungen anzeigen</label>
+              </div>
+
+              <div className="item">
+                <strong>Wasseranschluss</strong>
+                <span>X {irrigationSourcePoint.x.toFixed(2)} · Y {irrigationSourcePoint.y.toFixed(2)}</span>
+              </div>
+              <div className="grid2">
+                <label>Anschluss X<input type="number" step="0.1" value={irrigationSourcePoint.x} onChange={e=>setIrrigationSourcePoint({...irrigationSourcePoint,x:Number(e.target.value)})}/></label>
+                <label>Anschluss Y<input type="number" step="0.1" value={irrigationSourcePoint.y} onChange={e=>setIrrigationSourcePoint({...irrigationSourcePoint,y:Number(e.target.value)})}/></label>
+              </div>
+
+              <h3>Prüfungen</h3>
+              <div className="plantCheckList">
+                {irrigationChecks.map(check=>(
+                  <button
+                    key={check.id}
+                    className={`plantCheck ${check.severity}`}
+                    onClick={()=>{const first=check.objectIds[0];if(first)selectObject(first,false);}}
+                  >
+                    <strong>{check.title}</strong>
+                    <span>{check.message}</span>
+                  </button>
+                ))}
+                {!irrigationChecks.length && <div className="hint">Keine Bewässerungskonflikte erkannt.</div>}
+              </div>
             </div>
 
             <div className="waterAnalysisPanel">
@@ -4172,13 +5592,9 @@ export default function LandscapePlatform() {
                 <div className="item"><strong>Retentionspotenzial</strong><span>{retentionVolumeEstimate ? retentionVolumeEstimate.toFixed(1) : '—'} m³</span></div>
               </div>
 
-              <label><input type="checkbox" checked={showFlowOverlay2D} onChange={e=>setShowFlowOverlay2D(e.target.checked)} /> Fließrichtungen im 2D-Plan anzeigen</label>
-              <label><input type="checkbox" checked={showLowPoints2D} onChange={e=>setShowLowPoints2D(e.target.checked)} /> Tiefpunkte im 2D-Plan anzeigen</label>
-              <label><input type="checkbox" checked={showRetentionOverlay2D} onChange={e=>setShowRetentionOverlay2D(e.target.checked)} /> Retentionszellen im 2D-Plan anzeigen</label>
-
-              <div className="hint">
-                Die Analyse sampelt das Gelände als Raster, sucht je Feld die stärkste Falllinie und markiert lokale Tiefpunkte als mögliche Sammel- oder Rückhaltebereiche.
-              </div>
+              <label><input type="checkbox" checked={showFlowOverlay2D} onChange={e=>setShowFlowOverlay2D(e.target.checked)} /> Fließrichtungen anzeigen</label>
+              <label><input type="checkbox" checked={showLowPoints2D} onChange={e=>setShowLowPoints2D(e.target.checked)} /> Tiefpunkte anzeigen</label>
+              <label><input type="checkbox" checked={showRetentionOverlay2D} onChange={e=>setShowRetentionOverlay2D(e.target.checked)} /> Retentionszellen anzeigen</label>
             </div>
           </>
         )}
@@ -4317,6 +5733,74 @@ export default function LandscapePlatform() {
           </>
         )}
 
+        {tab === 'materials' && (
+          <>
+            <h2>Materialien und Oberflächen</h2>
+
+            <div className="kpis">
+              <div className="kpi"><small>Materialien</small><strong>{MATERIAL_LIBRARY.length}</strong></div>
+              <div className="kpi"><small>Verwendet</small><strong>{materialUsageStats.length}</strong></div>
+              <div className="kpi"><small>Auswahl</small><strong>{selectedObjectIds.length}</strong></div>
+            </div>
+
+            <div className="materialFilterPanel">
+              <label>Suche
+                <input value={materialSearch} onChange={e=>setMaterialSearch(e.target.value)} placeholder="Material suchen"/>
+              </label>
+              <label>Kategorie
+                <select value={materialCategoryFilter} onChange={e=>setMaterialCategoryFilter(e.target.value as 'all'|MaterialCategory)}>
+                  <option value="all">Alle</option>
+                  <option value="stone">Naturstein</option>
+                  <option value="wood">Holz</option>
+                  <option value="concrete">Beton</option>
+                  <option value="metal">Metall</option>
+                  <option value="glass">Glas</option>
+                  <option value="plaster">Putz</option>
+                  <option value="paving">Pflaster</option>
+                  <option value="gravel">Kies/Splitt</option>
+                  <option value="soil">Boden</option>
+                  <option value="water">Wasser</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="materialLibraryGrid">
+              {filteredMaterialLibrary.map(material=>(
+                <article key={material.id} className={`materialCard ${selectedMaterialId===material.id?'active':''}`}>
+                  <button className="materialSwatch" style={{background:material.baseColor}} onClick={()=>setSelectedMaterialId(material.id)} aria-label={material.name}></button>
+                  <div className="materialCardBody">
+                    <strong>{material.name}</strong>
+                    <span>{material.category} · Rauheit {material.roughness.toFixed(2)} · Metall {material.metalness.toFixed(2)}</span>
+                    <p>{material.description}</p>
+                    <div className="materialTags">
+                      <span>{material.texturePattern}</span>
+                      <span>{material.unitCostM2.toFixed(0)} €/m²</span>
+                    </div>
+                  </div>
+                  <button className="btn primary" onClick={()=>applyMaterialToSelectedObjects(material.id)} disabled={!selectedObjectIds.length}>
+                    Auf Auswahl anwenden
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <h2 style={{marginTop:14}}>Verwendung im Projekt</h2>
+            <div className="materialUsageList">
+              {materialUsageStats.map(item=>(
+                <div className="item" key={item.material.id}>
+                  <strong>{item.material.name}</strong>
+                  <span>{item.count} Objekt(e)</span>
+                </div>
+              ))}
+              {!materialUsageStats.length && <div className="hint">Noch keine Materialien zugeordnet.</div>}
+            </div>
+
+            <div className="hint" style={{marginTop:10}}>
+              Die 3D-Texturen werden prozedural im Browser erzeugt. Dadurch werden keine externen Texturbilder benötigt und das Projekt bleibt portabel.
+            </div>
+          </>
+        )}
+
         {tab === 'layers' && (
           <>
             <h2>Layerverwaltung</h2>
@@ -4346,18 +5830,75 @@ export default function LandscapePlatform() {
 
         {tab === 'analysis' && (
           <>
-            <h2>Standort- und Projektanalyse</h2>
-            <div className="kpis">
-              <div className="kpi"><small>Versiegelung</small><strong>{metrics.sealed}%</strong></div>
-              <div className="kpi"><small>Biodiversität</small><strong>{metrics.biodiversity}/100</strong></div>
-              <div className="kpi"><small>Auftrag</small><strong>{stats.fill.toFixed(1)} m³</strong></div>
-              <div className="kpi"><small>Abtrag</small><strong>{stats.cut.toFixed(1)} m³</strong></div>
-              <div className="kpi"><small>Regenrückhalt</small><strong>{Math.min(100,Math.round((100-metrics.sealed)+stats.cut*5))}/100</strong></div>
-              <div className="kpi"><small>Grünanteil</small><strong>{Math.min(100,Math.round(metrics.greenArea/Math.max(1,projectInfo.area)*100))}%</strong></div>
+            <h2>Projektprüfung und Qualität</h2>
+
+            <div className="grid2">
+              <button className="btn primary" disabled={auditBusy} onClick={runProjectAudit}>
+                {auditBusy?'Prüfung läuft …':'Projekt automatisch prüfen'}
+              </button>
+              <button className="btn blue" disabled={!projectAudit} onClick={applySafeAuditFixes}>
+                Sichere Optimierungen anwenden
+              </button>
             </div>
-            <div className="grid2" style={{marginTop:10}}>
-              <button className={`btn ${nightMode?'active':''}`} onClick={()=>setNightMode(!nightMode)}>Nachtmodus</button>
-              {[0,1,3,5,10,15,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y)}>{y===0?'heute':y+' Jahre'}</button>)}
+
+            {projectAudit ? (
+              <>
+                <div className="auditScoreCard">
+                  <div className="auditGrade">{projectAudit.grade}</div>
+                  <div>
+                    <strong>{projectAudit.score}/100</strong>
+                    <span>Gesamtqualität</span>
+                  </div>
+                </div>
+
+                <div className="auditCategoryGrid">
+                  {Object.entries(projectAudit.categoryScores).map(([category,score])=>(
+                    <div className="auditCategory" key={category}>
+                      <span>{category}</span>
+                      <strong>{Math.round(score)}</strong>
+                      <div className="auditBar"><i style={{width:`${score}%`}}/></div>
+                    </div>
+                  ))}
+                </div>
+
+                <h2 style={{marginTop:14}}>Konflikte und Hinweise</h2>
+                <div className="auditIssueList">
+                  {projectAudit.issues.map(issue=>(
+                    <button
+                      key={issue.id}
+                      className={`auditIssue ${issue.severity}`}
+                      onClick={()=>{const first=issue.objectIds[0];if(first)selectObject(first,false);}}
+                    >
+                      <strong>{issue.title}</strong>
+                      <span>{issue.message}</span>
+                      <small>{issue.category} · {issue.fixable?'automatisch teilweise behebbar':'manuell prüfen'}</small>
+                    </button>
+                  ))}
+                  {!projectAudit.issues.length && <div className="hint">Keine Konflikte erkannt.</div>}
+                </div>
+
+                <h2 style={{marginTop:14}}>Stärken</h2>
+                <div className="list">
+                  {projectAudit.strengths.map((strength,index)=><div className="item" key={index}><strong>✓</strong><span>{strength}</span></div>)}
+                </div>
+
+                <h2 style={{marginTop:14}}>Empfehlungen</h2>
+                <div className="list">
+                  {projectAudit.recommendations.map((recommendation,index)=><div className="item" key={index}><strong>{index+1}.</strong><span>{recommendation}</span></div>)}
+                </div>
+              </>
+            ) : (
+              <div className="hint" style={{marginTop:10}}>
+                Die Prüfung bewertet Geometrie, Gelände, Bepflanzung, Wasser, Sonne, Materialien, Budget und Architektur.
+              </div>
+            )}
+
+            <h2 style={{marginTop:14}}>Bestehende Kennzahlen</h2>
+            <div className="kpis">
+              <div className="kpi"><small>Geländeformen</small><strong>{terrainBlobs.length}</strong></div>
+              <div className="kpi"><small>Objekte</small><strong>{objects.length}</strong></div>
+              <div className="kpi"><small>Zonen</small><strong>{zones.length}</strong></div>
+              <div className="kpi"><small>Grünfläche</small><strong>{metrics.greenArea} m²</strong></div>
             </div>
           </>
         )}
@@ -4376,7 +5917,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.27 WATER + FLOW + BRAND</span>
+          <span className="pill brandPill">V0.30 AI PLANNING + AUDIT</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -4446,6 +5987,58 @@ export default function LandscapePlatform() {
                   pointerEvents="none"
                 />
               ))}
+
+              {tab==='water' && showIrrigationCoverage2D && irrigationEmitters.map(emitter=>{
+                const radius=Math.max(0.1,emitter.irrigationRadius || 2.5);
+                const arc=clamp(emitter.irrigationArc || 360,15,360);
+                const zone=irrigationZones.find(item=>item.id===emitter.irrigationZoneId);
+                return arc>=359.9 ? (
+                  <circle
+                    key={`coverage-${emitter.id}`}
+                    cx={emitter.x*SCALE}
+                    cy={emitter.y*SCALE}
+                    r={radius*SCALE}
+                    fill={zone?.color || '#be123c'}
+                    fillOpacity={emitter.emitterType==='drip'?0.12:0.08}
+                    stroke={zone?.color || '#be123c'}
+                    strokeDasharray="7 5"
+                    strokeWidth="1.4"
+                    pointerEvents="none"
+                  />
+                ) : (
+                  <path
+                    key={`coverage-${emitter.id}`}
+                    d={irrigationArcPath(emitter.x,emitter.y,radius,arc,emitter.rotation || 0)}
+                    fill={zone?.color || '#be123c'}
+                    fillOpacity="0.09"
+                    stroke={zone?.color || '#be123c'}
+                    strokeDasharray="7 5"
+                    strokeWidth="1.4"
+                    pointerEvents="none"
+                  />
+                );
+              })}
+
+              {tab==='water' && showIrrigationPipes2D && irrigationPipes.map(pipe=>(
+                <path
+                  key={`irrigation-pipe-${pipe.id}`}
+                  d={svgPathForPolyline(absolutePolyline(pipe),false)}
+                  fill="none"
+                  stroke={irrigationZones.find(zone=>zone.id===pipe.irrigationZoneId)?.color || '#9f1239'}
+                  strokeWidth="4"
+                  strokeOpacity="0.72"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  pointerEvents="none"
+                />
+              ))}
+
+              {tab==='water' && (
+                <g pointerEvents="none">
+                  <circle cx={irrigationSourcePoint.x*SCALE} cy={irrigationSourcePoint.y*SCALE} r="8" fill="#fff1f2" stroke="#881337" strokeWidth="3"/>
+                  <text x={irrigationSourcePoint.x*SCALE+10} y={irrigationSourcePoint.y*SCALE-10} fontSize="11" fill="#6b1024" paintOrder="stroke" stroke="#fff" strokeWidth="4">Wasseranschluss</text>
+                </g>
+              )}
 
               {tab==='water' && showRetentionOverlay2D && retentionCells.map((cell,index)=>(
                 <rect
@@ -4785,13 +6378,78 @@ export default function LandscapePlatform() {
             <label>Tiefe<input type="number" step="0.1" value={selectedObject.depth} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,depth:Number(e.target.value)}:o))} /></label>
             <label>Höhe<input type="number" step="0.1" value={selectedObject.height} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,height:Number(e.target.value)}:o))} /></label>
             <label>Drehung °<input type="number" step="1" value={selectedObject.rotation} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,rotation:Number(e.target.value)}:o))} /></label>
-            <label>Material<input value={selectedObject.material||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,material:e.target.value}:o))} /></label>
+            <label>Material
+              <select
+                value={selectedObject.materialId || defaultMaterialIdForObject(selectedObject) || ''}
+                onChange={e=>applyMaterialToObject(selectedObject.id,e.target.value)}
+              >
+                <option value="">Kein Bibliotheksmaterial</option>
+                {MATERIAL_LIBRARY.map(material=><option key={material.id} value={material.id}>{material.name}</option>)}
+              </select>
+            </label>
+
+            {selectedObject.materialId && (
+              <div className="objectMaterialPanel">
+                <div className="grid2">
+                  <label>Textur-Skalierung
+                    <input type="number" min="0.2" max="8" step="0.1" value={selectedObject.textureScale || materialDefinitionById(selectedObject.materialId)?.textureScale || 1} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,textureScale:Number(e.target.value)}:object))}/>
+                  </label>
+                  <label>Rauheit
+                    <input type="number" min="0" max="1" step="0.05" value={selectedObject.roughnessOverride ?? materialDefinitionById(selectedObject.materialId)?.roughness ?? 0.8} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,roughnessOverride:Number(e.target.value)}:object))}/>
+                  </label>
+                  <label>Metallanteil
+                    <input type="number" min="0" max="1" step="0.05" value={selectedObject.metalnessOverride ?? materialDefinitionById(selectedObject.materialId)?.metalness ?? 0} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,metalnessOverride:Number(e.target.value)}:object))}/>
+                  </label>
+                </div>
+
+                {['path','floor','stairs','gardenWall'].includes(selectedObject.type) && (
+                  <>
+                    <h3>Oberflächenaufbau</h3>
+                    <div className="surfaceLayerList">
+                      {(selectedObject.surfaceLayers || []).map((layer,index)=>(
+                        <div className="surfaceLayerCard" key={layer.id}>
+                          <strong>Schicht {index+1}</strong>
+                          <input value={layer.name} onChange={e=>updateSurfaceLayer(selectedObject.id,layer.id,{name:e.target.value})}/>
+                          <div className="grid2">
+                            <label>Dicke mm<input type="number" min="1" step="5" value={layer.thicknessMm} onChange={e=>updateSurfaceLayer(selectedObject.id,layer.id,{thicknessMm:Number(e.target.value)})}/></label>
+                            <label>Material<select value={layer.materialId} onChange={e=>updateSurfaceLayer(selectedObject.id,layer.id,{materialId:e.target.value})}>{MATERIAL_LIBRARY.map(material=><option key={material.id} value={material.id}>{material.name}</option>)}</select></label>
+                          </div>
+                          <button className="btn danger" onClick={()=>deleteSurfaceLayer(selectedObject.id,layer.id)}>Schicht löschen</button>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="btn" onClick={()=>addSurfaceLayer(selectedObject.id)}>Schicht hinzufügen</button>
+                    <div className="item">
+                      <strong>Gesamtdicke</strong>
+                      <span>{(selectedObject.surfaceLayers || []).reduce((sum,layer)=>sum+layer.thicknessMm,0)} mm</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(selectedObject.type) && <>
               <label>Ebene / Geschoss<select value={Number(selectedObject.level||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,level:Number(e.target.value)}:o))}>{levels.map(level=><option key={level.id} value={level.id}>{level.name} · {level.elevation.toFixed(2)} m</option>)}</select></label>
               <label>Dicke / Stärke<input type="number" step="0.01" value={Number(selectedObject.thickness||selectedObject.depth||0.2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,thickness:Number(e.target.value)}:o))}/></label>
               <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
             </>}
             <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
+            {selectedObject.type==='irrigation' && selectedObject.emitterType && (
+              <div className="smartHardscapeProperties">
+                <h3>Bewässerung</h3>
+                <label>Zone<select value={selectedObject.irrigationZoneId || ''} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,irrigationZoneId:e.target.value,color:irrigationZones.find(zone=>zone.id===e.target.value)?.color || object.color}:object))}>
+                  {irrigationZones.map(zone=><option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                </select></label>
+                <label>Typ<select value={selectedObject.emitterType} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,emitterType:e.target.value as 'sprinkler'|'drip'}:object))}>
+                  <option value="sprinkler">Regner</option>
+                  <option value="drip">Tropfbewässerung</option>
+                </select></label>
+                <label>Reichweite<input type="number" min="0.2" step="0.1" value={selectedObject.irrigationRadius || 1} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,irrigationRadius:Number(e.target.value)}:object))}/></label>
+                {selectedObject.emitterType==='sprinkler' && <label>Sektor °<input type="number" min="15" max="360" step="15" value={selectedObject.irrigationArc || 360} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,irrigationArc:Number(e.target.value)}:object))}/></label>}
+                <label>Durchfluss l/min<input type="number" min="0.1" step="0.5" value={selectedObject.irrigationFlowLMin || 1} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,irrigationFlowLMin:Number(e.target.value)}:object))}/></label>
+                <label>Leitungsdurchmesser mm<input type="number" min="12" step="1" value={selectedObject.pipeDiameterMm || 20} onChange={e=>setObjects(current=>current.map(object=>object.id===selectedObject.id?{...object,pipeDiameterMm:Number(e.target.value)}:object))}/></label>
+              </div>
+            )}
+
             {selectedObject.type==='path' && selectedObject.points?.length && (
               <div className="smartHardscapeProperties">
                 <h3>Intelligenter Weg</h3>
@@ -5421,11 +7079,11 @@ function Terrain3D({
 
       if (obj.type === 'roof') {
         if ((obj.subtype||'gable') === 'flat') {
-          const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.18), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+          const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.18), obj.depth), threeMaterialForObject(obj,obj.color));
           roof.position.y = levelBase + obj.height/2;
           group.add(roof); addEdge(roof);
         } else {
-          const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(obj.width,obj.depth)*0.72, Math.max(obj.height,0.6), 4), new THREE.MeshStandardMaterial({ color: obj.color }));
+          const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(obj.width,obj.depth)*0.72, Math.max(obj.height,0.6), 4), threeMaterialForObject(obj,obj.color));
           roof.scale.z = obj.depth/Math.max(obj.width,obj.depth);
           roof.rotation.y = Math.PI/4;
           roof.position.y = levelBase + obj.height/2;
@@ -5440,13 +7098,13 @@ function Terrain3D({
       }
 
       if (obj.type === 'door') {
-        const door = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const door = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.08)), threeMaterialForObject(obj,obj.color));
         door.position.y = levelBase + openingSill(obj) + obj.height/2;
         group.add(door); addEdge(door);
       }
 
       if (obj.type === 'balcony') {
-        const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.14), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.14), obj.depth), threeMaterialForObject(obj,obj.color));
         slab.position.y = levelBase;
         group.add(slab); addEdge(slab);
       }
@@ -5458,7 +7116,7 @@ function Terrain3D({
       }
 
       if (obj.type === 'column') {
-        const column = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(obj.width,0.12)/2, Math.max(obj.width,0.12)/2, obj.height, 16), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(obj.width,0.12)/2, Math.max(obj.width,0.12)/2, obj.height, 16), threeMaterialForObject(obj,obj.color));
         column.position.y = levelBase + obj.height/2;
         group.add(column);
       }
@@ -5478,7 +7136,7 @@ function Terrain3D({
       }
 
       if (obj.type === 'building') {
-        const body = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const body = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), threeMaterialForObject(obj,obj.color));
         body.position.y = obj.height / 2;
         group.add(body);
         addEdge(body, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
@@ -5497,13 +7155,13 @@ function Terrain3D({
         group.add(water);
       }
       if (obj.type === 'pergola') {
-        const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, 0.16, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, 0.16, obj.depth), threeMaterialForObject(obj,obj.color));
         roof.position.y = obj.height;
         group.add(roof);
         addEdge(roof, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
         const postPos = [[-obj.width/2+0.12,-obj.depth/2+0.12],[obj.width/2-0.12,-obj.depth/2+0.12],[-obj.width/2+0.12,obj.depth/2-0.12],[obj.width/2-0.12,obj.depth/2-0.12]];
         postPos.forEach(([x,z]) => {
-          const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, obj.height, 0.12), new THREE.MeshStandardMaterial({ color: obj.color }));
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, obj.height, 0.12), threeMaterialForObject(obj,obj.color));
           post.position.set(x, obj.height/2, z);
           group.add(post);
         });
@@ -5533,7 +7191,7 @@ function Terrain3D({
             const blockHeight=Math.max(0.05,(rise/steps)*(i+1));
             const step=new THREE.Mesh(
               new THREE.BoxGeometry(obj.width,blockHeight,tread*1.04),
-              new THREE.MeshStandardMaterial({color:obj.color,roughness:0.9})
+              threeMaterialForObject(obj,obj.color,{roughness:0.9})
             );
             step.position.set(
               x,
@@ -5548,7 +7206,7 @@ function Terrain3D({
           for (let i = 0; i < steps; i++) {
             const stepH = obj.height / steps;
             const stepD = obj.depth / steps;
-            const step = new THREE.Mesh(new THREE.BoxGeometry(obj.width, stepH, stepD), new THREE.MeshStandardMaterial({ color: obj.color }));
+            const step = new THREE.Mesh(new THREE.BoxGeometry(obj.width, stepH, stepD), threeMaterialForObject(obj,obj.color));
             step.position.set(0, stepH / 2 + i * stepH, -obj.depth / 2 + stepD / 2 + i * stepD);
             group.add(step);
           }
@@ -5576,11 +7234,11 @@ function Terrain3D({
           localPoints = curve.getPoints(Math.max(18,obj.points.length*8)).map(point=>({x:point.x,y:point.z}));
         }
 
-        const material = new THREE.MeshStandardMaterial({
-          color:obj.color,
-          roughness:obj.type==='path'?0.92:0.82,
-          metalness:0
-        });
+        const material = threeMaterialForObject(
+          obj,
+          obj.color,
+          {roughness:obj.roughnessOverride ?? (obj.type==='path'?0.92:0.82)}
+        );
 
         for (let i=1;i<localPoints.length;i++) {
           const a=localPoints[i-1];
@@ -5638,7 +7296,32 @@ function Terrain3D({
         }
       }
 
-      if ((obj.type === 'path' && !obj.points?.length) || obj.type === 'irrigation' || obj.type === 'drainage') {
+      if (obj.type==='irrigation' && obj.emitterType) {
+        const body = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.08,0.1,0.16,12),
+          new THREE.MeshStandardMaterial({color:obj.color,roughness:0.55,metalness:0.15})
+        );
+        body.position.y=0.08;
+        group.add(body);
+
+        if (obj.emitterType==='sprinkler') {
+          const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1,12,8),
+            new THREE.MeshStandardMaterial({color:'#f8fafc',roughness:0.4})
+          );
+          head.position.y=0.2;
+          group.add(head);
+        } else {
+          const cap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.07,10,8),
+            new THREE.MeshStandardMaterial({color:'#fecdd3',roughness:0.5})
+          );
+          cap.position.y=0.17;
+          group.add(cap);
+        }
+      }
+
+      if ((obj.type === 'path' && !obj.points?.length) || (obj.type === 'irrigation' && !obj.emitterType) || obj.type === 'drainage') {
         const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width,Math.max(0.05,obj.height),obj.depth),new THREE.MeshStandardMaterial({color:obj.color,roughness:0.88}));
         slab.position.y=Math.max(0.03,obj.height/2); group.add(slab);
       }
@@ -5735,7 +7418,7 @@ function Terrain3D({
       if (obj.type === 'hedge') {
     const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
     const renderDepth=dims?Math.min(obj.depth,Math.max(0.25,dims.width*0.35)):obj.depth;
-        const hedge = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const hedge = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), threeMaterialForObject(obj,obj.color));
         hedge.position.y = obj.height / 2;
         group.add(hedge);
       }

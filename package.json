@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v027-water-brand-flow",
-  "version": "0.27.0",
+  "name": "al-green-design-landscape-architecture-v030-ai-planning-audit",
+  "version": "0.30.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
