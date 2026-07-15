@@ -46,3 +46,9 @@ hr{border:none;border-top:1px solid #e5e7eb;margin:16px 0}
 .legendSquare,.legendCircle{display:inline-block}
 .legendSquare{width:14px;height:14px;border-radius:3px}.legendCircle{width:14px;height:14px;border-radius:50%}
 @media (max-width:1280px){.platform{grid-template-columns:1fr}.workspace{min-height:600px}}
+
+.list{display:grid;gap:8px}
+.item{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#f8fafc}
+.item strong{display:block;margin-bottom:4px}
+.item span{font-size:12px;color:#64748b}
+input[type=range]{padding:0;height:28px}

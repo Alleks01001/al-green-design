@@ -4,10 +4,10 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.15 AI MAX</p>
-        <h1>Landscape Architecture – AI MAX – OpenAI, Architektur, 2D/3D</h1>
+        <p>AL Green Design · Entwicklungsstand V0.17 ADVANCED STUDIO</p>
+        <h1>Landscape Architecture – ADVANCED STUDIO – Gelände, Architektur, Pflanzen, Wasser, Licht, KI</h1>
         <div>
-          Weiches 3D-Gelände mit verschiebbaren Gebäuden und Objekten, Pflanzen, Pergola, Mauer, Pool, Treppe, Belägen und Pflanzzonen. Dazu ein KI-Chat mit lokalem Fallback und vorbereitetem OpenAI-Backend.
+          Erweitertes Planungsstudio mit weichem 3D-Gelände, Architektur, Wegen, Zäunen, Licht, Wasser, Pflanzen, Kosten, Klimasimulation, Berichten und KI-Unterstützung.
         </div>
       </section>
       <LandscapePlatform />

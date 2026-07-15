@@ -1,73 +1,80 @@
-# AL Green Design – V0.15 AI MAX
+# AL Green Design – V0.17 ADVANCED STUDIO
 
-Diese Version integriert deine OpenAI-/Schema-/TransformControls-Erweiterungen und baut die Plattform weiter aus.
+V0.17 erweitert das bisherige PRO STUDIO zu einer deutlich umfassenderen Planungsbasis.
 
-## Neu in V0.15
+## Neue Objektbibliothek
 
-### OpenAI KI-Modell
-- OpenAI SDK eingebaut
-- serverseitige API-Route `app/api/garden/route.ts`
-- strukturierte JSON-Ausgabe per JSON Schema
-- GPT-Modell im UI auswählbar
-- Standard: `gpt-4o`
-- freies Modellfeld möglich
-- lokaler Fallback bleibt aktiv, wenn kein API-Key gesetzt ist
+- Gebäude
+- Pool
+- Teich
+- Pergola
+- Mauer
+- Zaun
+- Tor
+- Stufen
+- Weg
+- Baum
+- Strauch
+- Hecke
+- Hochbeet/Pflanzgefäß
+- Sitzbank
+- Leuchte
+- Feuerstelle
+- Felsen
+- Bewässerungsleitung
+- Drainage
 
-### Strukturierte KI-Gartenplanung
-Die KI liefert ein Layout in dieser Struktur:
+## Gelände
 
-- Terrain:
-  - flat
-  - hilly
-  - sunken
-  - intensity
+- weiche Erhebungen und Senken
+- Radius, Höhe/Tiefe und Weichheit
+- Höhenlinien-Darstellung
+- grobe Auftrags-/Abtragsberechnung
+- Geländefarbe in 3D
+- Objekte folgen automatisch der Geländehöhe
 
-- Objects:
-  - modern_house
-  - glass_house
-  - pool
-  - pergola
-  - tree
-  - shrub
+## 2D und 3D
 
-Diese Objekte werden automatisch in das bestehende Planmodell übersetzt.
+- 2D-Verschiebung von Gelände, Zonen und Objekten
+- 3D-Verschiebung von Garten- und Architekturobjekten
+- Nachtmodus
+- Jahreszeiten
+- Pflanzenwachstum
+- Sonnenrichtung und Sonnenhöhe
+- Kamera-Modi
+- Gitternetz und Höhenlinien ein-/ausblendbar
 
-### 3D / TransformControls vorbereitet
-- `@react-three/fiber`
-- `@react-three/drei`
-- `TransformControls`
-- `Canvas`
-- `Sky`
-- `SoftShadows`
-- `OrbitControls`
-- Beispielkomponenten:
-  - `components/MovableObject.tsx`
-  - `components/RenderCanvas.tsx`
+## Planung und Analyse
 
-### Bestehende 3D-Ansicht
-- Gebäude und Objekte bleiben weiterhin in der bestehenden 3D-Ansicht verschiebbar
-- Objekte liegen weiterhin auf der Geländehöhe
-- 2D-Verschiebung bleibt aktiv
+- Projektverwaltung
+- Undo/Redo
+- Layer sichtbar/gesperrt
+- Raster/Fangfunktion
+- Kostenberechnung
+- Versiegelung
+- Biodiversität
+- Regenrückhalt
+- Grünfläche
+- Objekt- und Pflanzenlisten
+- CSV-Bericht
+- vollständiger Projekt-Export
 
-## Vercel Environment Variable
+## KI
 
-Für echten OpenAI-Betrieb:
+- lokaler KI-Fallback
+- OpenAI JSON-Schema
+- Mehragenten-Struktur
+- Landschaftsplaner
+- Botaniker
+- Kostenagent
+- Wasseragent
+- Architekturagent
+- Nachhaltigkeitsagent
+
+## OpenAI in Vercel
 
 ```text
 OPENAI_API_KEY=dein_key
 ```
 
-Ohne Key verwendet die App den lokalen Fallback.
-
-## Struktur
-
-```text
-.gitignore
-app
-components
-next.config.mjs
-next-env.d.ts
-package.json
-README.md
-tsconfig.json
-```
+Die Anwendung bleibt auch ohne API-Key mit lokalem Fallback verwendbar.

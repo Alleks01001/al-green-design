@@ -6,8 +6,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 type ViewMode = '2d' | '3d';
-type Tab = 'chat' | 'image' | 'terrain' | 'architecture' | 'scene' | 'export';
-type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pergola' | 'wall' | 'stairs' | 'tree' | 'shrub' | 'hedge';
+type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'terrain' | 'architecture' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
+type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage';
 type SelectedKind = 'terrain' | 'zone' | 'object' | null;
 type Drag2D = { kind: SelectedKind; id: number } | null;
 type ChatEngine = 'local' | 'openai';
@@ -34,7 +34,7 @@ type Zone = {
   color: string;
 };
 
-type GardenObjectType = 'building' | 'pool' | 'pergola' | 'wall' | 'stairs' | 'tree' | 'shrub' | 'hedge';
+type GardenObjectType = 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage';
 
 type GardenObject = {
   id: number;
@@ -48,6 +48,10 @@ type GardenObject = {
   rotation: number;
   color: string;
   note?: string;
+  material?: string;
+  unitCost?: number;
+  waterNeed?: number;
+  lightNeed?: string;
 };
 
 const SCALE = 50;
@@ -103,13 +107,29 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.15 AI MAX – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.17 ADVANCED STUDIO – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
   const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb OPENAI_API_KEY in Vercel setzen.');
   const [openAiLastAnswer, setOpenAiLastAnswer] = useState('');
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
+  const [projectInfo, setProjectInfo] = useState({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [gridSize, setGridSize] = useState(0.5);
+  const [nightMode, setNightMode] = useState(false);
+  const [growthYear, setGrowthYear] = useState<0 | 3 | 10 | 20>(0);
+  const [season, setSeason] = useState<'Frühling' | 'Sommer' | 'Herbst' | 'Winter'>('Sommer');
+  const [sunAzimuth, setSunAzimuth] = useState(135);
+  const [sunElevation, setSunElevation] = useState(42);
+  const [showContours, setShowContours] = useState(true);
+  const [showGrid3D, setShowGrid3D] = useState(true);
+  const [cameraMode, setCameraMode] = useState<'orbit' | 'walk' | 'top'>('orbit');
+  const [layers, setLayers] = useState({ terrain: true, zones: true, buildings: true, plants: true, water: true, structures: true, lighting: true, utilities: true, furniture: true });
+  const [lockedLayers, setLockedLayers] = useState({ terrain: false, zones: false, buildings: false, plants: false, water: false, structures: false, lighting: false, utilities: false, furniture: false });
+  const [history, setHistory] = useState<any[]>([]);
+  const [future, setFuture] = useState<any[]>([]);
+
   const [drag2D, setDrag2D] = useState<Drag2D>(null);
 
   const [terrainBlobs, setTerrainBlobs] = useState<TerrainBlob[]>([
@@ -131,7 +151,11 @@ export default function LandscapePlatform() {
     { id: 205, type: 'shrub', name: 'Strauch', x: 5.6, y: -1.7, width: 1.0, depth: 1.0, height: 1.0, rotation: 0, color: '#22c55e' },
     { id: 206, type: 'hedge', name: 'Hecke', x: 0.0, y: -4.5, width: 4.0, depth: 0.6, height: 1.5, rotation: 0, color: '#15803d' },
     { id: 207, type: 'wall', name: 'Mauer', x: -0.6, y: -3.2, width: 3.0, depth: 0.25, height: 1.0, rotation: 15, color: '#9ca3af' },
-    { id: 208, type: 'stairs', name: 'Stufen', x: -2.5, y: -2.0, width: 2.2, depth: 1.4, height: 0.9, rotation: 0, color: '#c8b6a6' }
+    { id: 208, type: 'stairs', name: 'Stufen', x: -2.5, y: -2.0, width: 2.2, depth: 1.4, height: 0.9, rotation: 0, color: '#c8b6a6' },
+    { id: 209, type: 'path', name: 'Gartenweg', x: 0.5, y: 3.9, width: 5.5, depth: 1.0, height: 0.08, rotation: -8, color: '#d6c7ad', material: 'Kies', unitCost: 95 },
+    { id: 210, type: 'light', name: 'Wegeleuchte', x: 1.5, y: 3.2, width: 0.25, depth: 0.25, height: 0.9, rotation: 0, color: '#f59e0b', unitCost: 185 },
+    { id: 211, type: 'bench', name: 'Sitzbank', x: -4.6, y: 3.4, width: 1.8, depth: 0.65, height: 0.85, rotation: 0, color: '#8b5e3c', unitCost: 380 },
+    { id: 212, type: 'pond', name: 'Gartenteich', x: 5.0, y: -3.8, width: 3.2, depth: 2.2, height: 0.35, rotation: 0, color: '#0ea5e9', unitCost: 240 }
   ]);
 
   const [selectedKind, setSelectedKind] = useState<SelectedKind>('object');
@@ -151,6 +175,80 @@ export default function LandscapePlatform() {
     return { greenArea, hardArea, plantCount, sealed, biodiversity };
   }, [zones, objects]);
 
+
+  function snapshot() {
+    setHistory(v => [...v.slice(-29), { terrainBlobs, zones, objects }]);
+    setFuture([]);
+  }
+
+  function undo() {
+    const last = history[history.length - 1];
+    if (!last) return;
+    setFuture(v => [{ terrainBlobs, zones, objects }, ...v.slice(0, 29)]);
+    setTerrainBlobs(last.terrainBlobs);
+    setZones(last.zones);
+    setObjects(last.objects);
+    setHistory(v => v.slice(0, -1));
+    setStatus('Rückgängig ausgeführt.');
+  }
+
+  function redo() {
+    const next = future[0];
+    if (!next) return;
+    setHistory(v => [...v, { terrainBlobs, zones, objects }]);
+    setTerrainBlobs(next.terrainBlobs);
+    setZones(next.zones);
+    setObjects(next.objects);
+    setFuture(v => v.slice(1));
+    setStatus('Wiederherstellen ausgeführt.');
+  }
+
+  function snapValue(value: number) {
+    if (!snapEnabled) return value;
+    return Math.round(value / gridSize) * gridSize;
+  }
+
+  function objectLayer(obj: GardenObject) {
+    if (obj.type === 'building') return 'buildings';
+    if (['tree','shrub','hedge'].includes(obj.type)) return 'plants';
+    if (['pool','pond'].includes(obj.type)) return 'water';
+    if (obj.type === 'light') return 'lighting';
+    if (['irrigation','drainage'].includes(obj.type)) return 'utilities';
+    if (['bench','planter','firepit','rock'].includes(obj.type)) return 'furniture';
+    return 'structures';
+  }
+
+  function saveBrowserProject() {
+    localStorage.setItem('al-green-v017-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
+    setStatus('Projekt im Browser gespeichert.');
+  }
+
+  function loadBrowserProject() {
+    const raw = localStorage.getItem('al-green-v017-project');
+    if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
+    try {
+      const data = JSON.parse(raw);
+      snapshot();
+      if (data.projectInfo) setProjectInfo(data.projectInfo);
+      if (data.terrainBlobs) setTerrainBlobs(data.terrainBlobs);
+      if (data.zones) setZones(data.zones);
+      if (data.objects) setObjects(data.objects);
+      if (data.layers) setLayers(data.layers);
+      if (data.gridSize) setGridSize(data.gridSize);
+      if (typeof data.snapEnabled === 'boolean') setSnapEnabled(data.snapEnabled);
+      setStatus('Browserprojekt geladen.');
+    } catch { setStatus('Gespeichertes Projekt konnte nicht gelesen werden.'); }
+  }
+
+  function deleteSelection() {
+    if (!selectedKind || selectedId === null) return;
+    snapshot();
+    if (selectedKind === 'terrain') setTerrainBlobs(v => v.filter(b => b.id !== selectedId));
+    if (selectedKind === 'zone') setZones(v => v.filter(z => z.id !== selectedId));
+    if (selectedKind === 'object') setObjects(v => v.filter(o => o.id !== selectedId));
+    setSelection(null, null, 'Auswahl gelöscht.');
+  }
+
   function setSelection(kind: SelectedKind, id: number | null, message?: string) {
     setSelectedKind(kind);
     setSelectedId(id);
@@ -158,16 +256,28 @@ export default function LandscapePlatform() {
   }
 
   function addObject(type: GardenObjectType, x: number, y: number) {
+    snapshot();
     const id = Date.now();
     const presets: Record<GardenObjectType, Partial<GardenObject>> = {
-      building: { name: 'Neues Gebäude', width: 4.0, depth: 3.0, height: 3.2, color: '#d6c4a7' },
-      pool: { name: 'Neuer Pool', width: 4.2, depth: 2.4, height: 1.3, color: '#38bdf8' },
-      pergola: { name: 'Neue Pergola', width: 3.0, depth: 2.4, height: 2.6, color: '#8b5e3c' },
-      wall: { name: 'Neue Mauer', width: 3.0, depth: 0.25, height: 1.0, color: '#9ca3af' },
-      stairs: { name: 'Neue Stufen', width: 2.2, depth: 1.4, height: 0.9, color: '#c8b6a6' },
-      tree: { name: 'Neuer Baum', width: 1.4, depth: 1.4, height: 4.0, color: '#16a34a' },
-      shrub: { name: 'Neuer Strauch', width: 1.0, depth: 1.0, height: 1.2, color: '#22c55e' },
-      hedge: { name: 'Neue Hecke', width: 3.5, depth: 0.6, height: 1.5, color: '#15803d' }
+      building: { name: 'Neues Gebäude', width: 4.0, depth: 3.0, height: 3.2, color: '#d6c4a7', material: 'Putz/Holz', unitCost: 650 },
+      pool: { name: 'Neuer Pool', width: 4.2, depth: 2.4, height: 1.3, color: '#38bdf8', material: 'Poolbecken', unitCost: 900 },
+      pond: { name: 'Neuer Gartenteich', width: 3.6, depth: 2.6, height: 0.45, color: '#0ea5e9', material: 'Teichfolie', unitCost: 240 },
+      pergola: { name: 'Neue Pergola', width: 3.0, depth: 2.4, height: 2.6, color: '#8b5e3c', material: 'Holz', unitCost: 480 },
+      wall: { name: 'Neue Mauer', width: 3.0, depth: 0.25, height: 1.0, color: '#9ca3af', material: 'Beton/Stein', unitCost: 260 },
+      fence: { name: 'Neuer Zaun', width: 4.0, depth: 0.12, height: 1.4, color: '#7c5c3e', material: 'Holz/Metall', unitCost: 120 },
+      gate: { name: 'Neues Tor', width: 2.5, depth: 0.18, height: 1.6, color: '#475569', material: 'Metall', unitCost: 650 },
+      stairs: { name: 'Neue Stufen', width: 2.2, depth: 1.4, height: 0.9, color: '#c8b6a6', material: 'Naturstein', unitCost: 380 },
+      path: { name: 'Neuer Weg', width: 4.0, depth: 1.1, height: 0.08, color: '#d6c7ad', material: 'Kies/Pflaster', unitCost: 95 },
+      tree: { name: 'Neuer Baum', width: 1.4, depth: 1.4, height: 4.0, color: '#16a34a', material: 'Pflanze', unitCost: 320, waterNeed: 2, lightNeed: 'Sonne/Halbschatten' },
+      shrub: { name: 'Neuer Strauch', width: 1.0, depth: 1.0, height: 1.2, color: '#22c55e', material: 'Pflanze', unitCost: 65, waterNeed: 2, lightNeed: 'Sonne/Halbschatten' },
+      hedge: { name: 'Neue Hecke', width: 3.5, depth: 0.6, height: 1.5, color: '#15803d', material: 'Pflanze', unitCost: 180, waterNeed: 2, lightNeed: 'Sonne/Halbschatten' },
+      planter: { name: 'Neues Hochbeet', width: 2.0, depth: 1.0, height: 0.7, color: '#92400e', material: 'Holz/Metall', unitCost: 420 },
+      bench: { name: 'Neue Sitzbank', width: 1.8, depth: 0.65, height: 0.85, color: '#8b5e3c', material: 'Holz', unitCost: 380 },
+      light: { name: 'Neue Leuchte', width: 0.25, depth: 0.25, height: 0.9, color: '#f59e0b', material: 'Metall/LED', unitCost: 185 },
+      firepit: { name: 'Neue Feuerstelle', width: 1.4, depth: 1.4, height: 0.35, color: '#b45309', material: 'Stahl/Stein', unitCost: 750 },
+      rock: { name: 'Neuer Felsen', width: 1.4, depth: 1.0, height: 0.7, color: '#78716c', material: 'Naturstein', unitCost: 240 },
+      irrigation: { name: 'Bewässerungsleitung', width: 4.0, depth: 0.12, height: 0.08, color: '#2563eb', material: 'PE-Rohr', unitCost: 18 },
+      drainage: { name: 'Drainageleitung', width: 4.0, depth: 0.16, height: 0.10, color: '#0f766e', material: 'Drainagerohr', unitCost: 32 }
     };
     const obj: GardenObject = { id, type, x, y, rotation: 0, note: '', ...(presets[type] as any) };
     setObjects(v => [...v, obj]);
@@ -186,6 +296,7 @@ export default function LandscapePlatform() {
       return;
     }
     if (tool === 'mound' || tool === 'depression') {
+      snapshot();
       const id = Date.now();
       const blob: TerrainBlob = {
         id, name: tool === 'mound' ? 'Neue Erhebung' : 'Neue Mulde', x: p.x, y: p.y,
@@ -196,6 +307,7 @@ export default function LandscapePlatform() {
       return;
     }
     if (tool === 'plantZone' || tool === 'hardscape') {
+      snapshot();
       const id = Date.now();
       const zone: Zone = { id, kind: tool, name: tool === 'plantZone' ? 'Neue Pflanzzone' : 'Neue Belagsfläche', x: p.x, y: p.y, width: 3.4, depth: 2.0, color: tool === 'plantZone' ? '#a7f3d0' : '#b8b0a2' };
       setZones(v => [...v, zone]);
@@ -210,15 +322,15 @@ export default function LandscapePlatform() {
     const p = worldFromEvent(svgRef.current, e);
 
     if (drag2D.kind === 'object') {
-      setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x: p.x, y: p.y } : o));
+      setObjects(v => v.map(o => o.id === drag2D.id ? { ...o, x: snapValue(p.x), y: snapValue(p.y) } : o));
     }
 
     if (drag2D.kind === 'terrain') {
-      setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x: p.x, y: p.y } : b));
+      setTerrainBlobs(v => v.map(b => b.id === drag2D.id ? { ...b, x: snapValue(p.x), y: snapValue(p.y) } : b));
     }
 
     if (drag2D.kind === 'zone') {
-      setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x: p.x, y: p.y } : z));
+      setZones(v => v.map(z => z.id === drag2D.id ? { ...z, x: snapValue(p.x), y: snapValue(p.y) } : z));
     }
   }
 
@@ -435,9 +547,34 @@ export default function LandscapePlatform() {
     setSelection('terrain', generatedBlobs[0]?.id ?? null, `${chatEngine === 'openai' ? `OpenAI ${openAiModel}` : 'Lokale KI'} interpretiert: ${generatedBlobs.length} Terrain-Formen, ${generatedZones.length} Zonen und ${generatedObjects.length} Architektur-/Gartenobjekte.`);
   }
 
-  function exportProject() {
-    download('al-green-design-v015-ai-max.algreen', JSON.stringify({ terrainBlobs, zones, objects, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+  function exportCsvReport() {
+    const rows = [
+      ['Kategorie','Name','Typ','X','Y','Breite','Tiefe','Höhe','Material','Kostenansatz'],
+      ...objects.map(o=>['Objekt',o.name,o.type,o.x,o.y,o.width,o.depth,o.height,o.material||'',Number(o.unitCost||0)]),
+      ...zones.map(z=>['Zone',z.name,z.kind,z.x,z.y,z.width,z.depth,0,'',0]),
+      ...terrainBlobs.map(b=>['Gelände',b.name,b.height>=0?'Erhebung':'Senke',b.x,b.y,b.radius*2,b.radius*2,b.height,'Erde',48])
+    ];
+    const csv = rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n');
+    download('al-green-design-v017-bericht.csv', csv, 'text/csv;charset=utf-8');
+    setStatus('CSV-Bericht exportiert.');
   }
+
+  function exportProject() {
+    download('al-green-design-v017-pro-studio.algreen', JSON.stringify({ version:'0.17.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+  }
+
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT','TEXTAREA','SELECT'].includes(target?.tagName)) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
 
   return (
     <section className="platform">
@@ -445,10 +582,43 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Gebäude/Garten'],['scene','Szene'],['export','Export']
+            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Architektur'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
+
+
+        {tab === 'dashboard' && (
+          <>
+            <h2>PRO STUDIO Dashboard</h2>
+            <div className="kpis">
+              <div className="kpi"><small>Projekt</small><strong>{projectInfo.name}</strong></div>
+              <div className="kpi"><small>Budget</small><strong>{projectInfo.budget.toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Objekte</small><strong>{objects.length}</strong></div>
+              <div className="kpi"><small>Terrain</small><strong>{terrainBlobs.length}</strong></div>
+            </div>
+            <div className="grid2" style={{marginTop:10}}>
+              <button className="btn" onClick={undo}>Undo</button>
+              <button className="btn" onClick={redo}>Redo</button>
+              <button className="btn primary" onClick={saveBrowserProject}>Speichern</button>
+              <button className="btn blue" onClick={loadBrowserProject}>Laden</button>
+            </div>
+          </>
+        )}
+
+        {tab === 'project' && (
+          <>
+            <h2>Projektverwaltung</h2>
+            <div className="form">
+              <label>Projektname<input value={projectInfo.name} onChange={e=>setProjectInfo({...projectInfo,name:e.target.value})}/></label>
+              <label>Standort<input value={projectInfo.location} onChange={e=>setProjectInfo({...projectInfo,location:e.target.value})}/></label>
+              <label>Budget €<input type="number" value={projectInfo.budget} onChange={e=>setProjectInfo({...projectInfo,budget:Number(e.target.value)})}/></label>
+              <label>Fläche m²<input type="number" value={projectInfo.area} onChange={e=>setProjectInfo({...projectInfo,area:Number(e.target.value)})}/></label>
+              <label>Raster<select value={gridSize} onChange={e=>setGridSize(Number(e.target.value))}><option value="0.1">0,1 m</option><option value="0.25">0,25 m</option><option value="0.5">0,5 m</option><option value="1">1 m</option></select></label>
+              <label><input type="checkbox" checked={snapEnabled} onChange={e=>setSnapEnabled(e.target.checked)}/> Fangfunktion aktiv</label>
+            </div>
+          </>
+        )}
 
         {tab === 'chat' && (
           <>
@@ -508,10 +678,127 @@ export default function LandscapePlatform() {
             <h2>Architektur + Pflanzen</h2>
             <div className="grid3">
               {([
-                ['building','Gebäude/Haus'],['pool','Pool'],['pergola','Pergola'],['wall','Mauer'],['stairs','Stufen'],['tree','Baum'],['shrub','Strauch'],['hedge','Hecke'],['select','Auswählen']
+                ['building','Gebäude/Haus'],['pool','Pool'],['pond','Teich'],['pergola','Pergola'],['wall','Mauer'],['fence','Zaun'],['gate','Tor'],['stairs','Stufen'],['path','Weg'],['select','Auswählen']
               ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
             </div>
             <div className="hint" style={{marginTop:10}}>2D: Objekt anklicken und ziehen. 3D: Objekt anklicken und über das Gelände verschieben.</div>
+          </>
+        )}
+
+
+        {tab === 'library' && (
+          <>
+            <h2>Objekt- und Pflanzenbibliothek</h2>
+            <div className="grid3">
+              {([
+                ['tree','Baum'],['shrub','Strauch'],['hedge','Hecke'],['planter','Hochbeet'],['bench','Sitzbank'],['light','Leuchte'],['firepit','Feuerstelle'],['rock','Felsen'],['irrigation','Bewässerung'],['drainage','Drainage'],['select','Auswählen']
+              ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
+            </div>
+            <div className="hint" style={{marginTop:10}}>Objekt wählen und in den 2D-Plan klicken. Danach kann es in 2D und 3D verschoben und rechts angepasst werden.</div>
+          </>
+        )}
+
+        {tab === 'water' && (
+          <>
+            <h2>Wasser und Entwässerung</h2>
+            <div className="grid2">
+              <button className={`tool ${tool==='pool'?'active':''}`} onClick={()=>setTool('pool')}>Pool</button>
+              <button className={`tool ${tool==='pond'?'active':''}`} onClick={()=>setTool('pond')}>Teich</button>
+              <button className={`tool ${tool==='irrigation'?'active':''}`} onClick={()=>setTool('irrigation')}>Bewässerung</button>
+              <button className={`tool ${tool==='drainage'?'active':''}`} onClick={()=>setTool('drainage')}>Drainage</button>
+              <button className={`tool ${tool==='depression'?'active':''}`} onClick={()=>setTool('depression')}>Retentionsmulde</button>
+            </div>
+            <div className="kpis" style={{marginTop:10}}>
+              <div className="kpi"><small>Wasserobjekte</small><strong>{objects.filter(o=>['pool','pond'].includes(o.type)).length}</strong></div>
+              <div className="kpi"><small>Leitungen</small><strong>{objects.filter(o=>['irrigation','drainage'].includes(o.type)).length}</strong></div>
+              <div className="kpi"><small>Mulden</small><strong>{terrainBlobs.filter(b=>b.height<0).length}</strong></div>
+              <div className="kpi"><small>Rückhalt grob</small><strong>{Math.max(0,(stats.cut*0.65)).toFixed(1)} m³</strong></div>
+            </div>
+          </>
+        )}
+
+        {tab === 'climate' && (
+          <>
+            <h2>Klima, Sonne und Simulation</h2>
+            <div className="form">
+              <label>Jahreszeit<select value={season} onChange={e=>setSeason(e.target.value as any)}><option>Frühling</option><option>Sommer</option><option>Herbst</option><option>Winter</option></select></label>
+              <label>Sonnenrichtung °<input type="range" min="0" max="360" value={sunAzimuth} onChange={e=>setSunAzimuth(Number(e.target.value))}/><span>{sunAzimuth}°</span></label>
+              <label>Sonnenhöhe °<input type="range" min="5" max="85" value={sunElevation} onChange={e=>setSunElevation(Number(e.target.value))}/><span>{sunElevation}°</span></label>
+              <label>Kamera<select value={cameraMode} onChange={e=>setCameraMode(e.target.value as any)}><option value="orbit">Orbit</option><option value="walk">Begehen</option><option value="top">Draufsicht</option></select></label>
+              <label><input type="checkbox" checked={nightMode} onChange={e=>setNightMode(e.target.checked)}/> Nachtmodus</label>
+              <label><input type="checkbox" checked={showContours} onChange={e=>setShowContours(e.target.checked)}/> Höhenlinien</label>
+              <label><input type="checkbox" checked={showGrid3D} onChange={e=>setShowGrid3D(e.target.checked)}/> 3D-Raster</label>
+            </div>
+            <div className="grid2">
+              {[0,3,10,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y as any)}>{y===0?'heute':y+' Jahre'}</button>)}
+            </div>
+          </>
+        )}
+
+        {tab === 'reports' && (
+          <>
+            <h2>Berichte und Listen</h2>
+            <div className="list">
+              <div className="item"><strong>Objektliste</strong><span>{objects.length} Objekte im Projekt</span></div>
+              <div className="item"><strong>Pflanzenliste</strong><span>{objects.filter(o=>['tree','shrub','hedge'].includes(o.type)).length} Pflanzenobjekte</span></div>
+              <div className="item"><strong>Wassertechnik</strong><span>{objects.filter(o=>['pool','pond','irrigation','drainage'].includes(o.type)).length} Elemente</span></div>
+              <div className="item"><strong>Geländebericht</strong><span>Auftrag {stats.fill.toFixed(1)} m³ · Abtrag {stats.cut.toFixed(1)} m³</span></div>
+            </div>
+            <button className="btn blue" style={{marginTop:10}} onClick={exportCsvReport}>CSV-Bericht exportieren</button>
+          </>
+        )}
+
+        {tab === 'layers' && (
+          <>
+            <h2>Layerverwaltung</h2>
+            {Object.keys(layers).map(key => (
+              <div className="item" key={key} style={{marginBottom:8}}>
+                <strong>{key}</strong>
+                <label><input type="checkbox" checked={(layers as any)[key]} onChange={e=>setLayers({...layers,[key]:e.target.checked})}/> sichtbar</label>
+                <label><input type="checkbox" checked={(lockedLayers as any)[key]} onChange={e=>setLockedLayers({...lockedLayers,[key]:e.target.checked})}/> gesperrt</label>
+              </div>
+            ))}
+          </>
+        )}
+
+        {tab === 'costs' && (
+          <>
+            <h2>Kostenübersicht</h2>
+            <div className="kpis">
+              <div className="kpi"><small>Gebäude</small><strong>{(objects.filter(o=>o.type==='building').reduce((a,o)=>a+o.width*o.depth*Number(o.unitCost||650),0)).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Wasser</small><strong>{(objects.filter(o=>['pool','pond'].includes(o.type)).reduce((a,o)=>a+o.width*o.depth*Number(o.unitCost||500),0)).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Pflanzen</small><strong>{(objects.filter(o=>['tree','shrub','hedge'].includes(o.type)).reduce((a,o)=>a+Number(o.unitCost||(o.type==='tree'?320:o.type==='hedge'?180:65)),0)).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Ausstattung</small><strong>{(objects.filter(o=>['bench','planter','light','firepit','rock'].includes(o.type)).reduce((a,o)=>a+Number(o.unitCost||250),0)).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Technik</small><strong>{(objects.filter(o=>['irrigation','drainage'].includes(o.type)).reduce((a,o)=>a+o.width*Number(o.unitCost||25),0)).toFixed(0)} €</strong></div>
+              <div className="kpi"><small>Erdarbeiten</small><strong>{((stats.fill+stats.cut)*48).toFixed(0)} €</strong></div>
+            </div>
+          </>
+        )}
+
+        {tab === 'analysis' && (
+          <>
+            <h2>Standort- und Projektanalyse</h2>
+            <div className="kpis">
+              <div className="kpi"><small>Versiegelung</small><strong>{metrics.sealed}%</strong></div>
+              <div className="kpi"><small>Biodiversität</small><strong>{metrics.biodiversity}/100</strong></div>
+              <div className="kpi"><small>Auftrag</small><strong>{stats.fill.toFixed(1)} m³</strong></div>
+              <div className="kpi"><small>Abtrag</small><strong>{stats.cut.toFixed(1)} m³</strong></div>
+              <div className="kpi"><small>Regenrückhalt</small><strong>{Math.min(100,Math.round((100-metrics.sealed)+stats.cut*5))}/100</strong></div>
+              <div className="kpi"><small>Grünanteil</small><strong>{Math.min(100,Math.round(metrics.greenArea/Math.max(1,projectInfo.area)*100))}%</strong></div>
+            </div>
+            <div className="grid2" style={{marginTop:10}}>
+              <button className={`btn ${nightMode?'active':''}`} onClick={()=>setNightMode(!nightMode)}>Nachtmodus</button>
+              {[0,3,10,20].map(y=><button key={y} className={`btn ${growthYear===y?'active':''}`} onClick={()=>setGrowthYear(y as any)}>{y===0?'heute':y+' Jahre'}</button>)}
+            </div>
+          </>
+        )}
+
+        {tab === 'agents' && (
+          <>
+            <h2>Mehragenten-KI</h2>
+            <div className="list">
+              {['Landschaftsplaner','Botaniker','Kostenkalkulator','Bewässerungsexperte','Architekturagent','Nachhaltigkeitsagent','Lichtplaner','Geländemodellierer','Ausschreibungsagent'].map((agent,i)=><div className="item" key={agent}><strong>{agent}</strong><span>{i===0?'Layout und Flächen':i===1?'Pflanzen, Abstände, Standort':i===2?'Mengen und Kosten':i===3?'Wasserbedarf und Zonen':i===4?'Gebäude und Gartenarchitektur':'CO₂, Regenwasser und Biodiversität'}</span></div>)}
+            </div>
           </>
         )}
 
@@ -521,7 +808,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.15 AI MAX</span>
+          <span className="pill">V0.17 ADVANCED STUDIO</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -540,7 +827,7 @@ export default function LandscapePlatform() {
               onMouseLeave={handleSvgUp}
             >
               <defs>
-                {terrainBlobs.map(blob => (
+                {layers.terrain && terrainBlobs.map(blob => (
                   <radialGradient id={`g-${blob.id}`} key={blob.id}>
                     <stop offset="0%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0.85" />
                     <stop offset="45%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0.24" />
@@ -551,7 +838,7 @@ export default function LandscapePlatform() {
               <Grid />
               {image && <image href={image.dataUrl} x={-10 * SCALE} y={-6.5 * SCALE} width={20 * SCALE} height={13 * SCALE} opacity="0.22" preserveAspectRatio="none" />}
 
-              {zones.map(zone => (
+              {layers.zones && zones.map(zone => (
                 <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'zone', id:zone.id}); setSelection('zone', zone.id, `${zone.name} wird in 2D verschoben.`); }}}>
                   <rect x={(zone.x - zone.width/2) * SCALE} y={(zone.y - zone.depth/2) * SCALE} width={zone.width * SCALE} height={zone.depth * SCALE} fill={zone.color} fillOpacity="0.42" stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':'#334155'} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : 1.5} rx="6" />
                   <text x={zone.x * SCALE} y={zone.y * SCALE} fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{zone.name}</text>
@@ -561,11 +848,12 @@ export default function LandscapePlatform() {
               {terrainBlobs.map(blob => (
                 <g key={blob.id} onClick={(e)=>{e.stopPropagation(); setSelection('terrain', blob.id, `${blob.name} ausgewählt.`);}} onMouseDown={(e)=>{e.stopPropagation(); if (tool === 'select') { setDrag2D({kind:'terrain', id:blob.id}); setSelection('terrain', blob.id, `${blob.name} wird in 2D verschoben.`); }}}>
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={blob.radius * SCALE * blob.softness} fill={`url(#g-${blob.id})`} />
+                  {showContours && [0.35,0.55,0.75,0.95].map(level=><circle key={level} cx={blob.x*SCALE} cy={blob.y*SCALE} r={blob.radius*SCALE*blob.softness*level} fill="none" stroke={blob.height>=0?'#4d7c0f':'#2563eb'} strokeOpacity="0.32" strokeWidth="1"/>) }
                   <circle cx={blob.x * SCALE} cy={blob.y * SCALE} r={Math.max(6, blob.radius * SCALE * 0.25)} fill={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stroke={selectedKind==='terrain' && selectedId===blob.id ? '#f59e0b' : '#ffffff'} strokeWidth={selectedKind==='terrain' && selectedId===blob.id ? 3 : 1.5} />
                 </g>
               ))}
 
-              {objects.map(obj => (
+              {objects.filter(obj => (layers as any)[objectLayer(obj)]).map(obj => (
                 <GardenObject2D
                   key={obj.id}
                   obj={obj}
@@ -576,8 +864,8 @@ export default function LandscapePlatform() {
               ))}
             </svg>
           ) : (
-            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} onObjectMove={(id, x, y) => {
-              setObjects(v => v.map(o => o.id === id ? { ...o, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : o));
+            <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+              setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
               if (obj) setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
@@ -624,13 +912,16 @@ export default function LandscapePlatform() {
         {selectedObject && (
           <div className="form">
             <label>Name<input value={selectedObject.name} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,name:e.target.value}:o))} /></label>
-            <label>Typ<select value={selectedObject.type} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,type:e.target.value as GardenObjectType}:o))}><option>building</option><option>pool</option><option>pergola</option><option>wall</option><option>stairs</option><option>tree</option><option>shrub</option><option>hedge</option></select></label>
+            <label>Typ<select value={selectedObject.type} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,type:e.target.value as GardenObjectType}:o))}><option>building</option><option>pool</option><option>pond</option><option>pergola</option><option>wall</option><option>fence</option><option>gate</option><option>stairs</option><option>path</option><option>tree</option><option>shrub</option><option>hedge</option><option>planter</option><option>bench</option><option>light</option><option>firepit</option><option>rock</option><option>irrigation</option><option>drainage</option></select></label>
             <label>X<input type="number" step="0.1" value={selectedObject.x} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,x:Number(e.target.value)}:o))} /></label>
             <label>Y<input type="number" step="0.1" value={selectedObject.y} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,y:Number(e.target.value)}:o))} /></label>
             <label>Breite<input type="number" step="0.1" value={selectedObject.width} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,width:Number(e.target.value)}:o))} /></label>
             <label>Tiefe<input type="number" step="0.1" value={selectedObject.depth} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,depth:Number(e.target.value)}:o))} /></label>
             <label>Höhe<input type="number" step="0.1" value={selectedObject.height} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,height:Number(e.target.value)}:o))} /></label>
             <label>Drehung °<input type="number" step="1" value={selectedObject.rotation} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,rotation:Number(e.target.value)}:o))} /></label>
+            <label>Material<input value={selectedObject.material||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,material:e.target.value}:o))} /></label>
+            <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
+            {['tree','shrub','hedge'].includes(selectedObject.type) && <><label>Wasserbedarf<input type="number" min="1" max="5" value={Number(selectedObject.waterNeed||2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,waterNeed:Number(e.target.value)}:o))}/></label><label>Lichtbedarf<input value={selectedObject.lightNeed||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,lightNeed:e.target.value}:o))}/></label></>}
             <button className="btn danger" onClick={()=>{ setObjects(v=>v.filter(o=>o.id!==selectedObject.id)); setSelection(null,null,'Objekt gelöscht.'); }}>Objekt löschen</button>
           </div>
         )}
@@ -653,7 +944,7 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
   const tx = obj.x * SCALE;
   const ty = obj.y * SCALE;
   const rot = obj.rotation;
-  if (obj.type === 'tree' || obj.type === 'shrub') {
+  if (['tree','shrub','rock','firepit','light'].includes(obj.type)) {
     return (
       <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         <circle cx="0" cy="0" r={(obj.width / 2) * SCALE} fill={obj.color} fillOpacity="0.85" stroke={stroke} strokeWidth={sw} />
@@ -675,6 +966,14 @@ function Terrain3D({
   objects,
   selectedId,
   selectedKind,
+  nightMode,
+  growthYear,
+  season,
+  sunAzimuth,
+  sunElevation,
+  showContours,
+  showGrid3D,
+  cameraMode,
   onObjectMove,
   onObjectSelect,
   onStatus
@@ -684,6 +983,14 @@ function Terrain3D({
   objects: GardenObject[];
   selectedId: number | null;
   selectedKind: SelectedKind;
+  nightMode: boolean;
+  growthYear: number;
+  season: string;
+  sunAzimuth: number;
+  sunElevation: number;
+  showContours: boolean;
+  showGrid3D: boolean;
+  cameraMode: 'orbit' | 'walk' | 'top';
   onObjectMove: (id: number, x: number, y: number) => void;
   onObjectSelect: (id: number) => void;
   onStatus: (msg: string) => void;
@@ -694,9 +1001,9 @@ function Terrain3D({
     const mount = mountRef.current;
     if (!mount) return;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeaf2fb);
+    scene.background = new THREE.Color(nightMode ? 0x0f172a : season==='Winter' ? 0xe2e8f0 : 0xeaf2fb);
     const camera = new THREE.PerspectiveCamera(55, mount.clientWidth / mount.clientHeight, 0.1, 1000);
-    camera.position.set(16, 13, 18);
+    camera.position.set(cameraMode==='top'?0:cameraMode==='walk'?7:16, cameraMode==='top'?24:cameraMode==='walk'?2.2:13, cameraMode==='top'?0.1:cameraMode==='walk'?9:18);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -706,11 +1013,13 @@ function Terrain3D({
     controls.enableDamping = true;
     controls.target.set(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(12, 18, 10);
+    scene.add(new THREE.AmbientLight(nightMode ? 0x9db4ff : 0xffffff, nightMode ? 0.38 : 0.82));
+    const sun = new THREE.DirectionalLight(nightMode ? 0x94a3b8 : 0xffffff, nightMode ? 0.35 : 1.25);
+    const az = degToRad(sunAzimuth);
+    const el = degToRad(sunElevation);
+    sun.position.set(Math.cos(az)*Math.cos(el)*30, Math.sin(el)*30, Math.sin(az)*Math.cos(el)*30);
     scene.add(sun);
-    scene.add(new THREE.GridHelper(28, 28, 0x94a3b8, 0xd7e0eb));
+    if (showGrid3D) scene.add(new THREE.GridHelper(28, 28, 0x94a3b8, nightMode ? 0x334155 : 0xd7e0eb));
 
     const terrainSizeX = 24, terrainSizeY = 16, segX = 140, segY = 100;
     const geometry = new THREE.PlaneGeometry(terrainSizeX, terrainSizeY, segX, segY);
@@ -722,7 +1031,7 @@ function Terrain3D({
       const y = terrainHeightAt(x, z, terrainBlobs);
       pos.setY(i, y);
       const t = clamp((y + 1.2) / 2.8, 0, 1);
-      const color = new THREE.Color().lerpColors(new THREE.Color('#60a5fa'), new THREE.Color('#84cc16'), t);
+      const lowColor = season==='Winter' ? '#cbd5e1' : '#60a5fa'; const highColor = season==='Herbst' ? '#d97706' : season==='Winter' ? '#f8fafc' : '#84cc16'; const color = new THREE.Color().lerpColors(new THREE.Color(lowColor), new THREE.Color(highColor), t);
       colors.push(color.r, color.g, color.b);
     }
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -730,7 +1039,7 @@ function Terrain3D({
     const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: false });
     const terrainMesh = new THREE.Mesh(geometry, terrainMat);
     scene.add(terrainMesh);
-    scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.10 })));
+    if (showContours) scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(geometry), new THREE.LineBasicMaterial({ color: nightMode ? 0x94a3b8 : 0x64748b, transparent: true, opacity: 0.12 })));
 
     zones.forEach(zone => {
       const h = terrainHeightAt(zone.x, zone.y, terrainBlobs);
@@ -806,16 +1115,63 @@ function Terrain3D({
           group.add(step);
         }
       }
+      if (obj.type === 'pond') {
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(obj.width,obj.depth)*0.48,Math.max(obj.width,obj.depth)*0.52,0.08,32), new THREE.MeshStandardMaterial({ color: '#0ea5e9', transparent: true, opacity: 0.78, roughness: 0.18 }));
+        water.scale.z = obj.depth/Math.max(obj.width,obj.depth);
+        water.position.y = 0.03;
+        group.add(water);
+      }
+      if (obj.type === 'fence' || obj.type === 'gate') {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(obj.width,obj.height,obj.depth), new THREE.MeshStandardMaterial({color:obj.color,transparent:true,opacity:obj.type==='fence'?0.72:1}));
+        rail.position.y=obj.height/2; group.add(rail); addEdge(rail, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x475569);
+      }
+      if (obj.type === 'path' || obj.type === 'irrigation' || obj.type === 'drainage') {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width,Math.max(0.05,obj.height),obj.depth),new THREE.MeshStandardMaterial({color:obj.color,roughness:0.88}));
+        slab.position.y=Math.max(0.03,obj.height/2); group.add(slab);
+      }
+      if (obj.type === 'planter') {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(obj.width,obj.height,obj.depth),new THREE.MeshStandardMaterial({color:obj.color}));
+        box.position.y=obj.height/2; group.add(box); addEdge(box);
+        const soil = new THREE.Mesh(new THREE.BoxGeometry(obj.width*0.88,0.08,obj.depth*0.82),new THREE.MeshStandardMaterial({color:'#3f2d1f'}));
+        soil.position.y=obj.height+0.02; group.add(soil);
+      }
+      if (obj.type === 'bench') {
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(obj.width,0.12,obj.depth),new THREE.MeshStandardMaterial({color:obj.color}));
+        seat.position.y=0.48; group.add(seat);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(obj.width,0.55,0.10),new THREE.MeshStandardMaterial({color:obj.color}));
+        back.position.set(0,0.75,-obj.depth/2+0.05); group.add(back);
+        [-obj.width*0.38,obj.width*0.38].forEach(x=>{const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.48,0.1),new THREE.MeshStandardMaterial({color:'#475569'}));leg.position.set(x,0.24,0);group.add(leg);});
+      }
+      if (obj.type === 'light') {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,obj.height,12),new THREE.MeshStandardMaterial({color:'#475569'}));
+        pole.position.y=obj.height/2;group.add(pole);
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.14,16,12),new THREE.MeshStandardMaterial({color:'#fde68a',emissive:'#f59e0b',emissiveIntensity:nightMode?2.2:0.35}));
+        lamp.position.y=obj.height;group.add(lamp);
+        if(nightMode){const light=new THREE.PointLight(0xffd27a,1.4,5);light.position.y=obj.height;group.add(light);}
+      }
+      if (obj.type === 'firepit') {
+        const pit = new THREE.Mesh(new THREE.CylinderGeometry(obj.width*0.45,obj.width*0.5,obj.height,24),new THREE.MeshStandardMaterial({color:'#57534e'}));
+        pit.position.y=obj.height/2;group.add(pit);
+        const fire = new THREE.Mesh(new THREE.ConeGeometry(obj.width*0.16,obj.height*1.4,12),new THREE.MeshStandardMaterial({color:'#fb923c',emissive:'#ef4444',emissiveIntensity:1.5}));
+        fire.position.y=obj.height+0.2;group.add(fire);
+      }
+      if (obj.type === 'rock') {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(Math.max(obj.width,obj.depth)*0.42,1),new THREE.MeshStandardMaterial({color:obj.color,roughness:1}));
+        rock.scale.set(1,obj.height/Math.max(obj.width,obj.depth),obj.depth/obj.width);rock.position.y=obj.height/2;group.add(rock);
+      }
       if (obj.type === 'tree') {
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, obj.height * 0.45, 12), new THREE.MeshStandardMaterial({ color: '#7c4a2d' }));
-        trunk.position.y = obj.height * 0.225;
+        const growthFactor = growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9;
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, obj.height * 0.45 * growthFactor, 12), new THREE.MeshStandardMaterial({ color: '#7c4a2d' }));
+        trunk.position.y = obj.height * 0.225 * growthFactor;
         group.add(trunk);
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.6, 0.8), 18, 14), new THREE.MeshStandardMaterial({ color: obj.color }));
-        crown.position.y = obj.height * 0.7;
+        const leafColor = season==='Herbst'?'#d97706':season==='Winter'?'#94a3b8':season==='Frühling'?'#22c55e':obj.color;
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.6 * growthFactor, 0.8), 18, 14), new THREE.MeshStandardMaterial({ color: leafColor, transparent: season==='Winter', opacity: season==='Winter'?0.45:1 }));
+        crown.position.y = obj.height * 0.7 * growthFactor;
         group.add(crown);
       }
       if (obj.type === 'shrub') {
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.5, 0.45), 16, 14), new THREE.MeshStandardMaterial({ color: obj.color }));
+        const shrubColor = season==='Herbst'?'#b45309':season==='Winter'?'#94a3b8':obj.color;
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.5 * (growthYear===0?1:growthYear===3?1.15:growthYear===10?1.4:1.65), 0.45), 16, 14), new THREE.MeshStandardMaterial({ color: shrubColor }));
         crown.position.y = obj.height * 0.45;
         crown.scale.y = 0.8;
         group.add(crown);
@@ -893,7 +1249,7 @@ function Terrain3D({
       controls.dispose(); renderer.dispose(); geometry.dispose(); terrainMat.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [terrainBlobs, zones, objects, selectedId, selectedKind, onObjectMove, onObjectSelect, onStatus]);
+  }, [terrainBlobs, zones, objects, selectedId, selectedKind, nightMode, growthYear, season, sunAzimuth, sunElevation, showContours, showGrid3D, cameraMode, onObjectMove, onObjectSelect, onStatus]);
 
   return <div ref={mountRef} className="three" />;
 }

@@ -1,6 +1,6 @@
 {
-  "name": "al-green-design-landscape-architecture-v015",
-  "version": "0.15.0",
+  "name": "al-green-design-landscape-architecture-v017-advanced-studio",
+  "version": "0.17.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
