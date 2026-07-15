@@ -35,7 +35,7 @@ export default function VideoTo3DStudio() {
 
   const [videoUrl, setVideoUrl] = useState('');
   const [fileName, setFileName] = useState('');
-  const [frameTarget, setFrameTarget] = useState(18);
+  const [frameTarget, setFrameTarget] = useState(12);
   const [frames, setFrames] = useState<FrameItem[]>([]);
   const [selectedFrame, setSelectedFrame] = useState(0);
   const [depthStrength, setDepthStrength] = useState(1.6);
@@ -63,54 +63,252 @@ export default function VideoTo3DStudio() {
     setStatus('Video geladen. Metadaten werden gelesen.');
   }
 
-  async function seek(video: HTMLVideoElement, time: number) {
+  function waitForEvent(
+    target: HTMLMediaElement,
+    eventName: string,
+    timeoutMs = 8000
+  ) {
     return new Promise<void>((resolve, reject) => {
-      const done = () => { cleanup(); resolve(); };
-      const fail = () => { cleanup(); reject(new Error('Frame konnte nicht gelesen werden.')); };
-      const cleanup = () => {
-        video.removeEventListener('seeked', done);
-        video.removeEventListener('error', fail);
+      const timer = window.setTimeout(() => {
+        cleanup();
+        reject(new Error(`${eventName} timeout`));
+      }, timeoutMs);
+
+      const done = () => {
+        cleanup();
+        resolve();
       };
-      video.addEventListener('seeked', done, { once: true });
-      video.addEventListener('error', fail, { once: true });
-      video.currentTime = Math.max(0, Math.min(time, Math.max(0, video.duration - 0.05)));
+
+      const fail = () => {
+        cleanup();
+        reject(new Error(target.error?.message || `Medienfehler bei ${eventName}`));
+      };
+
+      const cleanup = () => {
+        window.clearTimeout(timer);
+        target.removeEventListener(eventName, done);
+        target.removeEventListener('error', fail);
+      };
+
+      target.addEventListener(eventName, done, { once: true });
+      target.addEventListener('error', fail, { once: true });
     });
   }
 
+  async function waitForVideoReady(video: HTMLVideoElement) {
+    if (video.readyState >= 1 && Number.isFinite(video.duration) && video.duration > 0) {
+      if (video.readyState >= 2) return;
+    }
+
+    if (video.readyState < 1) {
+      await waitForEvent(video, 'loadedmetadata', 10000);
+    }
+
+    if (video.readyState < 2) {
+      try {
+        await waitForEvent(video, 'loadeddata', 10000);
+      } catch {
+        if (video.readyState < 1) throw new Error('Videodaten konnten nicht geladen werden.');
+      }
+    }
+
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      throw new Error('Ungültige oder nicht lesbare Videolänge.');
+    }
+  }
+
+  async function waitForPresentedFrame(video: HTMLVideoElement, timeoutMs = 2500) {
+    const maybeVideo = video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: () => void) => number;
+    };
+
+    if (typeof maybeVideo.requestVideoFrameCallback === 'function') {
+      await new Promise<void>((resolve) => {
+        let finished = false;
+        const timer = window.setTimeout(() => {
+          if (!finished) {
+            finished = true;
+            resolve();
+          }
+        }, timeoutMs);
+
+        maybeVideo.requestVideoFrameCallback?.(() => {
+          if (!finished) {
+            finished = true;
+            window.clearTimeout(timer);
+            resolve();
+          }
+        });
+      });
+      return;
+    }
+
+    await new Promise<void>(resolve => window.setTimeout(resolve, 140));
+  }
+
+  async function seekRobust(video: HTMLVideoElement, time: number, attempt = 1) {
+    const safeTime = Math.max(0.05, Math.min(time, Math.max(0.05, video.duration - 0.08)));
+
+    if (Math.abs(video.currentTime - safeTime) < 0.015) {
+      await waitForPresentedFrame(video);
+      return;
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+          cleanup();
+          reject(new Error(`Seek timeout bei ${safeTime.toFixed(2)} s`));
+        }, 6000);
+
+        const done = () => {
+          cleanup();
+          resolve();
+        };
+
+        const fail = () => {
+          cleanup();
+          reject(new Error(video.error?.message || 'Seek fehlgeschlagen'));
+        };
+
+        const cleanup = () => {
+          window.clearTimeout(timer);
+          video.removeEventListener('seeked', done);
+          video.removeEventListener('error', fail);
+        };
+
+        video.addEventListener('seeked', done, { once: true });
+        video.addEventListener('error', fail, { once: true });
+        video.currentTime = safeTime;
+      });
+
+      await waitForPresentedFrame(video);
+    } catch (error) {
+      if (attempt < 3) {
+        await new Promise<void>(resolve => window.setTimeout(resolve, 180 * attempt));
+        return seekRobust(video, safeTime + attempt * 0.025, attempt + 1);
+      }
+      throw error;
+    }
+  }
+
+  async function createExtractionVideo() {
+    if (!videoUrl) throw new Error('Kein Video geladen.');
+
+    const extractionVideo = document.createElement('video');
+    extractionVideo.src = videoUrl;
+    extractionVideo.preload = 'auto';
+    extractionVideo.muted = true;
+    extractionVideo.playsInline = true;
+    extractionVideo.setAttribute('playsinline', '');
+    extractionVideo.setAttribute('webkit-playsinline', '');
+    extractionVideo.style.position = 'fixed';
+    extractionVideo.style.left = '-10000px';
+    extractionVideo.style.top = '0';
+    extractionVideo.style.width = '2px';
+    extractionVideo.style.height = '2px';
+    extractionVideo.style.opacity = '0';
+    extractionVideo.style.pointerEvents = 'none';
+
+    document.body.appendChild(extractionVideo);
+    extractionVideo.load();
+
+    await waitForVideoReady(extractionVideo);
+    extractionVideo.pause();
+
+    return extractionVideo;
+  }
+
   async function extractFrames() {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration) || video.duration <= 0) {
-      setStatus('Video ist noch nicht bereit.');
+    if (!videoUrl) {
+      setStatus('Bitte zuerst ein Video auswählen.');
       return;
     }
 
     setStage('extracting');
     setFrames([]);
-    setStatus('Geeignete Frames werden aus dem Video extrahiert.');
+    setJobInfo('');
+    setStatus('Video wird für die Frame-Extraktion vorbereitet.');
 
-    const canvas = document.createElement('canvas');
-    const maxWidth = 960;
-    const ratio = Math.min(1, maxWidth / Math.max(1, video.videoWidth));
-    canvas.width = Math.max(2, Math.round(video.videoWidth * ratio));
-    canvas.height = Math.max(2, Math.round(video.videoHeight * ratio));
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
+    let extractionVideo: HTMLVideoElement | null = null;
 
-    const count = Math.max(6, Math.min(48, frameTarget));
-    const output: FrameItem[] = [];
+    try {
+      extractionVideo = await createExtractionVideo();
 
-    for (let i = 0; i < count; i++) {
-      const t = video.duration * ((i + 0.5) / count);
-      await seek(video, t);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      output.push({ time: t, dataUrl: canvas.toDataURL('image/jpeg', 0.86) });
-      setStatus(`Frames extrahieren: ${i + 1}/${count}`);
+      const duration = extractionVideo.duration;
+      const sourceWidth = extractionVideo.videoWidth;
+      const sourceHeight = extractionVideo.videoHeight;
+
+      if (!sourceWidth || !sourceHeight) {
+        throw new Error('Die Videoauflösung konnte nicht gelesen werden.');
+      }
+
+      const maxWidth = 720;
+      const ratio = Math.min(1, maxWidth / sourceWidth);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(2, Math.round(sourceWidth * ratio));
+      canvas.height = Math.max(2, Math.round(sourceHeight * ratio));
+
+      const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+      if (!ctx) throw new Error('Canvas konnte nicht erstellt werden.');
+
+      const count = Math.max(6, Math.min(24, frameTarget));
+      const start = Math.max(0.08, duration * 0.04);
+      const end = Math.max(start + 0.1, duration * 0.96);
+      const output: FrameItem[] = [];
+      const failed: string[] = [];
+
+      for (let i = 0; i < count; i++) {
+        const progress = count === 1 ? 0.5 : i / (count - 1);
+        const t = start + (end - start) * progress;
+        setStatus(`Frame ${i + 1}/${count} wird gelesen · ${t.toFixed(1)} s`);
+
+        try {
+          await seekRobust(extractionVideo, t);
+
+          if (extractionVideo.readyState < 2) {
+            await new Promise<void>(resolve => window.setTimeout(resolve, 180));
+          }
+
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(extractionVideo, 0, 0, canvas.width, canvas.height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          if (!dataUrl || dataUrl.length < 1000) throw new Error('Leerer Frame');
+
+          output.push({ time: extractionVideo.currentTime, dataUrl });
+          await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+        } catch (error) {
+          failed.push(`${i + 1}: ${String(error)}`);
+        }
+      }
+
+      if (!output.length) {
+        throw new Error(failed.length ? `Kein Frame konnte gelesen werden. ${failed[0]}` : 'Kein Frame konnte gelesen werden.');
+      }
+
+      setFrames(output);
+      setSelectedFrame(Math.floor(output.length / 2));
+      setStage('frames-ready');
+
+      if (failed.length) {
+        setStatus(`${output.length} von ${count} Frames erfolgreich. ${failed.length} Frame(s) wurden übersprungen. Du kannst trotzdem fortfahren.`);
+      } else {
+        setStatus(`${output.length} Frames erfolgreich extrahiert. Frame auswählen und 3D-Modell erzeugen.`);
+      }
+    } catch (error) {
+      setStage('video-ready');
+      setStatus(`Frame-Extraktion fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (extractionVideo) {
+        extractionVideo.pause();
+        extractionVideo.removeAttribute('src');
+        extractionVideo.load();
+        extractionVideo.remove();
+      }
     }
-
-    setFrames(output);
-    setSelectedFrame(Math.floor(output.length / 2));
-    setStage('frames-ready');
-    setStatus(`${output.length} Frames extrahiert. Frame wählen und 3D-Modell erzeugen.`);
   }
 
   function buildQuick3D() {
@@ -333,7 +531,7 @@ export default function VideoTo3DStudio() {
   return (
     <main className="video3dPage">
       <section className="video3dHero">
-        <p>AL Green Design · V0.19.2</p>
+        <p>AL Green Design · V0.19.2.1</p>
         <h1>VIDEO → 3D → PROJEKT</h1>
         <p>Video laden, Frames extrahieren, 3D-Modell erzeugen, als GLB/OBJ exportieren oder direkt in dein Hauptprojekt übernehmen.</p>
       </section>
@@ -342,8 +540,9 @@ export default function VideoTo3DStudio() {
         <aside className="panel">
           <h2>1. Video</h2>
           <label className="file">Video auswählen<input type="file" accept="video/*" onChange={e => onVideo(e.target.files?.[0] ?? null)} /></label>
-          <label style={{ marginTop: 10 }}>Anzahl Frames<input type="number" min="6" max="48" value={frameTarget} onChange={e => setFrameTarget(Number(e.target.value))} /></label>
-          <button className="btn primary" style={{ width: '100%', marginTop: 10 }} disabled={!videoUrl || stage === 'extracting'} onClick={extractFrames}>Frames extrahieren</button>
+          <label style={{ marginTop: 10 }}>Anzahl Frames<input type="number" min="6" max="24" value={frameTarget} onChange={e => setFrameTarget(Number(e.target.value))} /></label>
+          <button className="btn primary" style={{ width: '100%', marginTop: 10 }} disabled={!videoUrl || stage === 'extracting'} onClick={extractFrames}>{stage === 'extracting' ? 'Frames werden erzeugt …' : frames.length ? 'Frames neu extrahieren' : 'Frames extrahieren'}</button>
+          <div className="hint" style={{ marginTop: 8 }}>Für iPhone/Safari werden die Frames jetzt mit einem separaten Extraktions-Video erzeugt. Das sichtbare Video kann währenddessen angehalten oder an einer anderen Position stehen.</div>
 
           <h2 style={{ marginTop: 18 }}>2. 3D erzeugen</h2>
           <label>Modellbreite in Metern<input type="number" min="0.5" max="100" step="0.1" value={modelWidth} onChange={e => setModelWidth(Math.max(0.5, Number(e.target.value) || 8))} /></label>

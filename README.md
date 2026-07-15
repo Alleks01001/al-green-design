@@ -1,78 +1,39 @@
-# AL Green Design – V0.19.2 MODEL PIPELINE
+# AL Green Design – V0.19.2.1 STABLE FRAME EXTRACTION
 
-Diese Version schließt die Lücke zwischen **Video → 3D** und dem Hauptprojekt.
+Diese Version behebt gezielt die unzuverlässige Frame-Extraktion im Video → 3D Studio.
 
-## Neuer kompletter Ablauf
+## Neuer Ablauf der Frame-Extraktion
 
 ```text
-Video hochladen
+Video-Upload
+→ separates unsichtbares Extraktions-Video
+→ loadedmetadata abwarten
+→ loadeddata abwarten
+→ robuste Seek-Vorgänge
+→ dargestellten Videoframe abwarten
+→ Canvas-Frame erzeugen
+```
+
+## Stabilitätsverbesserungen
+
+- eigener Video-Player nur für die Extraktion
+- funktioniert unabhängig von der Position des sichtbaren Video-Players
+- Seek-Timeout
+- bis zu 3 automatische Wiederholungsversuche pro Frame
+- requestVideoFrameCallback, wenn der Browser es unterstützt
+- erste und letzte 4 % des Videos werden nicht verwendet
+- maximale Frame-Breite 720 px
+- JPEG-Qualität 0,8
+- maximal 24 Frames pro Durchlauf
+- einzelne fehlerhafte Frames werden übersprungen
+- klare Fehlermeldung, wenn kein Frame gelesen werden kann
+
+## Empfohlener Test
+
+```text
+12 Frames
 → Frames extrahieren
 → Frame auswählen
 → 3D-Modell erzeugen
 → In Projekt übernehmen
-→ Hauptprojekt öffnet sich
-→ Modell erscheint in der 3D-Szene
 ```
-
-## Video-3D-Studio
-
-Neue Funktionen:
-
-- Modellbreite in Metern festlegen
-- Tiefenstärke festlegen
-- 3D-Modell erzeugen
-- **In Projekt übernehmen**
-- **GLB exportieren**
-- **OBJ exportieren**
-
-## Direkte Projektübernahme
-
-Das erzeugte Video-3D-Modell wird im Browser-Projektspeicher abgelegt und danach automatisch in der Hauptanwendung geladen.
-
-Im Bereich **3D-Szene** können importierte Modelle ausgewählt werden.
-
-Einstellbar:
-
-- Name
-- Position X
-- Höhe Y
-- Position Z
-- Drehung Y
-- Maßstab
-- Transparenz
-- Sichtbarkeit
-- Duplizieren
-- Löschen
-- Zurücksetzen
-
-## Projekt speichern
-
-Browser-Projekte speichern jetzt auch importierte Video-3D-Modelle.
-
-## Export
-
-### GLB
-
-Enthält die erzeugte 3D-Geometrie und ist für moderne 3D-Programme geeignet.
-
-### OBJ
-
-Enthält die Geometrie. Die direkte Übernahme in AL Green Design behält die Fototextur zuverlässig im Browserprojekt.
-
-## Wichtige technische Einordnung
-
-Das aktuelle Video-3D-Modell ist weiterhin die schnelle bildbasierte Relief-/Tiefenrekonstruktion aus einem ausgewählten Videoframe.
-
-Eine präzise Rekonstruktion eines vollständigen Gartens aus allen Videoframes benötigt weiterhin einen externen Photogrammetrie-Worker:
-
-```text
-Video
-→ Kamerapositionen
-→ Punktwolke
-→ dichte Rekonstruktion
-→ Mesh
-→ Textur
-→ GLB
-```
-
-Die vorbereitete Pipeline dafür bleibt enthalten.
