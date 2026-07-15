@@ -1,80 +1,91 @@
-# AL Green Design – V0.17 ADVANCED STUDIO
+# AL Green Design – V0.18 ARCHITECTURE + LIDAR
 
-V0.17 erweitert das bisherige PRO STUDIO zu einer deutlich umfassenderen Planungsbasis.
+V0.18 ist der erste größere Architektur-/Scan-Sprung.
 
-## Neue Objektbibliothek
+## Architektur-Engine
 
-- Gebäude
-- Pool
-- Teich
-- Pergola
-- Mauer
-- Zaun
-- Tor
-- Stufen
-- Weg
-- Baum
-- Strauch
-- Hecke
-- Hochbeet/Pflanzgefäß
-- Sitzbank
-- Leuchte
-- Feuerstelle
-- Felsen
-- Bewässerungsleitung
-- Drainage
+Neu als eigene editierbare Bauteile:
+
+- Bodenplatte
+- Außenwand
+- Innenwand
+- Flachdach
+- Satteldach / Dachkörper
+- Fenster
+- Tür
+- Schiebetür
+- Balkon
+- Geländer
+- Stütze
+- Carport
+- Wintergarten
+
+Jedes Bauteil kann in 2D ausgewählt, verschoben, gedreht, skaliert und in seinen Eigenschaften verändert werden.
+Die Bauteile werden auch in 3D dargestellt.
+
+## Split View
+
+- 2D
+- 3D
+- Split vertikal
+- Split horizontal
+
+Damit kann der Plan gleichzeitig in 2D und 3D kontrolliert werden.
 
 ## Gelände
 
-- weiche Erhebungen und Senken
-- Radius, Höhe/Tiefe und Weichheit
-- Höhenlinien-Darstellung
-- grobe Auftrags-/Abtragsberechnung
-- Geländefarbe in 3D
-- Objekte folgen automatisch der Geländehöhe
-
-## 2D und 3D
-
-- 2D-Verschiebung von Gelände, Zonen und Objekten
-- 3D-Verschiebung von Garten- und Architekturobjekten
-- Nachtmodus
-- Jahreszeiten
-- Pflanzenwachstum
-- Sonnenrichtung und Sonnenhöhe
-- Kamera-Modi
-- Gitternetz und Höhenlinien ein-/ausblendbar
-
-## Planung und Analyse
-
-- Projektverwaltung
-- Undo/Redo
-- Layer sichtbar/gesperrt
-- Raster/Fangfunktion
-- Kostenberechnung
-- Versiegelung
-- Biodiversität
-- Regenrückhalt
-- Grünfläche
-- Objekt- und Pflanzenlisten
-- CSV-Bericht
-- vollständiger Projekt-Export
+- weiche Erhebungen
+- Mulden / Senken
+- Höhenlinien
+- Auftrag / Abtrag
+- Objekte folgen der Geländehöhe
+- bestehende Terrain-Werkzeuge bleiben erhalten
 
 ## KI
 
-- lokaler KI-Fallback
-- OpenAI JSON-Schema
-- Mehragenten-Struktur
-- Landschaftsplaner
-- Botaniker
-- Kostenagent
-- Wasseragent
-- Architekturagent
-- Nachhaltigkeitsagent
+Das strukturierte KI-Schema wurde erweitert.
+Die KI kann jetzt zusätzlich Architektur-Bauteile liefern:
 
-## OpenAI in Vercel
+- building
+- floor
+- wall
+- interior_wall
+- roof
+- window
+- door
+- sliding_door
+- balcony
+- railing
+- column
+- carport
+- winter_garden
+- pool
+- pergola
+- tree
+- shrub
+
+## Mobile Scan / LiDAR Grundlage
+
+Neue Route und neue Scan-Seite:
+
+- `/scan`
+- Kamera-Vorschau im Browser
+- Fotoaufnahme als Fallback
+- Erkennung einer nativen iOS-/Android-LiDAR-Bridge
+- Scan-Dateiimport für PLY, OBJ, GLB, GLTF, USDZ, JSON und ZIP
+- API-Grundlage für Scan-Verarbeitung
+- Typen und Bridge-Definitionen
+
+Wichtig:
+Ein normaler Browser kann nicht zuverlässig direkt alle nativen LiDAR-Rohdaten eines Telefons auslesen.
+Die V0.18 enthält deshalb die Web-Oberfläche und die Bridge-Schnittstelle für eine spätere native iOS-/Android-Scan-App bzw. App-Hülle.
+
+## OpenAI
+
+Für echten OpenAI-Betrieb in Vercel:
 
 ```text
 OPENAI_API_KEY=dein_key
 ```
 
-Die Anwendung bleibt auch ohne API-Key mit lokalem Fallback verwendbar.
+Ohne Key bleibt der lokale Fallback aktiv.

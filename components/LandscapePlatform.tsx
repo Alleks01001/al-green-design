@@ -5,9 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-type ViewMode = '2d' | '3d';
-type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'terrain' | 'architecture' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
-type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage';
+type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
+type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'terrain' | 'architecture' | 'building' | 'scan' | 'library' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
+type Tool = 'select' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 type SelectedKind = 'terrain' | 'zone' | 'object' | null;
 type Drag2D = { kind: SelectedKind; id: number } | null;
 type ChatEngine = 'local' | 'openai';
@@ -34,7 +34,7 @@ type Zone = {
   color: string;
 };
 
-type GardenObjectType = 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage';
+type GardenObjectType = 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
 
 type GardenObject = {
   id: number;
@@ -52,6 +52,10 @@ type GardenObject = {
   unitCost?: number;
   waterNeed?: number;
   lightNeed?: string;
+  level?: number;
+  thickness?: number;
+  parentId?: number;
+  subtype?: string;
 };
 
 const SCALE = 50;
@@ -107,7 +111,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.17 ADVANCED STUDIO – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.18 ARCHITECTURE + LIDAR – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -155,7 +159,20 @@ export default function LandscapePlatform() {
     { id: 209, type: 'path', name: 'Gartenweg', x: 0.5, y: 3.9, width: 5.5, depth: 1.0, height: 0.08, rotation: -8, color: '#d6c7ad', material: 'Kies', unitCost: 95 },
     { id: 210, type: 'light', name: 'Wegeleuchte', x: 1.5, y: 3.2, width: 0.25, depth: 0.25, height: 0.9, rotation: 0, color: '#f59e0b', unitCost: 185 },
     { id: 211, type: 'bench', name: 'Sitzbank', x: -4.6, y: 3.4, width: 1.8, depth: 0.65, height: 0.85, rotation: 0, color: '#8b5e3c', unitCost: 380 },
-    { id: 212, type: 'pond', name: 'Gartenteich', x: 5.0, y: -3.8, width: 3.2, depth: 2.2, height: 0.35, rotation: 0, color: '#0ea5e9', unitCost: 240 }
+    { id: 212, type: 'pond', name: 'Gartenteich', x: 5.0, y: -3.8, width: 3.2, depth: 2.2, height: 0.35, rotation: 0, color: '#0ea5e9', unitCost: 240 },
+    { id: 220, type: 'floor', name: 'Haus Bodenplatte', x: -1.5, y: 2.4, width: 4.8, depth: 4.0, height: 0.18, rotation: 0, color: '#d1d5db', material: 'Stahlbeton', level: 0, thickness: 0.18, parentId: 201 },
+    { id: 221, type: 'wall', name: 'Außenwand Süd', x: -1.5, y: 4.35, width: 4.8, depth: 0.22, height: 2.8, rotation: 0, color: '#f8fafc', material: 'Putz', level: 0, thickness: 0.22, parentId: 201 },
+    { id: 222, type: 'wall', name: 'Außenwand Nord', x: -1.5, y: 0.45, width: 4.8, depth: 0.22, height: 2.8, rotation: 0, color: '#f8fafc', material: 'Putz', level: 0, thickness: 0.22, parentId: 201 },
+    { id: 223, type: 'wall', name: 'Außenwand West', x: -3.8, y: 2.4, width: 4.0, depth: 0.22, height: 2.8, rotation: 90, color: '#f8fafc', material: 'Putz', level: 0, thickness: 0.22, parentId: 201 },
+    { id: 224, type: 'wall', name: 'Außenwand Ost', x: 0.8, y: 2.4, width: 4.0, depth: 0.22, height: 2.8, rotation: 90, color: '#f8fafc', material: 'Putz', level: 0, thickness: 0.22, parentId: 201 },
+    { id: 225, type: 'interiorWall', name: 'Innenwand', x: -1.5, y: 2.4, width: 3.2, depth: 0.14, height: 2.7, rotation: 90, color: '#e5e7eb', material: 'Trockenbau', level: 0, thickness: 0.14, parentId: 201 },
+    { id: 226, type: 'window', name: 'Panoramafenster', x: -0.8, y: 4.23, width: 2.0, depth: 0.10, height: 1.5, rotation: 0, color: '#7dd3fc', material: 'Glas', level: 0, parentId: 201 },
+    { id: 227, type: 'door', name: 'Eingangstür', x: -2.8, y: 0.56, width: 1.0, depth: 0.12, height: 2.1, rotation: 0, color: '#92400e', material: 'Holz', level: 0, parentId: 201 },
+    { id: 228, type: 'slidingDoor', name: 'Terrassen-Schiebetür', x: -2.2, y: 4.23, width: 2.6, depth: 0.12, height: 2.35, rotation: 0, color: '#bae6fd', material: 'Glas/Aluminium', level: 0, parentId: 201 },
+    { id: 229, type: 'roof', name: 'Satteldach', x: -1.5, y: 2.4, width: 5.2, depth: 4.4, height: 1.2, rotation: 0, color: '#7c2d12', material: 'Dachziegel', level: 1, subtype: 'gable', parentId: 201 },
+    { id: 230, type: 'balcony', name: 'Balkon', x: -1.5, y: 4.9, width: 3.5, depth: 1.4, height: 0.18, rotation: 0, color: '#94a3b8', material: 'Beton/Holz', level: 1, parentId: 201 },
+    { id: 231, type: 'railing', name: 'Balkongeländer', x: -1.5, y: 5.55, width: 3.5, depth: 0.10, height: 1.05, rotation: 0, color: '#64748b', material: 'Glas/Metall', level: 1, parentId: 201 },
+    { id: 232, type: 'column', name: 'Terrassenstütze', x: -3.0, y: 5.0, width: 0.28, depth: 0.28, height: 2.8, rotation: 0, color: '#cbd5e1', material: 'Stahl', level: 0, parentId: 201 }
   ]);
 
   const [selectedKind, setSelectedKind] = useState<SelectedKind>('object');
@@ -209,7 +226,7 @@ export default function LandscapePlatform() {
   }
 
   function objectLayer(obj: GardenObject) {
-    if (obj.type === 'building') return 'buildings';
+    if (['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(obj.type)) return 'buildings';
     if (['tree','shrub','hedge'].includes(obj.type)) return 'plants';
     if (['pool','pond'].includes(obj.type)) return 'water';
     if (obj.type === 'light') return 'lighting';
@@ -219,12 +236,12 @@ export default function LandscapePlatform() {
   }
 
   function saveBrowserProject() {
-    localStorage.setItem('al-green-v017-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
+    localStorage.setItem('al-green-v018-project', JSON.stringify({ projectInfo, terrainBlobs, zones, objects, layers, gridSize, snapEnabled }));
     setStatus('Projekt im Browser gespeichert.');
   }
 
   function loadBrowserProject() {
-    const raw = localStorage.getItem('al-green-v017-project');
+    const raw = localStorage.getItem('al-green-v018-project');
     if (!raw) { setStatus('Kein gespeichertes Browserprojekt gefunden.'); return; }
     try {
       const data = JSON.parse(raw);
@@ -277,7 +294,18 @@ export default function LandscapePlatform() {
       firepit: { name: 'Neue Feuerstelle', width: 1.4, depth: 1.4, height: 0.35, color: '#b45309', material: 'Stahl/Stein', unitCost: 750 },
       rock: { name: 'Neuer Felsen', width: 1.4, depth: 1.0, height: 0.7, color: '#78716c', material: 'Naturstein', unitCost: 240 },
       irrigation: { name: 'Bewässerungsleitung', width: 4.0, depth: 0.12, height: 0.08, color: '#2563eb', material: 'PE-Rohr', unitCost: 18 },
-      drainage: { name: 'Drainageleitung', width: 4.0, depth: 0.16, height: 0.10, color: '#0f766e', material: 'Drainagerohr', unitCost: 32 }
+      drainage: { name: 'Drainageleitung', width: 4.0, depth: 0.16, height: 0.10, color: '#0f766e', material: 'Drainagerohr', unitCost: 32 },
+      floor: { name: 'Bodenplatte', width: 5.5, depth: 4.5, height: 0.18, color: '#d1d5db', material: 'Stahlbeton', unitCost: 180, level: 0, thickness: 0.18 },
+      interiorWall: { name: 'Innenwand', width: 3.0, depth: 0.14, height: 2.7, color: '#e5e7eb', material: 'Trockenbau/Mauerwerk', unitCost: 120, level: 0, thickness: 0.14 },
+      roof: { name: 'Dach', width: 5.8, depth: 4.8, height: 0.55, color: '#7c2d12', material: 'Dachdeckung', unitCost: 240, level: 1, subtype: 'gable' },
+      window: { name: 'Fenster', width: 1.4, depth: 0.10, height: 1.3, color: '#7dd3fc', material: 'Glas/Aluminium', unitCost: 780, level: 0, thickness: 0.10 },
+      door: { name: 'Tür', width: 1.0, depth: 0.12, height: 2.1, color: '#92400e', material: 'Holz/Metall', unitCost: 950, level: 0, thickness: 0.12 },
+      slidingDoor: { name: 'Schiebetür', width: 2.8, depth: 0.12, height: 2.4, color: '#bae6fd', material: 'Glas/Aluminium', unitCost: 2800, level: 0, thickness: 0.12 },
+      balcony: { name: 'Balkon', width: 3.5, depth: 1.8, height: 0.18, color: '#94a3b8', material: 'Beton/Holz', unitCost: 650, level: 1 },
+      railing: { name: 'Geländer', width: 3.0, depth: 0.10, height: 1.05, color: '#64748b', material: 'Glas/Metall', unitCost: 320, level: 1 },
+      column: { name: 'Stütze', width: 0.28, depth: 0.28, height: 2.8, color: '#cbd5e1', material: 'Stahl/Beton/Holz', unitCost: 420, level: 0 },
+      carport: { name: 'Carport', width: 5.5, depth: 3.2, height: 2.7, color: '#a16207', material: 'Holz/Stahl', unitCost: 520, level: 0 },
+      winterGarden: { name: 'Wintergarten', width: 4.0, depth: 3.0, height: 2.8, color: '#dbeafe', material: 'Glas/Aluminium', unitCost: 1100, level: 0 }
     };
     const obj: GardenObject = { id, type, x, y, rotation: 0, note: '', ...(presets[type] as any) };
     setObjects(v => [...v, obj]);
@@ -443,6 +471,18 @@ export default function LandscapePlatform() {
       if (type === 'pergola') {
         return { id: base + 100 + index, type: 'pergola', name: 'OpenAI Pergola', x, y, width: 3 * scaleX, depth: 2.4 * scaleZ, height: 2.6 * scaleY, rotation, color: '#8b5e3c' };
       }
+      if (type === 'floor') return { id: base + 100 + index, type: 'floor', name: 'OpenAI Bodenplatte', x, y, width: 4.5 * scaleX, depth: 4 * scaleZ, height: 0.18 * scaleY, rotation, color: '#d1d5db', material: 'Stahlbeton', level: 0, thickness: 0.18 };
+      if (type === 'wall') return { id: base + 100 + index, type: 'wall', name: 'OpenAI Außenwand', x, y, width: 4 * scaleX, depth: 0.22, height: 2.8 * scaleY, rotation, color: '#f8fafc', material: 'Putz', level: 0, thickness: 0.22 };
+      if (type === 'interior_wall') return { id: base + 100 + index, type: 'interiorWall', name: 'OpenAI Innenwand', x, y, width: 3 * scaleX, depth: 0.14, height: 2.7 * scaleY, rotation, color: '#e5e7eb', material: 'Trockenbau', level: 0, thickness: 0.14 };
+      if (type === 'roof') return { id: base + 100 + index, type: 'roof', name: 'OpenAI Dach', x, y, width: 5 * scaleX, depth: 4.5 * scaleZ, height: 1.0 * scaleY, rotation, color: '#7c2d12', material: 'Dachdeckung', level: 1, subtype: String(item.subtype || 'gable') };
+      if (type === 'window') return { id: base + 100 + index, type: 'window', name: 'OpenAI Fenster', x, y, width: 1.4 * scaleX, depth: 0.1, height: 1.3 * scaleY, rotation, color: '#7dd3fc', material: 'Glas' };
+      if (type === 'door') return { id: base + 100 + index, type: 'door', name: 'OpenAI Tür', x, y, width: 1.0 * scaleX, depth: 0.12, height: 2.1 * scaleY, rotation, color: '#92400e', material: 'Holz/Metall' };
+      if (type === 'sliding_door') return { id: base + 100 + index, type: 'slidingDoor', name: 'OpenAI Schiebetür', x, y, width: 2.8 * scaleX, depth: 0.12, height: 2.4 * scaleY, rotation, color: '#bae6fd', material: 'Glas/Aluminium' };
+      if (type === 'balcony') return { id: base + 100 + index, type: 'balcony', name: 'OpenAI Balkon', x, y, width: 3.5 * scaleX, depth: 1.6 * scaleZ, height: 0.18, rotation, color: '#94a3b8', level: 1 };
+      if (type === 'railing') return { id: base + 100 + index, type: 'railing', name: 'OpenAI Geländer', x, y, width: 3 * scaleX, depth: 0.1, height: 1.05 * scaleY, rotation, color: '#64748b', level: 1 };
+      if (type === 'column') return { id: base + 100 + index, type: 'column', name: 'OpenAI Stütze', x, y, width: 0.28 * scaleX, depth: 0.28 * scaleZ, height: 2.8 * scaleY, rotation, color: '#cbd5e1' };
+      if (type === 'carport') return { id: base + 100 + index, type: 'carport', name: 'OpenAI Carport', x, y, width: 5.5 * scaleX, depth: 3.2 * scaleZ, height: 2.7 * scaleY, rotation, color: '#a16207' };
+      if (type === 'winter_garden') return { id: base + 100 + index, type: 'winterGarden', name: 'OpenAI Wintergarten', x, y, width: 4 * scaleX, depth: 3 * scaleZ, height: 2.8 * scaleY, rotation, color: '#dbeafe' };
       if (type === 'shrub') {
         return { id: base + 100 + index, type: 'shrub', name: 'OpenAI Strauch', x, y, width: 1.0 * scaleX, depth: 1.0 * scaleZ, height: 1.1 * scaleY, rotation, color: '#22c55e' };
       }
@@ -555,12 +595,12 @@ export default function LandscapePlatform() {
       ...terrainBlobs.map(b=>['Gelände',b.name,b.height>=0?'Erhebung':'Senke',b.x,b.y,b.radius*2,b.radius*2,b.height,'Erde',48])
     ];
     const csv = rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n');
-    download('al-green-design-v017-bericht.csv', csv, 'text/csv;charset=utf-8');
+    download('al-green-design-v018-bericht.csv', csv, 'text/csv;charset=utf-8');
     setStatus('CSV-Bericht exportiert.');
   }
 
   function exportProject() {
-    download('al-green-design-v017-pro-studio.algreen', JSON.stringify({ version:'0.17.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
+    download('al-green-design-v018-pro-studio.algreen', JSON.stringify({ version:'0.17.0', projectInfo, terrainBlobs, zones, objects, layers, lockedLayers, gridSize, snapEnabled, imageName: image?.name ?? null, chatEngine, openAiModel }, null, 2), 'application/json');
   }
 
 
@@ -582,7 +622,7 @@ export default function LandscapePlatform() {
         <h2>Module</h2>
         <div className="grid2">
           {([
-            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Architektur'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
+            ['dashboard','Dashboard'],['project','Projekt'],['chat','KI-Chat'],['image','Bild/KI'],['terrain','Terrain'],['architecture','Architektur'],['building','Bauteile'],['scan','Scan/LiDAR'],['library','Bibliothek'],['layers','Layer'],['costs','Kosten'],['analysis','Analyse'],['water','Wasser'],['climate','Klima/Sonne'],['agents','KI-Agenten'],['scene','3D-Szene'],['reports','Berichte'],['export','Export']
           ] as [Tab,string][]).map(([id,label]) => <button key={id} className={`tab ${tab===id?'active':''}`} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
         <hr />
@@ -678,13 +718,40 @@ export default function LandscapePlatform() {
             <h2>Architektur + Pflanzen</h2>
             <div className="grid3">
               {([
-                ['building','Gebäude/Haus'],['pool','Pool'],['pond','Teich'],['pergola','Pergola'],['wall','Mauer'],['fence','Zaun'],['gate','Tor'],['stairs','Stufen'],['path','Weg'],['select','Auswählen']
+                ['building','Gebäudekörper'],['floor','Bodenplatte'],['wall','Außenwand'],['interiorWall','Innenwand'],['roof','Dach'],['window','Fenster'],['door','Tür'],['slidingDoor','Schiebetür'],['balcony','Balkon'],['railing','Geländer'],['column','Stütze'],['carport','Carport'],['winterGarden','Wintergarten'],['select','Auswählen']
               ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
             </div>
             <div className="hint" style={{marginTop:10}}>2D: Objekt anklicken und ziehen. 3D: Objekt anklicken und über das Gelände verschieben.</div>
           </>
         )}
 
+
+        {tab === 'building' && (
+          <>
+            <h2>Detaillierte Gebäude-Bauteile</h2>
+            <div className="grid3">
+              {([
+                ['floor','Bodenplatte'],['wall','Außenwand'],['interiorWall','Innenwand'],['roof','Dach'],['window','Fenster'],['door','Tür'],['slidingDoor','Schiebetür'],['balcony','Balkon'],['railing','Geländer'],['column','Stütze'],['carport','Carport'],['winterGarden','Wintergarten'],['select','Auswählen']
+              ] as [Tool,string][]).map(([id,label]) => <button key={id} className={`tool ${tool===id?'active':''}`} onClick={()=>setTool(id)}>{label}</button>)}
+            </div>
+            <div className="hint" style={{marginTop:10}}>
+              Bauteil wählen und im 2D-Plan platzieren. Danach Position, Größe, Höhe, Ebene, Dicke, Material und Dachtyp rechts bearbeiten.
+            </div>
+          </>
+        )}
+
+        {tab === 'scan' && (
+          <>
+            <h2>Mobile Scan / LiDAR</h2>
+            <div className="list">
+              <div className="item"><strong>Native LiDAR-/Depth-Bridge</strong><span>iOS-/Android-App-Bridge vorbereitet.</span></div>
+              <div className="item"><strong>Kamera-Fallback</strong><span>Direkt über die Scan-Seite nutzbar.</span></div>
+              <div className="item"><strong>Dateiimport</strong><span>PLY, OBJ, GLB, GLTF, USDZ, JSON, ZIP.</span></div>
+              <div className="item"><strong>Ziel</strong><span>Punktwolke → Mesh → Gelände → Bestandsobjekte.</span></div>
+            </div>
+            <a className="btn primary" style={{display:'block',marginTop:10,textAlign:'center',textDecoration:'none'}} href="/scan">Scan Studio öffnen</a>
+          </>
+        )}
 
         {tab === 'library' && (
           <>
@@ -808,12 +875,14 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill">V0.17 ADVANCED STUDIO</span>
+          <span className="pill">V0.18 ARCHITECTURE + LIDAR</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
           <button className={`pill ${view==='2d'?'active':''}`} onClick={()=>setView('2d')}>2D</button>
           <button className={`pill ${view==='3d'?'active':''}`} onClick={()=>setView('3d')}>3D</button>
+          <button className={`pill ${view==='splitVertical'?'active':''}`} onClick={()=>setView('splitVertical')}>Split ↔</button>
+          <button className={`pill ${view==='splitHorizontal'?'active':''}`} onClick={()=>setView('splitHorizontal')}>Split ↕</button>
         </div>
         <div className="canvasWrap">
           {view === '2d' ? (
@@ -863,13 +932,27 @@ export default function LandscapePlatform() {
                 />
               ))}
             </svg>
-          ) : (
+          ) : view === '3d' ? (
             <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
               setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
             }} onObjectSelect={(id) => {
               const obj = objects.find(o => o.id === id);
               if (obj) setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
             }} onStatus={setStatus} />
+          ) : (
+            <div className={`splitWorkspace ${view==='splitHorizontal'?'horizontal':''}`}>
+              <div className="splitPane">
+                <PlanOverview2D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} />
+              </div>
+              <div className="splitPane">
+                <Terrain3D terrainBlobs={terrainBlobs} zones={zones} objects={objects} selectedId={selectedId} selectedKind={selectedKind} nightMode={nightMode} growthYear={growthYear} season={season} sunAzimuth={sunAzimuth} sunElevation={sunElevation} showContours={showContours} showGrid3D={showGrid3D} cameraMode={cameraMode} onObjectMove={(id, x, y) => {
+                  setObjects(v => v.map(o => o.id === id ? { ...o, x: snapValue(x), y: snapValue(y) } : o));
+                }} onObjectSelect={(id) => {
+                  const obj = objects.find(o => o.id === id);
+                  if (obj) setSelection('object', id, `${obj.name} in 3D ausgewählt.`);
+                }} onStatus={setStatus} />
+              </div>
+            </div>
           )}
         </div>
         <div className="status"><span>{status}</span><span>Auftrag {stats.fill.toFixed(1)} m³ · Abtrag {stats.cut.toFixed(1)} m³</span></div>
@@ -912,7 +995,7 @@ export default function LandscapePlatform() {
         {selectedObject && (
           <div className="form">
             <label>Name<input value={selectedObject.name} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,name:e.target.value}:o))} /></label>
-            <label>Typ<select value={selectedObject.type} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,type:e.target.value as GardenObjectType}:o))}><option>building</option><option>pool</option><option>pond</option><option>pergola</option><option>wall</option><option>fence</option><option>gate</option><option>stairs</option><option>path</option><option>tree</option><option>shrub</option><option>hedge</option><option>planter</option><option>bench</option><option>light</option><option>firepit</option><option>rock</option><option>irrigation</option><option>drainage</option></select></label>
+            <label>Typ<select value={selectedObject.type} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,type:e.target.value as GardenObjectType}:o))}><option>building</option><option>pool</option><option>pond</option><option>pergola</option><option>wall</option><option>fence</option><option>gate</option><option>stairs</option><option>path</option><option>tree</option><option>shrub</option><option>hedge</option><option>planter</option><option>bench</option><option>light</option><option>firepit</option><option>rock</option><option>irrigation</option><option>drainage</option><option>floor</option><option>interiorWall</option><option>roof</option><option>window</option><option>door</option><option>slidingDoor</option><option>balcony</option><option>railing</option><option>column</option><option>carport</option><option>winterGarden</option></select></label>
             <label>X<input type="number" step="0.1" value={selectedObject.x} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,x:Number(e.target.value)}:o))} /></label>
             <label>Y<input type="number" step="0.1" value={selectedObject.y} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,y:Number(e.target.value)}:o))} /></label>
             <label>Breite<input type="number" step="0.1" value={selectedObject.width} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,width:Number(e.target.value)}:o))} /></label>
@@ -920,6 +1003,11 @@ export default function LandscapePlatform() {
             <label>Höhe<input type="number" step="0.1" value={selectedObject.height} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,height:Number(e.target.value)}:o))} /></label>
             <label>Drehung °<input type="number" step="1" value={selectedObject.rotation} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,rotation:Number(e.target.value)}:o))} /></label>
             <label>Material<input value={selectedObject.material||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,material:e.target.value}:o))} /></label>
+            {['building','floor','wall','interiorWall','roof','window','door','slidingDoor','balcony','railing','column','carport','winterGarden'].includes(selectedObject.type) && <>
+              <label>Ebene / Geschoss<input type="number" step="1" value={Number(selectedObject.level||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,level:Number(e.target.value)}:o))}/></label>
+              <label>Dicke / Stärke<input type="number" step="0.01" value={Number(selectedObject.thickness||selectedObject.depth||0.2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,thickness:Number(e.target.value)}:o))}/></label>
+              <label>Untertyp / Dachform<input value={selectedObject.subtype||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,subtype:e.target.value}:o))}/></label>
+            </>}
             <label>Kostenansatz<input type="number" step="1" value={Number(selectedObject.unitCost||0)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,unitCost:Number(e.target.value)}:o))} /></label>
             {['tree','shrub','hedge'].includes(selectedObject.type) && <><label>Wasserbedarf<input type="number" min="1" max="5" value={Number(selectedObject.waterNeed||2)} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,waterNeed:Number(e.target.value)}:o))}/></label><label>Lichtbedarf<input value={selectedObject.lightNeed||''} onChange={e=>setObjects(v=>v.map(o=>o.id===selectedObject.id?{...o,lightNeed:e.target.value}:o))}/></label></>}
             <button className="btn danger" onClick={()=>{ setObjects(v=>v.filter(o=>o.id!==selectedObject.id)); setSelection(null,null,'Objekt gelöscht.'); }}>Objekt löschen</button>
@@ -944,6 +1032,24 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
   const tx = obj.x * SCALE;
   const ty = obj.y * SCALE;
   const rot = obj.rotation;
+  if (['window','door','slidingDoor'].includes(obj.type)) {
+    return (
+      <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <rect x={(-obj.width/2)*SCALE} y={(-Math.max(obj.depth,0.08)/2)*SCALE} width={obj.width*SCALE} height={Math.max(obj.depth,0.08)*SCALE} fill={obj.type==='door'?'#92400e':'#7dd3fc'} fillOpacity={obj.type==='door'?0.85:0.55} stroke={stroke} strokeWidth={sw}/>
+        {obj.type==='door' && <path d={`M ${-obj.width/2*SCALE} 0 A ${obj.width*SCALE} ${obj.width*SCALE} 0 0 1 ${obj.width/2*SCALE} ${-obj.width*SCALE}`} fill="none" stroke="#92400e" strokeWidth="1.5"/>}
+        <text x="0" y={-8} fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+      </g>
+    );
+  }
+  if (obj.type === 'roof') {
+    return (
+      <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
+        <rect x={(-obj.width/2)*SCALE} y={(-obj.depth/2)*SCALE} width={obj.width*SCALE} height={obj.depth*SCALE} fill={obj.color} fillOpacity="0.18" stroke={stroke} strokeDasharray="8 5" strokeWidth={sw}/>
+        <line x1={0} y1={(-obj.depth/2)*SCALE} x2={0} y2={(obj.depth/2)*SCALE} stroke="#7c2d12" strokeWidth="2"/>
+        <text x="0" y="0" fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+      </g>
+    );
+  }
   if (['tree','shrub','rock','firepit','light'].includes(obj.type)) {
     return (
       <g onClick={onClick} onMouseDown={onMouseDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
@@ -957,6 +1063,48 @@ function GardenObject2D({ obj, selected, onClick, onMouseDown }: { obj: GardenOb
       <rect x={(-obj.width/2) * SCALE} y={(-obj.depth/2) * SCALE} width={obj.width * SCALE} height={obj.depth * SCALE} rx={obj.type === 'pool' ? 8 : 3} fill={obj.color} fillOpacity={obj.type === 'pool' ? 0.75 : 0.8} stroke={stroke} strokeWidth={sw} />
       <text x="0" y="0" fontSize="12" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
     </g>
+  );
+}
+
+
+function PlanOverview2D({
+  terrainBlobs,
+  zones,
+  objects,
+  selectedId,
+  selectedKind
+}: {
+  terrainBlobs: TerrainBlob[];
+  zones: Zone[];
+  objects: GardenObject[];
+  selectedId: number | null;
+  selectedKind: SelectedKind;
+}) {
+  return (
+    <svg className="canvas splitPlan" viewBox={`${VIEWBOX.x * SCALE} ${VIEWBOX.y * SCALE} ${VIEWBOX.width * SCALE} ${VIEWBOX.height * SCALE}`}>
+      <defs>
+        {terrainBlobs.map(blob => (
+          <radialGradient id={`split-g-${blob.id}`} key={blob.id}>
+            <stop offset="0%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0.7"/>
+            <stop offset="100%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0"/>
+          </radialGradient>
+        ))}
+      </defs>
+      <Grid/>
+      {zones.map(zone => (
+        <rect key={zone.id} x={(zone.x-zone.width/2)*SCALE} y={(zone.y-zone.depth/2)*SCALE} width={zone.width*SCALE} height={zone.depth*SCALE} fill={zone.color} fillOpacity="0.35" stroke={selectedKind==='zone'&&selectedId===zone.id?'#f59e0b':'#475569'} strokeWidth="1.5"/>
+      ))}
+      {terrainBlobs.map(blob => (
+        <circle key={blob.id} cx={blob.x*SCALE} cy={blob.y*SCALE} r={blob.radius*SCALE*blob.softness} fill={`url(#split-g-${blob.id})`}/>
+      ))}
+      {objects.map(obj => {
+        const selected = selectedKind==='object'&&selectedId===obj.id;
+        if (['tree','shrub','rock','firepit','light','column'].includes(obj.type)) {
+          return <circle key={obj.id} cx={obj.x*SCALE} cy={obj.y*SCALE} r={Math.max(5,obj.width*SCALE/2)} fill={obj.color} fillOpacity="0.75" stroke={selected?'#f59e0b':'#1f2937'} strokeWidth={selected?3:1.2}/>;
+        }
+        return <rect key={obj.id} x={(obj.x-obj.width/2)*SCALE} y={(obj.y-obj.depth/2)*SCALE} width={obj.width*SCALE} height={Math.max(obj.depth,0.08)*SCALE} fill={obj.color} fillOpacity={obj.type==='window'||obj.type==='slidingDoor'?0.42:0.62} stroke={selected?'#f59e0b':'#1f2937'} strokeWidth={selected?3:1.2} transform={`rotate(${obj.rotation} ${obj.x*SCALE} ${obj.y*SCALE})`}/>;
+      })}
+    </svg>
   );
 }
 
@@ -1067,6 +1215,76 @@ function Terrain3D({
       group.userData.objectId = obj.id;
       scene.add(group);
       objectGroups.push({ id: obj.id, group });
+
+      if (obj.type === 'floor') {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.08), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color, roughness: 0.85 }));
+        slab.position.y = Math.max(obj.height,0.08)/2 + (obj.level||0)*3;
+        group.add(slab); addEdge(slab, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x475569);
+      }
+
+      if (obj.type === 'interiorWall') {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.thickness||obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
+        wall.position.y = obj.height/2 + (obj.level||0)*3;
+        group.add(wall); addEdge(wall, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x94a3b8);
+      }
+
+      if (obj.type === 'roof') {
+        if ((obj.subtype||'gable') === 'flat') {
+          const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.18), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+          roof.position.y = (obj.level||1)*3 + obj.height/2;
+          group.add(roof); addEdge(roof);
+        } else {
+          const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(obj.width,obj.depth)*0.72, Math.max(obj.height,0.6), 4), new THREE.MeshStandardMaterial({ color: obj.color }));
+          roof.scale.z = obj.depth/Math.max(obj.width,obj.depth);
+          roof.rotation.y = Math.PI/4;
+          roof.position.y = (obj.level||1)*3 + obj.height/2;
+          group.add(roof);
+        }
+      }
+
+      if (obj.type === 'window' || obj.type === 'slidingDoor') {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.06)), new THREE.MeshStandardMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.48, metalness: 0.15, roughness: 0.2 }));
+        panel.position.y = (obj.level||0)*3 + obj.height/2 + (obj.type==='window'?0.75:0);
+        group.add(panel); addEdge(panel, selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x0ea5e9);
+      }
+
+      if (obj.type === 'door') {
+        const door = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.08)), new THREE.MeshStandardMaterial({ color: obj.color }));
+        door.position.y = (obj.level||0)*3 + obj.height/2;
+        group.add(door); addEdge(door);
+      }
+
+      if (obj.type === 'balcony') {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(obj.width, Math.max(obj.height,0.14), obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
+        slab.position.y = (obj.level||1)*3;
+        group.add(slab); addEdge(slab);
+      }
+
+      if (obj.type === 'railing') {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, Math.max(obj.depth,0.06)), new THREE.MeshStandardMaterial({ color: obj.color, transparent: true, opacity: 0.72 }));
+        rail.position.y = (obj.level||1)*3 + obj.height/2;
+        group.add(rail); addEdge(rail);
+      }
+
+      if (obj.type === 'column') {
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(obj.width,0.12)/2, Math.max(obj.width,0.12)/2, obj.height, 16), new THREE.MeshStandardMaterial({ color: obj.color }));
+        column.position.y = (obj.level||0)*3 + obj.height/2;
+        group.add(column);
+      }
+
+      if (obj.type === 'carport') {
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width,0.18,obj.depth),new THREE.MeshStandardMaterial({color:obj.color}));
+        roof.position.y=obj.height;group.add(roof);
+        [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
+          const post=new THREE.Mesh(new THREE.BoxGeometry(0.14,obj.height,0.14),new THREE.MeshStandardMaterial({color:obj.color}));
+          post.position.set(sx*(obj.width/2-0.12),obj.height/2,sz*(obj.depth/2-0.12));group.add(post);
+        });
+      }
+
+      if (obj.type === 'winterGarden') {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(obj.width,obj.height,obj.depth),new THREE.MeshStandardMaterial({color:'#bae6fd',transparent:true,opacity:0.28,metalness:0.08,roughness:0.18}));
+        body.position.y=obj.height/2;group.add(body);addEdge(body,selectedKind==='object'&&selectedId===obj.id?0xf59e0b:0x0284c7);
+      }
 
       if (obj.type === 'building') {
         const body = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), new THREE.MeshStandardMaterial({ color: obj.color }));
