@@ -276,6 +276,48 @@ type Room = {
 
 type ChatEngine = 'local' | 'openai';
 
+type AiChatRole = 'user' | 'assistant';
+
+type AiChatMessage = {
+  id: string;
+  role: AiChatRole;
+  content: string;
+  createdAt: string;
+  actionCount?: number;
+};
+
+type AiProjectActionType =
+  | 'add_object' | 'update_object' | 'delete_object'
+  | 'add_terrain' | 'update_terrain' | 'delete_terrain'
+  | 'add_zone' | 'update_zone' | 'delete_zone'
+  | 'update_project' | 'set_view' | 'select_object' | 'run_audit';
+
+type AiProjectAction = {
+  id: string;
+  action: AiProjectActionType;
+  targetId: number | null;
+  objectType: GardenObjectType | null;
+  zoneKind: Zone['kind'] | null;
+  name: string | null;
+  x: number | null;
+  y: number | null;
+  width: number | null;
+  depth: number | null;
+  height: number | null;
+  rotation: number | null;
+  radius: number | null;
+  softness: number | null;
+  color: string | null;
+  material: string | null;
+  note: string | null;
+  budget: number | null;
+  area: number | null;
+  location: string | null;
+  view: ViewMode | null;
+  destructive: boolean;
+  reason: string;
+};
+
 type TerrainBlob = {
   id: number;
   name: string;
@@ -1806,18 +1848,55 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.31 COMPLETE STUDIO – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.32 AI COPILOT – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
   const [openAiNote, setOpenAiNote] = useState('OpenAI vorbereitet. Für echten Live-Betrieb OPENAI_API_KEY in Vercel setzen.');
   const [openAiLastAnswer, setOpenAiLastAnswer] = useState('');
+  const [copilotMessages, setCopilotMessages] = useState<AiChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: 'Hallo! Ich bin dein AL Green Design Copilot. Du kannst mich beraten lassen oder den aktuellen Plan direkt ändern, zum Beispiel: „Verschiebe den Pool zwei Meter nach Osten“, „Setze drei Bäume als Sichtschutz im Norden“ oder „Prüfe das Projekt auf Planungsfehler“.',
+      createdAt: new Date().toISOString()
+    }
+  ]);
+  const [copilotInput, setCopilotInput] = useState('');
+  const [copilotBusy, setCopilotBusy] = useState(false);
+  const [copilotError, setCopilotError] = useState('');
+  const [copilotModel, setCopilotModel] = useState('gpt-5.2');
+  const [copilotAutoApply, setCopilotAutoApply] = useState(true);
+  const [copilotSuggestions, setCopilotSuggestions] = useState<string[]>([]);
+  const [pendingCopilotActions, setPendingCopilotActions] = useState<AiProjectAction[]>([]);
+  const [copilotReady, setCopilotReady] = useState(false);
+  const copilotEndRef = useRef<HTMLDivElement | null>(null);
   const [image, setImage] = useState<{ name: string; dataUrl: string; width: number; height: number } | null>(null);
   const [imageApplied, setImageApplied] = useState(false);
   const [imageOpacity, setImageOpacity] = useState(0.32);
   const [imageFit, setImageFit] = useState<'stretch' | 'contain'>('contain');
   const [importedModels, setImportedModels] = useState<ImportedReliefModel[]>([]);
   const [selectedImportedModelId, setSelectedImportedModelId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('al-green-v032-copilot-history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length) setCopilotMessages(parsed.slice(-40));
+      }
+    } catch {
+      // Ein beschädigter lokaler Verlauf darf den Editor nicht blockieren.
+    } finally {
+      setCopilotReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!copilotReady) return;
+    localStorage.setItem('al-green-v032-copilot-history', JSON.stringify(copilotMessages.slice(-40)));
+    copilotEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [copilotMessages, copilotReady]);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
   const [levels, setLevels] = useState<BuildingLevel[]>([
     { id: 0, name: 'EG', elevation: 0, height: 2.8, visible: true },
@@ -4657,6 +4736,337 @@ export default function LandscapePlatform() {
     return true;
   }
 
+  function copilotProjectContext() {
+    return {
+      project: projectInfo,
+      editor: {
+        view,
+        activeLevel,
+        selectedKind,
+        selectedId,
+        selectedObjectIds,
+        gridSize,
+        snapEnabled,
+        season,
+        growthYear
+      },
+      metrics,
+      terrain: terrainBlobs.map(item => ({
+        id:item.id,name:item.name,x:item.x,y:item.y,radius:item.radius,height:item.height,softness:item.softness
+      })),
+      zones: zones.map(item => ({
+        id:item.id,kind:item.kind,name:item.name,x:item.x,y:item.y,width:item.width,depth:item.depth
+      })),
+      objects: objects.map(item => ({
+        id:item.id,type:item.type,name:item.name,x:item.x,y:item.y,width:item.width,depth:item.depth,
+        height:item.height,rotation:item.rotation,material:item.material || null,level:item.level ?? null,
+        note:item.note || null
+      })),
+      audit: projectAudit ? {
+        score:projectAudit.score,
+        grade:projectAudit.grade,
+        issues:projectAudit.issues.slice(0,12).map(issue=>({severity:issue.severity,title:issue.title,message:issue.message}))
+      } : null
+    };
+  }
+
+  function copilotObjectPreset(type: GardenObjectType): Partial<GardenObject> {
+    const presets: Record<GardenObjectType, Partial<GardenObject>> = {
+      building:{name:'KI Gebäude',width:4,depth:3.5,height:3.2,color:'#d6c4a7',material:'Putz/Holz',unitCost:650},
+      pool:{name:'KI Pool',width:4.2,depth:2.4,height:1.3,color:'#38bdf8',material:'Poolbecken',unitCost:900},
+      pond:{name:'KI Gartenteich',width:3.5,depth:2.5,height:0.45,color:'#0ea5e9',material:'Teichfolie',unitCost:240},
+      pergola:{name:'KI Pergola',width:3,depth:2.4,height:2.6,color:'#8b5e3c',material:'Holz',unitCost:480},
+      wall:{name:'KI Mauer',width:3,depth:0.25,height:1,color:'#9ca3af',material:'Beton/Stein',unitCost:260},
+      gardenWall:{name:'KI Gartenmauer',width:3,depth:0.28,height:1,color:'#9ca3af',material:'Naturstein',unitCost:340,thickness:0.28},
+      fence:{name:'KI Zaun',width:4,depth:0.12,height:1.4,color:'#7c5c3e',material:'Holz/Metall',unitCost:120},
+      gate:{name:'KI Tor',width:2.5,depth:0.18,height:1.6,color:'#475569',material:'Metall',unitCost:650},
+      stairs:{name:'KI Stufen',width:2.2,depth:1.4,height:0.9,color:'#c8b6a6',material:'Naturstein',unitCost:380},
+      path:{name:'KI Weg',width:4,depth:1.1,height:0.08,color:'#d6c7ad',material:'Kies/Pflaster',unitCost:95},
+      tree:{name:'KI Baum',width:1.4,depth:1.4,height:4,color:'#16a34a',material:'Pflanze',unitCost:320,waterNeed:2,lightNeed:'Sonne/Halbschatten'},
+      shrub:{name:'KI Strauch',width:1,depth:1,height:1.2,color:'#22c55e',material:'Pflanze',unitCost:65,waterNeed:2,lightNeed:'Sonne/Halbschatten'},
+      hedge:{name:'KI Hecke',width:3.5,depth:0.6,height:1.5,color:'#15803d',material:'Pflanze',unitCost:180,waterNeed:2,lightNeed:'Sonne/Halbschatten'},
+      planter:{name:'KI Hochbeet',width:2,depth:1,height:0.7,color:'#92400e',material:'Holz/Metall',unitCost:420},
+      bench:{name:'KI Sitzbank',width:1.8,depth:0.65,height:0.85,color:'#8b5e3c',material:'Holz',unitCost:380},
+      light:{name:'KI Leuchte',width:0.25,depth:0.25,height:0.9,color:'#f59e0b',material:'Metall/LED',unitCost:185},
+      firepit:{name:'KI Feuerstelle',width:1.4,depth:1.4,height:0.35,color:'#b45309',material:'Stahl/Stein',unitCost:750},
+      rock:{name:'KI Felsen',width:1.4,depth:1,height:0.7,color:'#78716c',material:'Naturstein',unitCost:240},
+      irrigation:{name:'KI Bewässerung',width:4,depth:0.12,height:0.08,color:'#2563eb',material:'PE-Rohr',unitCost:18},
+      drainage:{name:'KI Drainage',width:4,depth:0.16,height:0.1,color:'#0f766e',material:'Drainagerohr',unitCost:32},
+      floor:{name:'KI Bodenplatte',width:5.5,depth:4.5,height:0.18,color:'#d1d5db',material:'Stahlbeton',unitCost:180,level:activeLevel,thickness:0.18},
+      interiorWall:{name:'KI Innenwand',width:3,depth:0.14,height:2.7,color:'#e5e7eb',material:'Trockenbau',unitCost:120,level:activeLevel,thickness:0.14},
+      roof:{name:'KI Dach',width:5.8,depth:4.8,height:0.55,color:'#7c2d12',material:'Dachdeckung',unitCost:240,level:activeLevel,subtype:'gable'},
+      window:{name:'KI Fenster',width:1.4,depth:0.1,height:1.3,color:'#7dd3fc',material:'Glas/Aluminium',unitCost:780,level:activeLevel,sillHeight:0.9},
+      door:{name:'KI Tür',width:1,depth:0.12,height:2.1,color:'#92400e',material:'Holz/Metall',unitCost:950,level:activeLevel,sillHeight:0},
+      slidingDoor:{name:'KI Schiebetür',width:2.8,depth:0.12,height:2.4,color:'#bae6fd',material:'Glas/Aluminium',unitCost:2800,level:activeLevel,sillHeight:0},
+      balcony:{name:'KI Balkon',width:3.5,depth:1.8,height:0.18,color:'#94a3b8',material:'Beton/Holz',unitCost:650,level:activeLevel},
+      railing:{name:'KI Geländer',width:3,depth:0.1,height:1.05,color:'#64748b',material:'Glas/Metall',unitCost:320,level:activeLevel},
+      column:{name:'KI Stütze',width:0.28,depth:0.28,height:2.8,color:'#cbd5e1',material:'Stahl/Beton/Holz',unitCost:420,level:activeLevel},
+      carport:{name:'KI Carport',width:5.5,depth:3.2,height:2.7,color:'#a16207',material:'Holz/Stahl',unitCost:520,level:activeLevel},
+      winterGarden:{name:'KI Wintergarten',width:4,depth:3,height:2.8,color:'#dbeafe',material:'Glas/Aluminium',unitCost:1100,level:activeLevel}
+    };
+    return presets[type];
+  }
+
+  function applyCopilotActions(actions: AiProjectAction[], confirmed = false) {
+    const executable = actions.filter(action => confirmed || !action.destructive);
+    if (!executable.length) return;
+
+    const changesPlan = executable.some(action => !['set_view','select_object','run_audit'].includes(action.action));
+    if (changesPlan) snapshot();
+
+    let nextObjects = [...objects];
+    let nextTerrain = [...terrainBlobs];
+    let nextZones = [...zones];
+    let nextProject = {...projectInfo};
+    let objectsChanged = false;
+    let terrainChanged = false;
+    let zonesChanged = false;
+    let projectChanged = false;
+    let shouldAudit = false;
+    let nextSelectedId: number | null = null;
+    const base = Date.now();
+
+    executable.forEach((action,index) => {
+      if (action.action === 'add_object' && action.objectType) {
+        const preset = copilotObjectPreset(action.objectType);
+        const draft: GardenObject = ensureObjectMaterial({
+          id: base + index + 1,
+          type: action.objectType,
+          name: action.name || String(preset.name || 'KI Objekt'),
+          x: action.x ?? 0,
+          y: action.y ?? 0,
+          width: Math.max(0.05, action.width ?? Number(preset.width || 1)),
+          depth: Math.max(0.05, action.depth ?? Number(preset.depth || 1)),
+          height: Math.max(0.02, action.height ?? Number(preset.height || 1)),
+          rotation: action.rotation ?? 0,
+          color: action.color || String(preset.color || '#94a3b8'),
+          material: action.material || String(preset.material || ''),
+          note: action.note || action.reason,
+          unitCost: preset.unitCost,
+          level: isLevelBoundObject({type:action.objectType} as GardenObject) ? activeLevel : preset.level,
+          thickness: preset.thickness,
+          sillHeight: preset.sillHeight,
+          subtype: preset.subtype,
+          waterNeed: preset.waterNeed,
+          lightNeed: preset.lightNeed
+        });
+        nextObjects.push(draft);
+        nextSelectedId = draft.id;
+        objectsChanged = true;
+      }
+
+      if (action.action === 'update_object' && action.targetId != null) {
+        nextObjects = nextObjects.map(item => {
+          if (item.id !== action.targetId) return item;
+          const update: Partial<GardenObject> = {};
+          if (action.name != null) update.name = action.name;
+          if (action.x != null) update.x = action.x;
+          if (action.y != null) update.y = action.y;
+          if (action.width != null) update.width = Math.max(0.05, action.width);
+          if (action.depth != null) update.depth = Math.max(0.05, action.depth);
+          if (action.height != null) update.height = Math.max(0.02, action.height);
+          if (action.rotation != null) update.rotation = action.rotation;
+          if (action.color != null) update.color = action.color;
+          if (action.material != null) update.material = action.material;
+          if (action.note != null) update.note = action.note;
+          return ensureObjectMaterial({...item,...update});
+        });
+        nextSelectedId = action.targetId;
+        objectsChanged = true;
+      }
+
+      if (action.action === 'delete_object' && action.targetId != null) {
+        nextObjects = nextObjects.filter(item => item.id !== action.targetId && item.parentId !== action.targetId);
+        objectsChanged = true;
+      }
+
+      if (action.action === 'add_terrain') {
+        const item: TerrainBlob = {
+          id: base + 1000 + index,
+          name: action.name || 'KI Geländeform',
+          x: action.x ?? 0,
+          y: action.y ?? 0,
+          radius: Math.max(0.25, action.radius ?? 2),
+          height: action.height ?? 0.5,
+          softness: clamp(action.softness ?? 1.4, 0.25, 4),
+          source: 'AI Copilot'
+        };
+        nextTerrain.push(item);
+        terrainChanged = true;
+      }
+
+      if (action.action === 'update_terrain' && action.targetId != null) {
+        nextTerrain = nextTerrain.map(item => item.id === action.targetId ? {
+          ...item,
+          name: action.name ?? item.name,
+          x: action.x ?? item.x,
+          y: action.y ?? item.y,
+          radius: Math.max(0.25, action.radius ?? item.radius),
+          height: action.height ?? item.height,
+          softness: clamp(action.softness ?? item.softness, 0.25, 4)
+        } : item);
+        terrainChanged = true;
+      }
+
+      if (action.action === 'delete_terrain' && action.targetId != null) {
+        nextTerrain = nextTerrain.filter(item => item.id !== action.targetId);
+        terrainChanged = true;
+      }
+
+      if (action.action === 'add_zone' && action.zoneKind) {
+        nextZones.push({
+          id: base + 2000 + index,
+          kind: action.zoneKind,
+          name: action.name || (action.zoneKind === 'plantZone' ? 'KI Pflanzzone' : 'KI Belagszone'),
+          x: action.x ?? 0,
+          y: action.y ?? 0,
+          width: Math.max(0.1, action.width ?? 3),
+          depth: Math.max(0.1, action.depth ?? 2),
+          color: action.color || (action.zoneKind === 'plantZone' ? '#a7f3d0' : '#b8b0a2')
+        });
+        zonesChanged = true;
+      }
+
+      if (action.action === 'update_zone' && action.targetId != null) {
+        nextZones = nextZones.map(item => item.id === action.targetId ? {
+          ...item,
+          name: action.name ?? item.name,
+          kind: action.zoneKind ?? item.kind,
+          x: action.x ?? item.x,
+          y: action.y ?? item.y,
+          width: Math.max(0.1, action.width ?? item.width),
+          depth: Math.max(0.1, action.depth ?? item.depth),
+          color: action.color ?? item.color
+        } : item);
+        zonesChanged = true;
+      }
+
+      if (action.action === 'delete_zone' && action.targetId != null) {
+        nextZones = nextZones.filter(item => item.id !== action.targetId);
+        zonesChanged = true;
+      }
+
+      if (action.action === 'update_project') {
+        nextProject = {
+          ...nextProject,
+          name: action.name ?? nextProject.name,
+          location: action.location ?? nextProject.location,
+          budget: action.budget ?? nextProject.budget,
+          area: action.area ?? nextProject.area
+        };
+        projectChanged = true;
+      }
+
+      if (action.action === 'set_view' && action.view) setView(action.view);
+      if (action.action === 'select_object' && action.targetId != null) nextSelectedId = action.targetId;
+      if (action.action === 'run_audit') shouldAudit = true;
+    });
+
+    if (objectsChanged) setObjects(nextObjects);
+    if (terrainChanged) setTerrainBlobs(nextTerrain);
+    if (zonesChanged) setZones(nextZones);
+    if (projectChanged) setProjectInfo(nextProject);
+
+    if (nextSelectedId != null && nextObjects.some(item => item.id === nextSelectedId)) {
+      setSelectedKind('object');
+      setSelectedId(nextSelectedId);
+      setSelectedObjectIds([nextSelectedId]);
+    }
+
+    if (shouldAudit) setTimeout(() => runProjectAudit(), 0);
+    setStatus(`AI Copilot: ${executable.length} Aktion${executable.length === 1 ? '' : 'en'} ausgeführt.`);
+  }
+
+  async function sendCopilotMessage(textOverride?: string) {
+    const text = String(textOverride ?? copilotInput).trim();
+    if (!text || copilotBusy) return;
+
+    const userMessage: AiChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+      createdAt: new Date().toISOString()
+    };
+    const nextMessages = [...copilotMessages, userMessage].slice(-40);
+    setCopilotMessages(nextMessages);
+    setCopilotInput('');
+    setCopilotError('');
+    setCopilotBusy(true);
+    setPendingCopilotActions([]);
+
+    try {
+      const response = await fetch('/api/assistant', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model: copilotModel,
+          messages: nextMessages.map(message => ({role:message.role,content:message.content})),
+          project: copilotProjectContext()
+        })
+      });
+      const data = await response.json();
+      if (!data?.ok) throw new Error(String(data?.message || 'Die KI konnte nicht antworten.'));
+
+      const result = data.result || {};
+      const actions = (Array.isArray(result.actions) ? result.actions : []) as AiProjectAction[];
+      const safeActions = actions.filter(action => !action.destructive);
+      const protectedActions = actions.filter(action => action.destructive);
+      const assistantMessage: AiChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: String(result.reply || 'Ich habe die Anfrage ausgewertet.'),
+        createdAt: new Date().toISOString(),
+        actionCount: actions.length
+      };
+      setCopilotMessages(current => [...current,assistantMessage].slice(-40));
+      setCopilotSuggestions(Array.isArray(result.suggestions) ? result.suggestions.slice(0,4) : []);
+
+      if (copilotAutoApply && safeActions.length) applyCopilotActions(safeActions);
+      if (!copilotAutoApply && actions.length) setPendingCopilotActions(actions);
+      else if (protectedActions.length) setPendingCopilotActions(protectedActions);
+
+      if (result.requiresConfirmation && protectedActions.length) {
+        setStatus(String(result.confirmationQuestion || 'Der AI Copilot wartet auf deine Bestätigung.'));
+      } else if (!actions.length) {
+        setStatus('AI Copilot hat geantwortet.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCopilotError(message);
+      setCopilotMessages(current => [...current,{
+        id:`assistant-error-${Date.now()}`,
+        role:'assistant',
+        content:`Ich konnte die Anfrage nicht ausführen: ${message}`,
+        createdAt:new Date().toISOString()
+      }].slice(-40));
+    } finally {
+      setCopilotBusy(false);
+    }
+  }
+
+  function confirmPendingCopilotActions() {
+    applyCopilotActions(pendingCopilotActions, true);
+    setPendingCopilotActions([]);
+    setCopilotMessages(current => [...current,{
+      id:`assistant-confirmed-${Date.now()}`,
+      role:'assistant',
+      content:'Die bestätigten Änderungen wurden im Projekt ausgeführt. Du kannst sie über Rückgängig wieder zurücknehmen.',
+      createdAt:new Date().toISOString()
+    }].slice(-40));
+  }
+
+  function clearCopilotHistory() {
+    setCopilotMessages([{
+      id:`welcome-${Date.now()}`,
+      role:'assistant',
+      content:'Der Chat wurde geleert. Ich kenne weiterhin den aktuellen Projektzustand und kann direkt damit weiterarbeiten.',
+      createdAt:new Date().toISOString()
+    }]);
+    setCopilotSuggestions([]);
+    setPendingCopilotActions([]);
+    setCopilotError('');
+  }
+
   async function generateFromChat() {
     const text = chat.toLowerCase();
     const base = Date.now();
@@ -4755,7 +5165,7 @@ export default function LandscapePlatform() {
       ])
     ];
     const csv=rows.map(row=>row.map(csvCell).join(';')).join('\n');
-    download('al-green-design-v031-mengen-kosten.csv',csv,'text/csv;charset=utf-8');
+    download('al-green-design-v032-mengen-kosten.csv',csv,'text/csv;charset=utf-8');
     setStatus('Mengen- und Kostenliste exportiert.');
   }
 
@@ -4791,7 +5201,7 @@ export default function LandscapePlatform() {
   }
 
   function exportHtmlReport() {
-    download('al-green-design-v031-projektbericht.html',buildPrintableReportHtml(),'text/html;charset=utf-8');
+    download('al-green-design-v032-projektbericht.html',buildPrintableReportHtml(),'text/html;charset=utf-8');
     setStatus('HTML-Projektbericht exportiert.');
   }
 
@@ -4860,13 +5270,13 @@ export default function LandscapePlatform() {
       ...terrainBlobs.map(b=>['Gelände',b.name,b.height>=0?'Erhebung':'Senke',b.x,b.y,b.radius*2,b.radius*2,b.height,'Erde',48])
     ];
     const csv = rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n');
-    download('al-green-design-v031-objektbericht.csv', csv, 'text/csv;charset=utf-8');
+    download('al-green-design-v032-objektbericht.csv', csv, 'text/csv;charset=utf-8');
     setStatus('CSV-Bericht exportiert.');
   }
 
   function exportProject() {
-    download('al-green-design-v031-complete-studio.algreen', JSON.stringify({
-      version:'0.31.0',
+    download('al-green-design-v032-complete-studio.algreen', JSON.stringify({
+      version:'0.32.0',
       projectInfo,
       terrainBlobs,
       elevationPoints,
@@ -4986,7 +5396,92 @@ export default function LandscapePlatform() {
 
         {tab === 'chat' && (
           <>
-            <h2>AI Planning Studio</h2>
+            <h2>AI Copilot</h2>
+            <div className="copilotShell">
+              <div className="copilotToolbar">
+                <div>
+                  <strong>Projektbewusster Chat</strong>
+                  <span>berät, versteht Rückfragen und kann den Plan direkt ändern</span>
+                </div>
+                <label>Modell
+                  <input value={copilotModel} onChange={e=>setCopilotModel(e.target.value)} placeholder="gpt-5.2" />
+                </label>
+                <label className="copilotToggle">
+                  <input type="checkbox" checked={copilotAutoApply} onChange={e=>setCopilotAutoApply(e.target.checked)} />
+                  Sichere Aktionen direkt anwenden
+                </label>
+                <button className="btn" onClick={clearCopilotHistory}>Chat leeren</button>
+              </div>
+
+              <div className="copilotMessages" aria-live="polite">
+                {copilotMessages.map(message=>(
+                  <article key={message.id} className={`copilotMessage ${message.role}`}>
+                    <div className="copilotAvatar">{message.role==='assistant'?'AI':'Du'}</div>
+                    <div className="copilotBubble">
+                      <strong>{message.role==='assistant'?'AL Green Copilot':'Du'}</strong>
+                      <p>{message.content}</p>
+                      {typeof message.actionCount==='number' && message.actionCount>0 && (
+                        <span className="copilotActionBadge">{message.actionCount} geplante Aktion{message.actionCount===1?'':'en'}</span>
+                      )}
+                    </div>
+                  </article>
+                ))}
+                {copilotBusy && (
+                  <article className="copilotMessage assistant">
+                    <div className="copilotAvatar">AI</div>
+                    <div className="copilotBubble copilotThinking"><strong>AL Green Copilot</strong><p>Ich analysiere den Dialog und den aktuellen Plan …</p></div>
+                  </article>
+                )}
+                <div ref={copilotEndRef}/>
+              </div>
+
+              {copilotError && <div className="copilotError">{copilotError}</div>}
+
+              {pendingCopilotActions.length>0 && (
+                <div className="copilotConfirmation">
+                  <strong>{pendingCopilotActions.some(action=>action.destructive)?'Bestätigung erforderlich':'Aktionen bereit'}</strong>
+                  <p>{pendingCopilotActions.some(action=>action.destructive)
+                    ? 'Diese Änderung löscht oder ersetzt Projektbestandteile. Bitte zuerst kontrollieren.'
+                    : 'Die automatische Anwendung ist deaktiviert. Du kannst die geplanten Änderungen jetzt übernehmen.'}</p>
+                  <div className="copilotActionList">
+                    {pendingCopilotActions.map(action=><span key={action.id}>{action.reason}</span>)}
+                  </div>
+                  <div className="grid2">
+                    <button className="btn primary" onClick={confirmPendingCopilotActions}>Änderungen ausführen</button>
+                    <button className="btn danger" onClick={()=>setPendingCopilotActions([])}>Verwerfen</button>
+                  </div>
+                </div>
+              )}
+
+              {copilotSuggestions.length>0 && (
+                <div className="copilotSuggestions">
+                  {copilotSuggestions.map((suggestion,index)=>(
+                    <button key={`${suggestion}-${index}`} onClick={()=>sendCopilotMessage(suggestion)} disabled={copilotBusy}>{suggestion}</button>
+                  ))}
+                </div>
+              )}
+
+              <form className="copilotComposer" onSubmit={e=>{e.preventDefault();void sendCopilotMessage();}}>
+                <textarea
+                  value={copilotInput}
+                  onChange={e=>setCopilotInput(e.target.value)}
+                  onKeyDown={e=>{
+                    if(e.key==='Enter' && !e.shiftKey){
+                      e.preventDefault();
+                      void sendCopilotMessage();
+                    }
+                  }}
+                  placeholder="Schreibe wie in ChatGPT, z. B.: Verschiebe die Pergola nach Süden, mache sie 4 × 3 Meter groß und verwende dunkles Thermoholz."
+                  disabled={copilotBusy}
+                />
+                <button className="btn primary copilotSend" type="submit" disabled={copilotBusy || !copilotInput.trim()}>
+                  {copilotBusy?'Denke …':'Senden'}
+                </button>
+              </form>
+              <div className="hint">Der API-Schlüssel bleibt serverseitig. Löschaktionen werden niemals ohne Bestätigung ausgeführt. Jede Änderung kann mit Rückgängig zurückgenommen werden.</div>
+            </div>
+
+            <h2 style={{marginTop:18}}>AI Planning Studio</h2>
 
             <label>Projektbeschreibung
               <textarea className="full" value={chat} onChange={e=>setChat(e.target.value)} placeholder="Beispiel: Moderner pflegeleichter Garten mit Terrasse, Pergola, Sichtschutz, Pool und naturnaher Bepflanzung."/>
@@ -6119,7 +6614,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.31 COMPLETE STUDIO</span>
+          <span className="pill brandPill">V0.32 AI COPILOT</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>

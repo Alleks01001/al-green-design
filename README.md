@@ -1,4 +1,4 @@
-# AL Green Design – V0.31 COMPLETE STUDIO
+# AL Green Design – V0.32 AI COPILOT
 
 V0.31 integriert die bisher aufgebauten Module in einen gemeinsamen finalen Studio-Prototyp.
 
@@ -103,5 +103,11 @@ Die schnelle Video-3D-Funktion erzeugt weiterhin ein bildbasiertes Relief. Eine 
 ## Version
 
 ```text
-0.31.0
+0.32.0
 ```
+
+## V0.32 – AI Copilot
+
+Neu hinzugekommen ist ein projektbewusster Mehr-Runden-Chat über die OpenAI Responses API.
+
+Der Copilot kann nicht nur Text beantworten, sondern den aktuellen Plan über validierte Aktionen verändern. Löschaktionen benötigen eine ausdrückliche Bestätigung. Details zur Einrichtung stehen in `AI_COPILOT_SETUP.md`.
