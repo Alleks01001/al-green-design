@@ -1,4 +1,4 @@
-# AL Green Design V1.0.1 – geprüfte Foundation
+# AL Green Design V1.0.3 – geprüfte Foundation
 
 Modularer Web-Neuaufbau ohne Apple-/iOS-, Xcode-, ARKit- oder native LiDAR-Komponenten.
 
