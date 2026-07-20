@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – V0.32 AI COPILOT',
+  title: 'AL Green Design – V0.33 AI INSTANT COPILOT',
   description: 'Erweitertes Garten- und Landschaftsplanungsstudio mit Projektverwaltung, Layern, Soft Terrain, verschiebbaren Gebäuden/Zonen, Kosten, Analysen und OpenAI-JSON-Schema.',
   robots: { index: false, follow: false }
 };
