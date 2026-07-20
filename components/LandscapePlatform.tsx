@@ -8,6 +8,8 @@ import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importe
 import {
   DEFAULT_LOCAL_GARDEN_MEMORY,
   interpretLocalGardenCommand,
+  describeLocalGardenMemory,
+  LOCAL_GARDEN_TEACHING_GUIDE,
   type LocalGardenMemory
 } from '@/lib/ai/localGardenIntelligence';
 
@@ -1866,7 +1868,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.34 LOCAL GARDEN INTELLIGENCE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.35 ADAPTIVE GARDEN INTELLIGENCE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -1876,7 +1878,7 @@ export default function LandscapePlatform() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Hallo! Ich bin deine lokale Garden Intelligence. Ich arbeite ohne externe KI direkt im Browser: „Erstelle eine Rasenfläche 8 × 5 Meter“, „Setze fünf Bäume an die Nordgrenze“ oder „Verbinde Haus und Pool mit einem Weg“. Korrekturen kann ich lokal lernen.',
+      content: 'Hallo! Ich bin deine Adaptive Garden Intelligence. Ich arbeite ohne externe KI direkt im Browser und lerne Begriffe, Standards, Makros und Korrekturen: „Erstelle eine Rasenfläche 8 × 5 Meter“, „Setze fünf Bäume an die Nordgrenze“ oder „Verbinde Haus und Pool mit einem Weg“. Korrekturen kann ich lokal lernen.',
       createdAt: new Date().toISOString()
     }
   ]);
@@ -1884,6 +1886,8 @@ export default function LandscapePlatform() {
   const [copilotBusy, setCopilotBusy] = useState(false);
   const [copilotError, setCopilotError] = useState('');
   const [localGardenMemory, setLocalGardenMemory] = useState<LocalGardenMemory>(DEFAULT_LOCAL_GARDEN_MEMORY);
+  const [showLearningGuide, setShowLearningGuide] = useState(false);
+  const memoryImportRef = useRef<HTMLInputElement | null>(null);
   const [localMemoryReady, setLocalMemoryReady] = useState(false);
   const [copilotSuggestions, setCopilotSuggestions] = useState<string[]>([]);
   const [copilotReady, setCopilotReady] = useState(false);
@@ -1897,12 +1901,12 @@ export default function LandscapePlatform() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('al-green-v034-local-history');
+      const saved = localStorage.getItem('al-green-v035-local-history') || localStorage.getItem('al-green-v034-local-history');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length) setCopilotMessages(parsed.slice(-40));
       }
-      const savedMemory = localStorage.getItem('al-green-v034-local-memory');
+      const savedMemory = localStorage.getItem('al-green-v035-local-memory') || localStorage.getItem('al-green-v034-local-memory');
       if (savedMemory) {
         const parsedMemory = JSON.parse(savedMemory);
         if (parsedMemory && typeof parsedMemory === 'object') setLocalGardenMemory(parsedMemory);
@@ -1917,13 +1921,13 @@ export default function LandscapePlatform() {
 
   useEffect(() => {
     if (!copilotReady) return;
-    localStorage.setItem('al-green-v034-local-history', JSON.stringify(copilotMessages.slice(-40)));
+    localStorage.setItem('al-green-v035-local-history', JSON.stringify(copilotMessages.slice(-40)));
     copilotEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [copilotMessages, copilotReady]);
 
   useEffect(() => {
     if (!localMemoryReady) return;
-    localStorage.setItem('al-green-v034-local-memory', JSON.stringify(localGardenMemory));
+    localStorage.setItem('al-green-v035-local-memory', JSON.stringify(localGardenMemory));
   }, [localGardenMemory, localMemoryReady]);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
   const [levels, setLevels] = useState<BuildingLevel[]>([
@@ -4903,17 +4907,17 @@ export default function LandscapePlatform() {
     }
   }
 
-  function applyCopilotActions(actions: AiProjectAction[], confirmed = true) {
+  function applyCopilotActions(actions: AiProjectAction[], confirmed = true, baseSnapshot: EditorSnapshot | null = null, skipSnapshot = false) {
     const executable = actions.filter(action => confirmed || !action.destructive);
     if (!executable.length) return {executed:0,labels:[] as string[]};
 
     const changesPlan = executable.some(action => !['set_view','select_object','run_audit'].includes(action.action));
-    if (changesPlan) snapshot();
+    if (changesPlan && !skipSnapshot) snapshot();
 
-    let nextObjects = [...objects];
-    let nextTerrain = [...terrainBlobs];
-    let nextZones = [...zones];
-    let nextProject = {...projectInfo};
+    let nextObjects = [...(baseSnapshot?.objects || objects)];
+    let nextTerrain = [...(baseSnapshot?.terrainBlobs || terrainBlobs)];
+    let nextZones = [...(baseSnapshot?.zones || zones)];
+    let nextProject = {...(baseSnapshot?.projectInfo || projectInfo)};
     let objectsChanged = false;
     let terrainChanged = false;
     let zonesChanged = false;
@@ -5184,7 +5188,7 @@ export default function LandscapePlatform() {
     }
 
     if (shouldAudit) setTimeout(() => runProjectAudit(), 0);
-    setStatus(`Local Garden Intelligence: ${executed} Änderung${executed === 1 ? '' : 'en'} sofort ausgeführt.`);
+    setStatus(`Adaptive Garden Intelligence: ${executed} Änderung${executed === 1 ? '' : 'en'} sofort ausgeführt.`);
     return {executed,labels};
   }
 
@@ -5202,7 +5206,7 @@ export default function LandscapePlatform() {
     setCopilotInput('');
     setCopilotError('');
     setCopilotBusy(true);
-    setStatus('Local Garden Intelligence analysiert und zeichnet …');
+    setStatus('Adaptive Garden Intelligence analysiert und zeichnet …');
 
     try {
       await new Promise(resolve => setTimeout(resolve, 20));
@@ -5211,8 +5215,19 @@ export default function LandscapePlatform() {
 
       let execution = {executed:0,labels:[] as string[]};
       if (result.editorCommand === 'undo') {
-        undo();
-        execution = {executed:1,labels:['Rückgängig']};
+        if (result.actions.length) {
+          let baseSnapshot: EditorSnapshot | null = null;
+          const previous = undoStack[undoStack.length - 1];
+          if (previous) {
+            try { baseSnapshot = JSON.parse(previous) as EditorSnapshot; } catch { baseSnapshot = null; }
+          }
+          if (baseSnapshot) restoreEditorSnapshot(baseSnapshot);
+          const correctionExecution = applyCopilotActions(result.actions as AiProjectAction[],true,baseSnapshot,Boolean(baseSnapshot));
+          execution = {executed:correctionExecution.executed,labels:['Korrektur',...correctionExecution.labels]};
+        } else {
+          undo();
+          execution = {executed:1,labels:['Rückgängig']};
+        }
       } else if (result.editorCommand === 'redo') {
         redo();
         execution = {executed:1,labels:['Wiederholen']};
@@ -5251,7 +5266,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
       } else if (!result.actions.length && !result.editorCommand && result.confidence < 0.6) {
         setCopilotError(result.reply);
       } else {
-        setStatus(`Local Garden Intelligence: ${execution.executed} Änderung${execution.executed===1?'':'en'} ausgeführt.`);
+        setStatus(`Adaptive Garden Intelligence: ${execution.executed} Änderung${execution.executed===1?'':'en'} ausgeführt.`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -5264,6 +5279,48 @@ Annahmen: ${result.assumptions.join(' · ')}`
       }].slice(-40));
     } finally {
       setCopilotBusy(false);
+    }
+  }
+
+  function showLocalLearningGuide() {
+    setShowLearningGuide(current=>!current);
+    setCopilotMessages(current => [...current,{
+      id:`learning-guide-${Date.now()}`,
+      role:'assistant',
+      content:LOCAL_GARDEN_TEACHING_GUIDE,
+      createdAt:new Date().toISOString()
+    }].slice(-40));
+  }
+
+  function exportLocalGardenMemory() {
+    const blob = new Blob([JSON.stringify(localGardenMemory,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `al-green-wissen-${new Date().toISOString().slice(0,10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setStatus('Lokales KI-Wissen exportiert.');
+  }
+
+  async function importLocalGardenMemory(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!parsed || typeof parsed !== 'object') throw new Error('Ungültige Wissensdatei.');
+      setLocalGardenMemory({...DEFAULT_LOCAL_GARDEN_MEMORY,...parsed,version:2});
+      setCopilotMessages(current => [...current,{
+        id:`memory-import-${Date.now()}`,
+        role:'assistant',
+        content:'Wissensdatei importiert. '+describeLocalGardenMemory(parsed),
+        createdAt:new Date().toISOString()
+      }].slice(-40));
+      setStatus('Lokales KI-Wissen importiert.');
+    } catch (error) {
+      setCopilotError(error instanceof Error ? error.message : String(error));
+    } finally {
+      event.target.value='';
     }
   }
 
@@ -5281,6 +5338,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
   function resetLocalGardenMemory() {
     const fresh: LocalGardenMemory = JSON.parse(JSON.stringify(DEFAULT_LOCAL_GARDEN_MEMORY));
     setLocalGardenMemory(fresh);
+    localStorage.removeItem('al-green-v035-local-memory');
     localStorage.removeItem('al-green-v034-local-memory');
     setCopilotMessages(current => [...current,{
       id:`memory-reset-${Date.now()}`,
@@ -5620,7 +5678,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
         {tab === 'chat' && (
           <>
-            <h2>Local Garden Intelligence</h2>
+            <h2>Adaptive Garden Intelligence</h2>
             <div className="copilotShell">
               <div className="copilotToolbar">
                 <div>
@@ -5628,20 +5686,41 @@ Annahmen: ${result.assumptions.join(' · ')}`
                   <span>Ohne API, ohne Wartezeit: Text verstehen, zeichnen und aus Korrekturen lernen</span>
                 </div>
                 <div className="localIntelligenceStatus">
-                  <strong>Lokal / Offline</strong>
-                  <span>{Object.keys(localGardenMemory.aliases).length} Begriffe · {localGardenMemory.learnedStatements.length} Lernnotizen</span>
+                  <strong>Lokal / Offline / lernfähig</strong>
+                  <span>{Object.keys(localGardenMemory.aliases).length} Begriffe · {Object.keys(localGardenMemory.macros||{}).length} Makros · {Object.keys(localGardenMemory.presets||{}).length} Standards · {(localGardenMemory.corrections||[]).length} Korrekturen</span>
                 </div>
-                <span className="copilotInstantBadge">Direktmodus aktiv</span>
+                <span className="copilotInstantBadge">Adaptive Lernstufe aktiv</span>
+                <button className="btn primary" onClick={showLocalLearningGuide}>So bringst du mir etwas bei</button>
+                <button className="btn" onClick={exportLocalGardenMemory}>Wissen exportieren</button>
+                <button className="btn" onClick={()=>memoryImportRef.current?.click()}>Wissen importieren</button>
+                <input ref={memoryImportRef} type="file" accept="application/json" hidden onChange={importLocalGardenMemory}/>
                 <button className="btn" onClick={clearCopilotHistory}>Verlauf leeren</button>
-                <button className="btn" onClick={resetLocalGardenMemory}>Lernspeicher löschen</button>
+                <button className="btn danger" onClick={resetLocalGardenMemory}>Lernspeicher löschen</button>
               </div>
+
+              {showLearningGuide && (
+                <section className="adaptiveLearningGuide">
+                  <div>
+                    <strong>Lernzentrale</strong>
+                    <button className="btn" onClick={()=>setShowLearningGuide(false)}>Schließen</button>
+                  </div>
+                  <pre>{LOCAL_GARDEN_TEACHING_GUIDE}</pre>
+                  <div className="learningExamples">
+                    <button onClick={()=>setCopilotInput('Merke dir: Chillzone bedeutet Terrasse.')}>Begriff lernen</button>
+                    <button onClick={()=>setCopilotInput('Wenn ich sage Feierabendplatz, erstelle eine Terrasse 5 × 4 Meter aus Naturstein mit einer Pergola.')}>Ablauf lernen</button>
+                    <button onClick={()=>setCopilotInput('Standard für Baum: 3 Meter hoch, 2 Meter breit und 2,5 Meter Abstand.')}>Objektstandard lernen</button>
+                    <button onClick={()=>setCopilotInput('Das war falsch. Stattdessen verschiebe den Pool 2 Meter nach Osten.')}>Letzten Befehl korrigieren</button>
+                    <button onClick={()=>setCopilotInput('Was hast du gelernt?')}>Wissen anzeigen</button>
+                  </div>
+                </section>
+              )}
 
               <div className="copilotMessages" aria-live="polite">
                 {copilotMessages.map(message=>(
                   <article key={message.id} className={`copilotMessage ${message.role}`}>
                     <div className="copilotAvatar">{message.role==='assistant'?'LG':'Du'}</div>
                     <div className="copilotBubble">
-                      <strong>{message.role==='assistant'?'Local Garden Intelligence':'Du'}</strong>
+                      <strong>{message.role==='assistant'?'Adaptive Garden Intelligence':'Du'}</strong>
                       <p>{message.content}</p>
                       {typeof message.actionCount==='number' && message.actionCount>0 && (
                         <span className="copilotActionBadge">{message.actionCount} ausgeführte Änderung{message.actionCount===1?'':'en'}</span>
@@ -5652,7 +5731,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
                 {copilotBusy && (
                   <article className="copilotMessage assistant">
                     <div className="copilotAvatar">LG</div>
-                    <div className="copilotBubble copilotThinking"><strong>Local Garden Intelligence</strong><p>Ich zerlege die Anweisung lokal in ausführbare Zeichenbefehle …</p></div>
+                    <div className="copilotBubble copilotThinking"><strong>Adaptive Garden Intelligence</strong><p>Ich zerlege die Anweisung lokal in ausführbare Zeichenbefehle …</p></div>
                   </article>
                 )}
                 <div ref={copilotEndRef}/>
@@ -5682,10 +5761,10 @@ Annahmen: ${result.assumptions.join(' · ')}`
                   disabled={copilotBusy}
                 />
                 <button className="btn primary copilotSend" type="submit" disabled={copilotBusy || !copilotInput.trim()}>
-                  {copilotBusy?'Zeichne …':'Bestätigen & direkt zeichnen'}
+                  {copilotBusy?'Zeichne …':'Bestätigen, lernen & direkt zeichnen'}
                 </button>
               </form>
-              <div className="hint">Der Klick führt erkannte Änderungen sofort lokal aus. Lerneinstellungen bleiben in diesem Browser gespeichert. Beispiel: „Merke dir: Sichtschutz bedeutet Hecke“ oder „Standardweg 1,4 m breit“.</div>
+              <div className="hint">Der Klick führt Änderungen sofort lokal aus. Du kannst Begriffe, ganze Arbeitsabläufe, Objektstandards und Korrekturen beibringen. Öffne „So bringst du mir etwas bei“ für konkrete Vorlagen.</div>
             </div>
 
             <h2 style={{marginTop:18}}>AI Planning Studio</h2>
@@ -6821,7 +6900,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.34 LOCAL GARDEN INTELLIGENCE</span>
+          <span className="pill brandPill">V0.35 ADAPTIVE GARDEN INTELLIGENCE</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>

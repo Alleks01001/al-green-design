@@ -49,9 +49,35 @@ export type LocalGardenProjectContext = {
   };
 };
 
+export type LocalGardenPreset = {
+  width?: number;
+  depth?: number;
+  height?: number;
+  spacing?: number;
+  count?: number;
+  material?: string;
+  arrangement?: 'row' | 'column' | 'grid' | 'circle' | 'cluster';
+};
+
 export type LocalGardenMemory = {
-  version: 1;
+  version: 2;
   aliases: Record<string, string>;
+  macros: Record<string, string>;
+  presets: Record<string, LocalGardenPreset>;
+  projectTerms: Record<string, string>;
+  preferences: Record<string, string | number | boolean>;
+  corrections: Array<{
+    id: string;
+    trigger: string;
+    replacement: string;
+    createdAt: string;
+  }>;
+  lastInteraction: {
+    input: string;
+    expandedInput: string;
+    actionSummary: string[];
+    createdAt: string;
+  } | null;
   defaults: {
     pathWidth: number;
     objectSpacing: number;
@@ -123,7 +149,7 @@ export type LocalGardenResult = {
 };
 
 export const DEFAULT_LOCAL_GARDEN_MEMORY: LocalGardenMemory = {
-  version: 1,
+  version: 2,
   aliases: {
     'sichtschutz': 'hecke',
     'sitzplatz': 'terrasse',
@@ -132,6 +158,12 @@ export const DEFAULT_LOCAL_GARDEN_MEMORY: LocalGardenMemory = {
     'naturweg': 'weg',
     'schwimmbecken': 'pool'
   },
+  macros: {},
+  presets: {},
+  projectTerms: {},
+  preferences: {},
+  corrections: [],
+  lastInteraction: null,
   defaults: {
     pathWidth: 1.2,
     objectSpacing: 2.5,
@@ -209,11 +241,18 @@ function normalize(value: unknown): string {
 }
 
 function cloneMemory(memory?: Partial<LocalGardenMemory> | null): LocalGardenMemory {
+  const source = memory as Partial<LocalGardenMemory> | null | undefined;
   return {
-    version: 1,
-    aliases: { ...DEFAULT_LOCAL_GARDEN_MEMORY.aliases, ...(memory?.aliases || {}) },
-    defaults: { ...DEFAULT_LOCAL_GARDEN_MEMORY.defaults, ...(memory?.defaults || {}) },
-    learnedStatements: Array.isArray(memory?.learnedStatements) ? memory!.learnedStatements!.slice(-100) : []
+    version: 2,
+    aliases: { ...DEFAULT_LOCAL_GARDEN_MEMORY.aliases, ...(source?.aliases || {}) },
+    macros: { ...(source?.macros || {}) },
+    presets: { ...(source?.presets || {}) },
+    projectTerms: { ...(source?.projectTerms || {}) },
+    preferences: { ...(source?.preferences || {}) },
+    corrections: Array.isArray(source?.corrections) ? source!.corrections!.slice(-100) : [],
+    lastInteraction: source?.lastInteraction || null,
+    defaults: { ...DEFAULT_LOCAL_GARDEN_MEMORY.defaults, ...(source?.defaults || {}) },
+    learnedStatements: Array.isArray(source?.learnedStatements) ? source!.learnedStatements!.slice(-200) : []
   };
 }
 
@@ -420,21 +459,77 @@ function learnFromCommand(original: string, normalized: string, memory: LocalGar
 
   const aliasPatterns = [
     /(?:merke dir|lerne|speichere)\s*:?\s*["']?(.+?)["']?\s*(?:=|bedeutet|heisst|steht fuer)\s*["']?(.+?)["']?\s*$/i,
-    /mit\s+["']?(.+?)["']?\s+meine ich\s+["']?(.+?)["']?\s*$/i
+    /mit\s+["']?(.+?)["']?\s+meine ich\s+["']?(.+?)["']?\s*$/i,
+    /in diesem projekt\s+(?:bedeutet|ist)\s+["']?(.+?)["']?\s+(?:das objekt|gleich|=)\s*["']?(.+?)["']?\s*$/i
   ];
   for (const pattern of aliasPatterns) {
     const match = original.match(pattern);
     if (match) {
-      const from = normalize(match[1]);
-      const to = normalize(match[2]);
+      const rawFrom = match[1].trim().replace(/[.?!,:;]+$/g,'');
+      const rawTo = match[2].trim().replace(/[.?!,:;]+$/g,'');
+      const from = normalize(rawFrom);
+      const to = normalize(rawTo);
       if (from && to && from !== to) {
         memory.aliases[from] = to;
-        const statement = `„${match[1].trim()}“ bedeutet künftig „${match[2].trim()}“.`;
+        if (/in diesem projekt/i.test(original)) memory.projectTerms[from] = match[2].trim();
+        const statement = `„${rawFrom}“ bedeutet künftig „${rawTo}“.`;
         addLearning(memory, original, statement);
         learned.push(statement);
       }
       break;
     }
+  }
+
+  const macroPatterns = [
+    /wenn ich\s+(?:sage|schreibe)\s+["']?(.+?)["']?\s*,?\s*(?:dann\s+)?(?:(?:sollst du|bedeutet das|mache|fuehre aus|führe aus)\s+)?((?:erstelle|erzeuge|setze|platziere|verschiebe|ändere|aendere|verbinde|zeichne|baue|lösche|loesche).+?)\s*$/i,
+    /(?:lerne befehl|lerne ablauf|speichere makro)\s*:?\s*["']?(.+?)["']?\s*(?:=>|=|bedeutet)\s*["']?(.+?)["']?\s*$/i
+  ];
+  for (const pattern of macroPatterns) {
+    const match = original.match(pattern);
+    if (match) {
+      const rawTrigger = match[1].trim().replace(/[.?!,:;]+$/g,'');
+      const trigger = normalize(rawTrigger);
+      const replacement = match[2].trim().replace(/^[,;:\s]+|[.?!]+$/g,'');
+      if (trigger && replacement) {
+        memory.macros[trigger] = replacement;
+        const statement = `Arbeitsbefehl „${rawTrigger}“ führt künftig „${replacement}“ aus.`;
+        addLearning(memory, original, statement);
+        learned.push(statement);
+      }
+      break;
+    }
+  }
+
+  const presetMatch = original.match(/standard\s+(?:fuer|für)\s+([\wäöüÄÖÜß -]+?)\s*:\s*(.+)$/i);
+  if (presetMatch) {
+    const rawKey = normalize(presetMatch[1]);
+    const key = resolveMemoryKey(rawKey);
+    const details = presetMatch[2];
+    const dims = extractDimensions(details);
+    const detailNorm = normalize(details);
+    const preset: LocalGardenPreset = { ...(memory.presets[key] || {}) };
+    if (dims.width != null) preset.width = dims.width;
+    if (dims.depth != null) preset.depth = dims.depth;
+    const labeledWidth = extractMetric(detailNorm, ['breit', 'breite']);
+    const labeledDepth = extractMetric(detailNorm, ['tief', 'tiefe', 'lang', 'laenge']);
+    if (labeledWidth != null) preset.width = labeledWidth;
+    if (labeledDepth != null) preset.depth = labeledDepth;
+    const height = extractMetric(detailNorm, ['hoch', 'hoehe']);
+    const spacing = extractMetric(detailNorm, ['abstand', 'auseinander']);
+    const material = extractMaterial(details);
+    const count = extractCount(detailNorm);
+    if (height != null) preset.height = height;
+    if (spacing != null) preset.spacing = spacing;
+    if (material) preset.material = material;
+    if (/reihe/.test(detailNorm)) preset.arrangement = 'row';
+    if (/gruppe|cluster/.test(detailNorm)) preset.arrangement = 'cluster';
+    if (/kreis/.test(detailNorm)) preset.arrangement = 'circle';
+    if (/raster/.test(detailNorm)) preset.arrangement = 'grid';
+    if (/\b(?:anzahl|immer)\s+\w+/.test(detailNorm) && count > 1) preset.count = count;
+    memory.presets[key] = preset;
+    const statement = `Standard für ${presetMatch[1].trim()} gespeichert.`;
+    addLearning(memory, original, statement);
+    learned.push(statement);
   }
 
   const pathWidth = normalized.match(/(?:standardweg|weg standard|wege standard).*?(\d+(?:[.,]\d+)?)\s*(?:m|meter)?\s*(?:breit)?/);
@@ -490,8 +585,96 @@ function learnFromCommand(original: string, normalized: string, memory: LocalGar
     learned.push(statement);
   }
 
-  return learned;
+  const preference = original.match(/ich bevorzuge\s+(.+?)\s+(?:fuer|für|bei)\s+(.+)$/i);
+  if (preference) {
+    const key = normalize(preference[2]);
+    memory.preferences[key] = preference[1].trim();
+    const statement = `Bevorzugung gespeichert: ${preference[1].trim()} für ${preference[2].trim()}.`;
+    addLearning(memory, original, statement);
+    learned.push(statement);
+  }
+
+  return Array.from(new Set(learned));
 }
+
+
+function resolveMemoryKey(value: string): string {
+  const normalized = normalize(value);
+  return objectAliases[normalized] || normalized;
+}
+
+function expandAdaptiveMemory(input: string, memory: LocalGardenMemory): string {
+  let expanded = String(input || '').trim();
+  const normalizedInput = normalize(expanded);
+
+  const exactCorrection = [...memory.corrections].reverse().find(item => item.trigger === normalizedInput);
+  if (exactCorrection) expanded = exactCorrection.replacement;
+
+  const macros = Object.entries(memory.macros)
+    .map(([trigger, replacement]) => [normalize(trigger), replacement] as const)
+    .filter(([trigger]) => Boolean(trigger))
+    .sort((a, b) => b[0].length - a[0].length);
+
+  for (const [trigger, replacement] of macros) {
+    const normalizedExpanded = normalize(expanded);
+    if (normalizedExpanded === trigger || normalizedExpanded.includes(trigger)) {
+      expanded = normalizedExpanded === trigger
+        ? replacement
+        : expanded.replace(new RegExp(escapeRegExp(trigger), 'i'), replacement);
+      break;
+    }
+  }
+
+  return replaceLearnedAliases(normalize(expanded), memory);
+}
+
+function memoryStatistics(memory: LocalGardenMemory): string {
+  return [
+    `${Object.keys(memory.aliases).length} Begriffe`,
+    `${Object.keys(memory.macros).length} Makros`,
+    `${Object.keys(memory.presets).length} Objektstandards`,
+    `${memory.corrections.length} Korrekturen`,
+    `${memory.learnedStatements.length} Lernnotizen`
+  ].join(' · ');
+}
+
+export function describeLocalGardenMemory(existingMemory?: Partial<LocalGardenMemory> | null): string {
+  const memory = cloneMemory(existingMemory);
+  const aliasPreview = Object.entries(memory.aliases).slice(-8).map(([a,b]) => `• ${a} → ${b}`);
+  const macroPreview = Object.entries(memory.macros).slice(-6).map(([a,b]) => `• „${a}“ → „${b}“`);
+  const presetPreview = Object.entries(memory.presets).slice(-6).map(([key,preset]) => {
+    const values = [preset.width && `${preset.width} m breit`, preset.depth && `${preset.depth} m tief`, preset.height && `${preset.height} m hoch`, preset.material].filter(Boolean).join(', ');
+    return `• ${key}: ${values || 'gespeicherter Standard'}`;
+  });
+  return [`Gespeichertes Wissen: ${memoryStatistics(memory)}`, ...aliasPreview, ...macroPreview, ...presetPreview].join('\n');
+}
+
+export const LOCAL_GARDEN_TEACHING_GUIDE = `SO BRINGST DU MIR ETWAS BEI
+
+1. Begriff lernen
+„Merke dir: Chillzone bedeutet Terrasse.“
+
+2. Ganzen Arbeitsbefehl lernen
+„Wenn ich sage Feierabendplatz, erstelle eine Terrasse 5 × 4 Meter aus Naturstein mit einer Pergola.“
+
+3. Objektstandard lernen
+„Standard für Baum: 3 Meter hoch, 2 Meter breit und 2,5 Meter Abstand.“
+„Standard für Terrasse: 6 × 4 Meter, Material Naturstein.“
+
+4. Projektbegriff lernen
+„In diesem Projekt bedeutet Haupthaus das Objekt Wohnhaus.“
+
+5. Fehler korrigieren
+„Das war falsch. Stattdessen verschiebe den Pool 2 Meter nach Osten.“
+Ich mache die letzte Änderung rückgängig und merke mir die Korrektur.
+
+6. Wissen prüfen
+„Was hast du gelernt?“
+
+7. Einzelnes Wissen vergessen
+„Vergiss den Begriff Chillzone.“
+
+Die lokale Intelligenz lernt Gartenbefehle, Maße, Materialien, Synonyme, Abläufe und Korrekturen. Sie trainiert kein allgemeines Sprachmodell und verändert ihren Programmcode nicht selbst.`;
 
 function splitCommands(original: string): string[] {
   return original
@@ -516,7 +699,7 @@ function createActionsForCommand(commandOriginal: string, context: LocalGardenPr
   question?: string;
 } {
   const rawNormalized = normalize(commandOriginal);
-  const text = replaceLearnedAliases(rawNormalized, memory);
+  const text = expandAdaptiveMemory(commandOriginal, memory);
   const objects = context.objects || [];
   const zones = context.zones || [];
   const actions: LocalGardenAction[] = [];
@@ -535,6 +718,9 @@ function createActionsForCommand(commandOriginal: string, context: LocalGardenPr
   const rotation = extractMetric(text, ['grad', 'drehung']);
   const objectType = extractObjectType(text);
   const surface = extractSurface(text);
+  const objectPreset = objectType ? (memory.presets[objectType] || {}) : {};
+  const surfacePresetKey = surface ? normalize(surface.name) : '';
+  const surfacePreset = surfacePresetKey ? (memory.presets[surfacePresetKey] || memory.presets[surfacePresetKey.replace(/flaeche|flache/g,'')] || {}) : {};
 
   if (/\b(ruckgangig|rueckgaengig|undo|zuruck|zurueck)\b/.test(text)) return { actions, assumptions, question: '__UNDO__' };
   if (/\b(wiederholen|redo|vorwaerts)\b/.test(text)) return { actions, assumptions, question: '__REDO__' };
@@ -586,9 +772,9 @@ function createActionsForCommand(commandOriginal: string, context: LocalGardenPr
     if (surface || /\bflaeche\b/.test(text)) {
       const chosen = surface || surfaceAliases[memory.defaults.defaultSurface === 'terrace' ? 'terrasse' : memory.defaults.defaultSurface === 'bed' ? 'beet' : 'rasenflache'];
       const reference = extractReference(text, context);
-      const zoneWidth = width ?? dimensions.width ?? 4;
-      const zoneDepth = depth ?? dimensions.depth ?? 3;
-      const resolvedMaterial = material || chosen.material || (chosen.name === 'Terrasse' ? memory.defaults.terraceMaterial : null);
+      const zoneWidth = width ?? dimensions.width ?? surfacePreset.width ?? 4;
+      const zoneDepth = depth ?? dimensions.depth ?? surfacePreset.depth ?? 3;
+      const resolvedMaterial = material || surfacePreset.material || chosen.material || (chosen.name === 'Terrasse' ? memory.defaults.terraceMaterial : null);
       actions.push(baseAction('add_zone', 'Fläche direkt im Plan anlegen.', {
         zoneKind: chosen.kind,
         name: chosen.name,
@@ -604,8 +790,13 @@ function createActionsForCommand(commandOriginal: string, context: LocalGardenPr
       if (!width && !depth && dimensions.width == null) assumptions.push(`Mangels Maßangabe verwende ich ${zoneWidth} × ${zoneDepth} m.`);
     } else if (objectType) {
       const reference = extractReference(text, context);
-      const effectiveHeight = height ?? (objectType === 'gardenWall' ? memory.defaults.wallHeight : objectType === 'fence' ? memory.defaults.fenceHeight : null);
-      const effectiveWidth = objectType === 'path' ? (width ?? memory.defaults.pathWidth) : width;
+      const effectiveHeight = height ?? objectPreset.height ?? (objectType === 'gardenWall' ? memory.defaults.wallHeight : objectType === 'fence' ? memory.defaults.fenceHeight : null);
+      const effectiveWidth = objectType === 'path' ? (width ?? objectPreset.width ?? memory.defaults.pathWidth) : (width ?? objectPreset.width ?? null);
+      const effectiveDepth = depth ?? objectPreset.depth ?? null;
+      const effectiveCount = count > 1 ? count : (objectPreset.count ?? count);
+      const effectiveSpacing = explicitSpacing ?? objectPreset.spacing ?? memory.defaults.objectSpacing;
+      const effectiveArrangement = arrangement ?? objectPreset.arrangement ?? null;
+      const effectiveMaterial = material ?? objectPreset.material ?? null;
       const boundaryPlacement = !reference && !selected && /grenze|rand/.test(text)
         ? relation === 'north' ? {x:0,y:-11.5}
           : relation === 'south' ? {x:0,y:11.5}
@@ -616,14 +807,14 @@ function createActionsForCommand(commandOriginal: string, context: LocalGardenPr
       const boundaryArrangement = /grenze|rand/.test(text) && (relation === 'east' || relation === 'west') ? 'column' : arrangement;
       actions.push(baseAction('add_object', 'Objekt unmittelbar im Plan erzeugen.', {
         objectType,
-        count,
-        arrangement: boundaryArrangement,
-        spacing: count > 1 ? spacing : (explicitSpacing ?? 0.6),
+        count: effectiveCount,
+        arrangement: boundaryArrangement || effectiveArrangement,
+        spacing: effectiveCount > 1 ? effectiveSpacing : (explicitSpacing ?? 0.6),
         width: effectiveWidth,
-        depth,
+        depth: effectiveDepth,
         height: effectiveHeight,
         rotation,
-        material,
+        material: effectiveMaterial,
         relation,
         x: boundaryPlacement.x,
         y: boundaryPlacement.y,
@@ -719,31 +910,65 @@ export function interpretLocalGardenCommand(
   const original = String(input || '').trim();
   const memory = cloneMemory(existingMemory);
   const normalized = normalize(original);
-  const learned = learnFromCommand(original, normalized, memory);
 
   if (!original) {
-    return {
-      reply: 'Bitte gib eine Anweisung ein.', actions: [], suggestions: [], assumptions: [], memory, learned,
-      confidence: 0, editorCommand: null
-    };
+    return { reply: 'Bitte gib eine Anweisung ein.', actions: [], suggestions: [], assumptions: [], memory, learned: [], confidence: 0, editorCommand: null };
   }
 
-  const onlyLearning = learned.length > 0 && /(?:merke dir|lerne|speichere|mit .+ meine ich|standard)/i.test(original) && !/(?:erstelle|setze|platziere|verschiebe|aendere|loesche|dupliziere|verbinde|baue|zeichne)/i.test(normalized);
-  if (onlyLearning) {
-    return {
-      reply: `Gelernt: ${learned.join(' ')}`,
-      actions: [],
-      suggestions: ['Erstelle eine 6 × 4 m Terrasse.', 'Setze drei Bäume an die Nordgrenze.'],
-      assumptions: [], memory, learned, confidence: 1, editorCommand: null
-    };
+  if (/(wie bringe ich dir|wie kann ich dir|lernhilfe|training|was kannst du lernen)/i.test(original)) {
+    return { reply: LOCAL_GARDEN_TEACHING_GUIDE, actions: [], suggestions: ['Was hast du gelernt?', 'Merke dir: Chillzone bedeutet Terrasse.'], assumptions: [], memory, learned: [], confidence: 1, editorCommand: null };
   }
 
+  if (/(was hast du gelernt|zeige.*(?:wissen|lernspeicher)|was weisst du|was weißt du)/i.test(original)) {
+    return { reply: describeLocalGardenMemory(memory), actions: [], suggestions: ['Wie bringe ich dir etwas bei?', 'Vergiss den Begriff Chillzone.'], assumptions: [], memory, learned: [], confidence: 1, editorCommand: null };
+  }
+
+  const forgetMatch = original.match(/vergiss\s+(?:den begriff|das makro|den standard)?\s*["']?(.+?)["']?\s*$/i);
+  if (forgetMatch) {
+    const rawForgotten = forgetMatch[1].trim().replace(/[.?!,:;]+$/g,'');
+    const key = normalize(rawForgotten);
+    delete memory.aliases[key];
+    delete memory.macros[key];
+    delete memory.presets[resolveMemoryKey(key)];
+    delete memory.projectTerms[key];
+    addLearning(memory, original, `Wissen zu „${rawForgotten}“ wurde entfernt.`);
+    return { reply: `Erledigt. Ich habe das gespeicherte Wissen zu „${rawForgotten}“ entfernt.`, actions: [], suggestions: [], assumptions: [], memory, learned: [`„${rawForgotten}“ vergessen.`], confidence: 1, editorCommand: null };
+  }
+
+  const correctionMatch = original.match(/(?:das war falsch|korrigiere(?: den letzten befehl)?|nicht so)\s*[,:.-]*\s*(?:stattdessen|ich meinte)?\s*(.+)$/i);
+  if (correctionMatch && memory.lastInteraction) {
+    const replacement = correctionMatch[1].trim();
+    const trigger = normalize(memory.lastInteraction.input);
+    memory.corrections.push({ id: `correction-${Date.now()}`, trigger, replacement, createdAt: new Date().toISOString() });
+    memory.corrections = memory.corrections.slice(-100);
+    const statement = `Korrektur gelernt: „${memory.lastInteraction.input}“ soll künftig „${replacement}“ bedeuten.`;
+    addLearning(memory, original, statement);
+    const actions: LocalGardenAction[] = [];
+    const assumptions: string[] = [];
+    let question = '';
+    for (const command of splitCommands(replacement)) {
+      const result = createActionsForCommand(command, context, memory);
+      if (result.question && !question) question = result.question;
+      actions.push(...result.actions);
+      assumptions.push(...result.assumptions);
+    }
+    memory.lastInteraction = { input: replacement, expandedInput: replacement, actionSummary: actions.map(action => action.action), createdAt: new Date().toISOString() };
+    return { reply: question || `Korrektur verstanden. Ich mache die letzte Änderung rückgängig und führe stattdessen aus: ${replacement}`, actions, suggestions: ['Was hast du gelernt?'], assumptions, memory, learned: [statement], confidence: actions.length ? 0.95 : 0.65, editorCommand: 'undo' };
+  }
+
+  const learned = learnFromCommand(original, normalized, memory);
+  const explicitTeaching = /^(?:merke dir|lerne|speichere|mit .+ meine ich|standard|wenn ich|ich bevorzuge|in diesem projekt)/i.test(original.trim());
+  if (learned.length > 0 && explicitTeaching) {
+    return { reply: `Gelernt: ${learned.join(' ')}`, actions: [], suggestions: ['Was hast du gelernt?', 'Wie bringe ich dir etwas bei?'], assumptions: [], memory, learned, confidence: 1, editorCommand: null };
+  }
+
+  const expandedInput = expandAdaptiveMemory(original, memory);
   const actions: LocalGardenAction[] = [];
   const assumptions: string[] = [];
   let question = '';
   let editorCommand: 'undo' | 'redo' | null = null;
 
-  for (const command of splitCommands(original)) {
+  for (const command of splitCommands(expandedInput)) {
     const result = createActionsForCommand(command, context, memory);
     if (result.question === '__UNDO__') editorCommand = 'undo';
     else if (result.question === '__REDO__') editorCommand = 'redo';
@@ -754,41 +979,21 @@ export function interpretLocalGardenCommand(
 
   if (!actions.length && !editorCommand) {
     return {
-      reply: question || 'Ich habe noch keine ausführbare Gartenaktion erkannt. Formuliere den Befehl etwa als „Erstelle …“, „Verschiebe …“, „Ändere …“ oder „Verbinde …“.',
+      reply: question || 'Ich habe noch keine ausführbare Gartenaktion erkannt. Du kannst mir den gewünschten Ablauf auch beibringen: „Wenn ich sage …, dann sollst du …“.',
       actions: [],
-      suggestions: [
-        'Erstelle eine Rasenfläche 8 × 5 Meter.',
-        'Setze fünf Bäume als Reihe an die Nordgrenze.',
-        'Verbinde Haus und Pool mit einem 1,2 Meter breiten Weg.'
-      ],
+      suggestions: ['Wie bringe ich dir etwas bei?', 'Erstelle eine Rasenfläche 8 × 5 Meter.', 'Wenn ich sage Feierabendplatz, erstelle eine Terrasse 5 × 4 Meter.'],
       assumptions, memory, learned, confidence: question ? 0.55 : 0.25, editorCommand: null
     };
   }
 
-  const actionLabels = actions.map(action => {
-    if (action.action === 'add_zone') return action.name || 'Fläche';
-    if (action.action === 'add_object') return `${action.count || 1} ${action.objectType || 'Objekt'}`;
-    if (action.action === 'connect_objects') return 'Verbindung';
-    if (action.action === 'run_audit') return 'Projektprüfung';
-    if (action.action === 'set_view') return 'Ansicht';
-    return action.targetName || 'Elementänderung';
-  });
+  const actionLabels = actions.map(action => action.action === 'add_zone' ? (action.name || 'Fläche') : action.action === 'add_object' ? `${action.count || 1} ${action.objectType || 'Objekt'}` : action.action === 'connect_objects' ? 'Verbindung' : action.action === 'run_audit' ? 'Projektprüfung' : action.action === 'set_view' ? 'Ansicht' : (action.targetName || 'Elementänderung'));
+  memory.lastInteraction = { input: original, expandedInput, actionSummary: actionLabels, createdAt: new Date().toISOString() };
 
   return {
-    reply: editorCommand
-      ? editorCommand === 'undo' ? 'Die letzte Änderung wird rückgängig gemacht.' : 'Die zuletzt rückgängig gemachte Änderung wird wiederholt.'
-      : `Verstanden. Ich führe ${actions.length} Aktion${actions.length === 1 ? '' : 'en'} direkt aus: ${actionLabels.join(', ')}.`,
+    reply: editorCommand ? (editorCommand === 'undo' ? 'Die letzte Änderung wird rückgängig gemacht.' : 'Die zuletzt rückgängig gemachte Änderung wird wiederholt.') : `Verstanden. Ich führe ${actions.length} Aktion${actions.length === 1 ? '' : 'en'} direkt aus: ${actionLabels.join(', ')}.`,
     actions,
-    suggestions: [
-      'Mache das ausgewählte Objekt 4 × 3 Meter groß.',
-      'Setze drei Sträucher als Gruppe daneben.',
-      'Prüfe das Projekt auf Planungsfehler.'
-    ],
-    assumptions,
-    memory,
-    learned,
-    confidence: question ? 0.72 : 0.9,
-    editorCommand
+    suggestions: ['Korrigiere den letzten Befehl: Stattdessen …', 'Was hast du gelernt?', 'Wie bringe ich dir etwas bei?'],
+    assumptions, memory, learned, confidence: question ? 0.72 : 0.92, editorCommand
   };
 }
 

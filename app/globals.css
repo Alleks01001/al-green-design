@@ -291,3 +291,12 @@ input[type=range]{padding:0;height:28px}
   color: #8b4b5b;
   font-size: 10px;
 }
+
+
+/* V0.35 Adaptive Garden Intelligence */
+.adaptiveLearningGuide{display:grid;gap:10px;padding:13px;border:1px solid #be123c;border-radius:14px;background:linear-gradient(135deg,#fff1f2,#fff)}
+.adaptiveLearningGuide>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.adaptiveLearningGuide pre{margin:0;max-height:330px;overflow:auto;padding:12px;border:1px solid #fecdd3;border-radius:11px;background:#fff;color:#5f0f22;white-space:pre-wrap;font:11px/1.55 Arial,Helvetica,sans-serif}
+.learningExamples{display:flex;flex-wrap:wrap;gap:6px}
+.learningExamples button{padding:7px 9px;border:1px solid #fda4af;border-radius:999px;background:#fff;color:#881337;font-size:10px;font-weight:700;cursor:pointer}
+.learningExamples button:hover{background:#ffe4e6;border-color:#be123c}
