@@ -1,28 +1,32 @@
 {
-  "name": "al-green-design-v1-foundation",
-  "version": "1.0.4",
+  "name": "al-green-design-landscape-architecture-v031-complete-studio",
+  "version": "0.31.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.35",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "three": "0.164.1"
+    "@react-three/drei": "^9.105.0",
+    "@react-three/fiber": "^8.16.0",
+    "next": "^14.2.3",
+    "openai": "^4.47.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.164.1"
   },
   "devDependencies": {
-    "@types/node": "20.12.12",
-    "@types/react": "18.3.3",
-    "@types/react-dom": "18.3.0",
-    "@types/three": "0.164.0",
-    "typescript": "5.4.5"
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.164.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.3",
+    "typescript": "^5.4.5"
   },
   "engines": {
     "node": "20.x"
-  },
-  "packageManager": "npm@10.9.2"
+  }
 }
