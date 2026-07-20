@@ -5,6 +5,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importedModel';
+import {
+  DEFAULT_LOCAL_GARDEN_MEMORY,
+  interpretLocalGardenCommand,
+  type LocalGardenMemory
+} from '@/lib/ai/localGardenIntelligence';
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
 type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'hardscape' | 'architecture' | 'building' | 'scan' | 'library' | 'materials' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
@@ -1861,7 +1866,7 @@ export default function LandscapePlatform() {
   const [tab, setTab] = useState<Tab>('architecture');
   const [view, setView] = useState<ViewMode>('2d');
   const [tool, setTool] = useState<Tool>('select');
-  const [status, setStatus] = useState('Bereit: V0.33 AI INSTANT COPILOT – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.34 LOCAL GARDEN INTELLIGENCE – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -1871,14 +1876,15 @@ export default function LandscapePlatform() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Hallo! Ich bin dein AL Green Design Instant Copilot. Du kannst mich beraten lassen oder den aktuellen Plan direkt ändern, zum Beispiel: „Verschiebe den Pool zwei Meter nach Osten“, „Setze drei Bäume als Sichtschutz im Norden“ oder „Prüfe das Projekt auf Planungsfehler“.',
+      content: 'Hallo! Ich bin deine lokale Garden Intelligence. Ich arbeite ohne externe KI direkt im Browser: „Erstelle eine Rasenfläche 8 × 5 Meter“, „Setze fünf Bäume an die Nordgrenze“ oder „Verbinde Haus und Pool mit einem Weg“. Korrekturen kann ich lokal lernen.',
       createdAt: new Date().toISOString()
     }
   ]);
   const [copilotInput, setCopilotInput] = useState('');
   const [copilotBusy, setCopilotBusy] = useState(false);
   const [copilotError, setCopilotError] = useState('');
-  const [copilotModel, setCopilotModel] = useState('gpt-5.2');
+  const [localGardenMemory, setLocalGardenMemory] = useState<LocalGardenMemory>(DEFAULT_LOCAL_GARDEN_MEMORY);
+  const [localMemoryReady, setLocalMemoryReady] = useState(false);
   const [copilotSuggestions, setCopilotSuggestions] = useState<string[]>([]);
   const [copilotReady, setCopilotReady] = useState(false);
   const copilotEndRef = useRef<HTMLDivElement | null>(null);
@@ -1891,23 +1897,34 @@ export default function LandscapePlatform() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('al-green-v033-copilot-history');
+      const saved = localStorage.getItem('al-green-v034-local-history');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length) setCopilotMessages(parsed.slice(-40));
       }
+      const savedMemory = localStorage.getItem('al-green-v034-local-memory');
+      if (savedMemory) {
+        const parsedMemory = JSON.parse(savedMemory);
+        if (parsedMemory && typeof parsedMemory === 'object') setLocalGardenMemory(parsedMemory);
+      }
     } catch {
-      // Ein beschädigter lokaler Verlauf darf den Editor nicht blockieren.
+      // Beschädigte lokale Daten dürfen den Editor nicht blockieren.
     } finally {
       setCopilotReady(true);
+      setLocalMemoryReady(true);
     }
   }, []);
 
   useEffect(() => {
     if (!copilotReady) return;
-    localStorage.setItem('al-green-v033-copilot-history', JSON.stringify(copilotMessages.slice(-40)));
+    localStorage.setItem('al-green-v034-local-history', JSON.stringify(copilotMessages.slice(-40)));
     copilotEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [copilotMessages, copilotReady]);
+
+  useEffect(() => {
+    if (!localMemoryReady) return;
+    localStorage.setItem('al-green-v034-local-memory', JSON.stringify(localGardenMemory));
+  }, [localGardenMemory, localMemoryReady]);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo>({ name: 'Gartenprojekt', location: 'Wien', budget: 25000, area: 400 });
   const [levels, setLevels] = useState<BuildingLevel[]>([
     { id: 0, name: 'EG', elevation: 0, height: 2.8, visible: true },
@@ -5094,14 +5111,20 @@ export default function LandscapePlatform() {
       }
 
       if (action.action === 'add_zone' && action.zoneKind) {
+        const zoneWidth = Math.max(0.1, action.width ?? 3);
+        const zoneDepth = Math.max(0.1, action.depth ?? 2);
+        const zoneReference = action.referenceId != null ? nextObjects.find(item=>item.id===action.referenceId) : undefined;
+        const zoneOrigin = zoneReference
+          ? copilotRelativePosition(action,zoneReference,zoneWidth,zoneDepth)
+          : {x:action.x ?? 0,y:action.y ?? 0};
         const zone = {
           id: base + 2000 + index,
           kind: action.zoneKind,
-          name: action.name || (action.zoneKind === 'plantZone' ? 'KI Pflanzzone' : 'KI Belagszone'),
-          x: action.x ?? 0,
-          y: action.y ?? 0,
-          width: Math.max(0.1, action.width ?? 3),
-          depth: Math.max(0.1, action.depth ?? 2),
+          name: action.name || (action.zoneKind === 'plantZone' ? 'Lokale Pflanzzone' : 'Lokale Belagszone'),
+          x: zoneOrigin.x,
+          y: zoneOrigin.y,
+          width: zoneWidth,
+          depth: zoneDepth,
           color: action.color || (action.zoneKind === 'plantZone' ? '#a7f3d0' : '#b8b0a2')
         };
         nextZones.push(zone);
@@ -5161,7 +5184,7 @@ export default function LandscapePlatform() {
     }
 
     if (shouldAudit) setTimeout(() => runProjectAudit(), 0);
-    setStatus(`AI Instant Copilot: ${executed} Änderung${executed === 1 ? '' : 'en'} sofort ausgeführt.`);
+    setStatus(`Local Garden Intelligence: ${executed} Änderung${executed === 1 ? '' : 'en'} sofort ausgeführt.`);
     return {executed,labels};
   }
 
@@ -5175,56 +5198,60 @@ export default function LandscapePlatform() {
       content: text,
       createdAt: new Date().toISOString()
     };
-    const nextMessages = [...copilotMessages, userMessage].slice(-40);
-    setCopilotMessages(nextMessages);
+    setCopilotMessages(current => [...current,userMessage].slice(-40));
     setCopilotInput('');
     setCopilotError('');
     setCopilotBusy(true);
-    setStatus('AI Instant Copilot analysiert und generiert …');
+    setStatus('Local Garden Intelligence analysiert und zeichnet …');
 
     try {
-      const response = await fetch('/api/assistant', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          model: copilotModel,
-          messages: nextMessages.map(message => ({role:message.role,content:message.content})),
-          project: copilotProjectContext(),
-          executeImmediately: true
-        })
-      });
-      const data = await response.json();
-      if (!data?.ok) throw new Error(String(data?.message || 'Die KI konnte nicht antworten.'));
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const result = interpretLocalGardenCommand(text, copilotProjectContext(), localGardenMemory);
+      setLocalGardenMemory(result.memory);
 
-      const result = data.result || {};
-      const actions = (Array.isArray(result.actions) ? result.actions : []) as AiProjectAction[];
-      const assumptions = Array.isArray(result.assumptions)
-        ? result.assumptions.map((item:unknown)=>String(item)).filter(Boolean).slice(0,6)
-        : [];
-      const execution = actions.length
-        ? applyCopilotActions(actions,true)
-        : {executed:0,labels:[] as string[]};
+      let execution = {executed:0,labels:[] as string[]};
+      if (result.editorCommand === 'undo') {
+        undo();
+        execution = {executed:1,labels:['Rückgängig']};
+      } else if (result.editorCommand === 'redo') {
+        redo();
+        execution = {executed:1,labels:['Wiederholen']};
+      } else if (result.actions.length) {
+        execution = applyCopilotActions(result.actions as AiProjectAction[],true);
+      }
+
       const executionText = execution.executed > 0
-        ? `\n\nSofort ausgeführt: ${execution.executed} Änderung${execution.executed===1?'':'en'}${execution.labels.length ? ` (${execution.labels.slice(0,6).join(', ')}${execution.labels.length>6?' …':''})` : ''}.`
-        : actions.length
-          ? '\n\nDie KI hat Aktionen geliefert, aber kein passendes Projektelement konnte ausgeführt werden.'
-          : '';
-      const assumptionText = assumptions.length
-        ? `\n\nAnnahmen: ${assumptions.join(' · ')}`
+        ? `
+
+Sofort ausgeführt: ${execution.executed} Änderung${execution.executed===1?'':'en'}${execution.labels.length ? ` (${execution.labels.slice(0,8).join(', ')}${execution.labels.length>8?' …':''})` : ''}.`
         : '';
+      const learningText = result.learned.length
+        ? `
+
+Lokal gelernt: ${result.learned.join(' ')}`
+        : '';
+      const assumptionText = result.assumptions.length
+        ? `
+
+Annahmen: ${result.assumptions.join(' · ')}`
+        : '';
+
       const assistantMessage: AiChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: `${String(result.reply || 'Ich habe die Anfrage ausgewertet.')}${executionText}${assumptionText}`,
+        content: `${result.reply}${executionText}${learningText}${assumptionText}`,
         createdAt: new Date().toISOString(),
         actionCount: execution.executed
       };
       setCopilotMessages(current => [...current,assistantMessage].slice(-40));
-      setCopilotSuggestions(Array.isArray(result.suggestions) ? result.suggestions.slice(0,4) : []);
+      setCopilotSuggestions(result.suggestions.slice(0,4));
 
-      if (!actions.length) setStatus('AI Instant Copilot hat geantwortet – keine Planänderung angefordert oder erkannt.');
-      if (actions.length && execution.executed === 0) {
-        setCopilotError('Die Anweisung wurde verstanden, konnte aber keinem vorhandenen Objekt zugeordnet werden. Markiere das gewünschte Objekt oder nenne seinen exakten Namen.');
+      if (result.actions.length && execution.executed === 0) {
+        setCopilotError('Der lokale Parser hat eine Aktion erkannt, aber das Zielelement konnte nicht ausgeführt werden. Markiere das Element oder verwende seinen exakten Namen.');
+      } else if (!result.actions.length && !result.editorCommand && result.confidence < 0.6) {
+        setCopilotError(result.reply);
+      } else {
+        setStatus(`Local Garden Intelligence: ${execution.executed} Änderung${execution.executed===1?'':'en'} ausgeführt.`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -5232,7 +5259,7 @@ export default function LandscapePlatform() {
       setCopilotMessages(current => [...current,{
         id:`assistant-error-${Date.now()}`,
         role:'assistant',
-        content:`Ich konnte die Anfrage nicht ausführen: ${message}`,
+        content:`Die lokale Anweisung konnte nicht verarbeitet werden: ${message}`,
         createdAt:new Date().toISOString()
       }].slice(-40));
     } finally {
@@ -5244,11 +5271,24 @@ export default function LandscapePlatform() {
     setCopilotMessages([{
       id:`welcome-${Date.now()}`,
       role:'assistant',
-      content:'Der Chat wurde geleert. Ich kenne weiterhin den aktuellen Projektzustand und kann direkt damit weiterarbeiten.',
+      content:'Der Verlauf wurde geleert. Der lokale Lernspeicher bleibt erhalten und ich kenne weiterhin den aktuellen Projektzustand.',
       createdAt:new Date().toISOString()
     }]);
     setCopilotSuggestions([]);
     setCopilotError('');
+  }
+
+  function resetLocalGardenMemory() {
+    const fresh: LocalGardenMemory = JSON.parse(JSON.stringify(DEFAULT_LOCAL_GARDEN_MEMORY));
+    setLocalGardenMemory(fresh);
+    localStorage.removeItem('al-green-v034-local-memory');
+    setCopilotMessages(current => [...current,{
+      id:`memory-reset-${Date.now()}`,
+      role:'assistant',
+      content:'Der lokale Lernspeicher wurde auf die Grundeinstellungen zurückgesetzt.',
+      createdAt:new Date().toISOString()
+    }].slice(-40));
+    setStatus('Lokaler Lernspeicher zurückgesetzt.');
   }
 
   async function generateFromChat() {
@@ -5580,26 +5620,28 @@ export default function LandscapePlatform() {
 
         {tab === 'chat' && (
           <>
-            <h2>AI Instant Copilot</h2>
+            <h2>Local Garden Intelligence</h2>
             <div className="copilotShell">
               <div className="copilotToolbar">
                 <div>
-                  <strong>Sofort-Generator mit Projektverständnis</strong>
-                  <span>Dein Klick auf Bestätigen führt die Anweisung unmittelbar im Plan aus</span>
+                  <strong>Lokaler Garten-Zeichenassistent</strong>
+                  <span>Ohne API, ohne Wartezeit: Text verstehen, zeichnen und aus Korrekturen lernen</span>
                 </div>
-                <label>Modell
-                  <input value={copilotModel} onChange={e=>setCopilotModel(e.target.value)} placeholder="gpt-5.2" />
-                </label>
-                <span className="copilotInstantBadge">Sofortmodus aktiv</span>
-                <button className="btn" onClick={clearCopilotHistory}>Chat leeren</button>
+                <div className="localIntelligenceStatus">
+                  <strong>Lokal / Offline</strong>
+                  <span>{Object.keys(localGardenMemory.aliases).length} Begriffe · {localGardenMemory.learnedStatements.length} Lernnotizen</span>
+                </div>
+                <span className="copilotInstantBadge">Direktmodus aktiv</span>
+                <button className="btn" onClick={clearCopilotHistory}>Verlauf leeren</button>
+                <button className="btn" onClick={resetLocalGardenMemory}>Lernspeicher löschen</button>
               </div>
 
               <div className="copilotMessages" aria-live="polite">
                 {copilotMessages.map(message=>(
                   <article key={message.id} className={`copilotMessage ${message.role}`}>
-                    <div className="copilotAvatar">{message.role==='assistant'?'AI':'Du'}</div>
+                    <div className="copilotAvatar">{message.role==='assistant'?'LG':'Du'}</div>
                     <div className="copilotBubble">
-                      <strong>{message.role==='assistant'?'AL Green Copilot':'Du'}</strong>
+                      <strong>{message.role==='assistant'?'Local Garden Intelligence':'Du'}</strong>
                       <p>{message.content}</p>
                       {typeof message.actionCount==='number' && message.actionCount>0 && (
                         <span className="copilotActionBadge">{message.actionCount} ausgeführte Änderung{message.actionCount===1?'':'en'}</span>
@@ -5609,8 +5651,8 @@ export default function LandscapePlatform() {
                 ))}
                 {copilotBusy && (
                   <article className="copilotMessage assistant">
-                    <div className="copilotAvatar">AI</div>
-                    <div className="copilotBubble copilotThinking"><strong>AL Green Copilot</strong><p>Ich verstehe die Anweisung, prüfe den aktuellen Plan und generiere direkt …</p></div>
+                    <div className="copilotAvatar">LG</div>
+                    <div className="copilotBubble copilotThinking"><strong>Local Garden Intelligence</strong><p>Ich zerlege die Anweisung lokal in ausführbare Zeichenbefehle …</p></div>
                   </article>
                 )}
                 <div ref={copilotEndRef}/>
@@ -5636,14 +5678,14 @@ export default function LandscapePlatform() {
                       void sendCopilotMessage();
                     }
                   }}
-                  placeholder="Schreibe wie in ChatGPT, z. B.: Verschiebe die Pergola nach Süden, mache sie 4 × 3 Meter groß und verwende dunkles Thermoholz."
+                  placeholder="Beispiel: Erstelle eine 8 × 5 m Rasenfläche und setze fünf Bäume als Reihe an die Nordgrenze."
                   disabled={copilotBusy}
                 />
                 <button className="btn primary copilotSend" type="submit" disabled={copilotBusy || !copilotInput.trim()}>
-                  {copilotBusy?'Generiere …':'Bestätigen & sofort generieren'}
+                  {copilotBusy?'Zeichne …':'Bestätigen & direkt zeichnen'}
                 </button>
               </form>
-              <div className="hint">Der Klick auf „Bestätigen & sofort generieren“ führt alle erkannten Änderungen unmittelbar aus. Vor jeder Planänderung wird automatisch ein Rückgängig-Stand erstellt.</div>
+              <div className="hint">Der Klick führt erkannte Änderungen sofort lokal aus. Lerneinstellungen bleiben in diesem Browser gespeichert. Beispiel: „Merke dir: Sichtschutz bedeutet Hecke“ oder „Standardweg 1,4 m breit“.</div>
             </div>
 
             <h2 style={{marginTop:18}}>AI Planning Studio</h2>
@@ -6779,7 +6821,7 @@ export default function LandscapePlatform() {
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.33 AI INSTANT COPILOT</span>
+          <span className="pill brandPill">V0.34 LOCAL GARDEN INTELLIGENCE</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
