@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
 const message =
-  "Die alte V0.3-OpenAI-Gartenroute wurde in AL Green Design V1.0.3 deaktiviert.";
+  "Die alte V0.3-OpenAI-Gartenroute wurde in AL Green Design V1.0.4 deaktiviert.";
 
 export async function GET() {
   return NextResponse.json(
     {
       ok: false,
-      version: "1.0.3",
+      version: "1.0.4",
       legacyRouteDisabled: true,
       message
     },
@@ -19,7 +19,7 @@ export async function POST() {
   return NextResponse.json(
     {
       ok: false,
-      version: "1.0.3",
+      version: "1.0.4",
       legacyRouteDisabled: true,
       message
     },
