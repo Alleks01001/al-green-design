@@ -1,4 +1,4 @@
-# AL Green Design V1.0 – Foundation
+# AL Green Design V1.0.1 – geprüfte Foundation
 
 Modularer Web-Neuaufbau ohne Apple-/iOS-, Xcode-, ARKit- oder native LiDAR-Komponenten.
 
@@ -30,3 +30,8 @@ npm run dev
 npm run typecheck
 npm run build
 ```
+
+
+## Geprüfter Stand
+
+Dieses Paket wurde mit `npm install`, `npm run typecheck`, `npm run build` und `npm start` erfolgreich geprüft.
