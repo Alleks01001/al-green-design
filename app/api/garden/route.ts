@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 
 const GardenSchema = {
   type: 'object',
@@ -19,29 +18,7 @@ const GardenSchema = {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          type: {
-            type: 'string',
-            enum: [
-              'modern_house',
-              'glass_house',
-              'floor',
-              'wall',
-              'interior_wall',
-              'roof',
-              'window',
-              'door',
-              'sliding_door',
-              'balcony',
-              'railing',
-              'column',
-              'carport',
-              'winter_garden',
-              'pool',
-              'pergola',
-              'tree',
-              'shrub'
-            ]
-          },
+          type: { type: 'string' },
           x: { type: 'number' },
           z: { type: 'number' },
           scaleX: { type: 'number' },
@@ -71,29 +48,45 @@ export async function POST(req: Request) {
       });
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const response = await openai.chat.completions.create({
-      model: model || 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Du bist Landschaftsarchitekt und Gebäudeplaner. Interpretiere den vollständigen Wunsch. Erzeuge nicht nur einen Gebäudekubus: nutze bei Gebäuden sinnvolle Bauteile wie Bodenplatte, Außen-/Innenwände, Dach, Fenster, Türen, Schiebetüren, Balkon, Geländer und Stützen. Platziere Garten, Gelände und Architektur logisch. Antworte ausschließlich im vorgegebenen JSON-Schema.'
-        },
-        { role: 'user', content: String(prompt || '') }
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'garden_architecture_layout',
-          schema: GardenSchema,
-          strict: true
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Du bist Landschaftsarchitekt und Gebäudeplaner. Interpretiere den vollständigen Wunsch. Erzeuge nicht nur einen Gebäudekubus: nutze bei Gebäuden sinnvolle Bauteile wie Bodenplatte, Außen-/Innenwände, Dach, Fenster, Türen, Schiebetüren, Balkon, Geländer und Stützen. Platziere Garten, Gelände und Architektur logisch. Antworte ausschließlich im vorgegebenen JSON-Schema.'
+          },
+          { role: 'user', content: String(prompt || '') }
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'garden_architecture_layout',
+            schema: GardenSchema,
+            strict: true
+          }
         }
-      }
+      })
     });
 
-    const raw = response.choices[0]?.message?.content || '{}';
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json({
+        ok: false,
+        fallback: true,
+        error: 'OpenAI-Anfrage war nicht erfolgreich.',
+        details: data
+      });
+    }
+
+    const raw = data?.choices?.[0]?.message?.content || '{}';
     return NextResponse.json({ ok: true, layout: JSON.parse(raw) });
   } catch (error) {
     return NextResponse.json({

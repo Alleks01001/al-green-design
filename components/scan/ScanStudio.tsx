@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { detectLiDARBridge, startNativeLiDARScan } from '@/lib/mobile/lidarBridge';
+import { detectLiDARBridge, startNativeLiDARScan, type LiDARBridgeStatus } from '@/lib/mobile/lidarBridge';
 
 type NativeResult = {
   type?: string;
@@ -16,9 +16,9 @@ export default function ScanStudio() {
   const [cameraActive, setCameraActive] = useState(false);
   const [status, setStatus] = useState('Scan-Modul bereit.');
   const [progress, setProgress] = useState(0);
-  const [bridge, setBridge] = useState(() => ({
+  const [bridge, setBridge] = useState<LiDARBridgeStatus>(() => ({
     available: false,
-    platform: 'web-fallback' as const,
+    platform: 'web-fallback',
     message: 'Prüfe Gerät...'
   }));
   const [files, setFiles] = useState<string[]>([]);
