@@ -1,16 +1,1 @@
-import LandscapePlatform from '@/components/LandscapePlatform';
-
-export default function Home() {
-  return (
-    <main>
-      <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.31 NATIVE LIDAR</p>
-        <h1>Landscape Architecture – ADVANCED STUDIO – Gelände, Architektur, Pflanzen, Wasser, Licht, KI</h1>
-        <div>
-          Planungsstudio mit detaillierteren Architektur-Bauteilen, Split-View 2D/3D, weichem Gelände, KI-Planung und Mobile-Scan-/LiDAR-Grundlage.
-        </div>
-      </section>
-      <LandscapePlatform />
-    </main>
-  );
-}
+import {StudioShell} from "@/components/shell/StudioShell";import {EditorStoreProvider} from "@/stores/editor-store";export default function HomePage(){return <EditorStoreProvider><StudioShell/></EditorStoreProvider>}
