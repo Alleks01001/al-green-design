@@ -302,7 +302,7 @@ input[type=range]{padding:0;height:28px}
 .learningExamples button:hover{background:#ffe4e6;border-color:#be123c}
 
 
-/* V0.36 Smart Draw Toolbar */
+/* V0.37 Extended Studio Toolbar */
 .canvasWrap{position:relative}
 .smartDrawToolbar{position:absolute;z-index:32;top:12px;left:12px;right:12px;display:flex;align-items:center;gap:8px;min-height:62px;padding:8px 10px;border:1px solid rgba(127,29,29,.22);border-radius:16px;background:rgba(255,250,249,.95);backdrop-filter:blur(15px);box-shadow:0 14px 34px rgba(95,15,34,.14);overflow-x:auto}
 .smartDrawGroup{display:flex;align-items:center;gap:5px;flex:0 0 auto}.smartDrawGroup button{display:grid;place-items:center;gap:2px;min-width:58px;height:46px;padding:4px 7px;border:1px solid #ead7dc;border-radius:10px;background:#fff;color:#5f0f22;font-size:21px;line-height:1;cursor:pointer}.smartDrawGroup button span{font-size:8px;font-weight:800;letter-spacing:.02em}.smartDrawGroup button:hover{border-color:#be123c;background:#fff1f2}.smartDrawGroup button.active{border-color:#7f1d1d;background:#7f1d1d;color:#fff;box-shadow:0 7px 17px rgba(127,29,29,.22)}
@@ -313,3 +313,16 @@ input[type=range]{padding:0;height:28px}
 .canvasWrap>.canvas,.canvasWrap>.terrain3d{padding-top:76px}
 @media(max-width:1100px){.smartDrawToolbar{position:relative;top:auto;left:auto;right:auto;border-radius:0;border-left:0;border-right:0}.canvasWrap>.canvas,.canvasWrap>.terrain3d{padding-top:0}.smartDrawSettings{display:none}}
 @media(max-width:680px){.smartDrawGroup button{min-width:52px}.smartDrawSwatches{grid-template-columns:repeat(4,18px)}.smartDrawDivider{display:none}}
+
+
+/* V0.37 Extended Studio */
+.smartDrawToolbar{align-items:flex-start;flex-wrap:nowrap;min-height:74px}
+.shapeTools{max-width:460px;flex-wrap:wrap}
+.smartDrawRecentColors{display:grid;grid-template-columns:repeat(3,15px);gap:3px;padding-left:3px;border-left:1px solid #ead7dc}
+.smartDrawRecentColors button{width:15px;height:15px;padding:0;border:1px solid rgba(15,23,42,.22);border-radius:4px;cursor:pointer}
+.smartDrawSettings{flex-wrap:wrap;max-width:690px}
+.smartDrawSettings select{max-width:105px;padding:5px;border:1px solid #ead7dc;border-radius:7px;background:#fff;color:#5f0f22;font-size:9px}
+.smartDrawQuickActions{display:grid;grid-template-columns:repeat(2,minmax(76px,1fr));gap:4px;flex:0 0 auto;padding:5px;border:1px solid #d8b4c0;border-radius:11px;background:#fff7f7}
+.smartDrawQuickActions button{padding:5px 7px;border:1px solid #ead7dc;border-radius:7px;background:#fff;color:#6b1024;font-size:8px;font-weight:800;cursor:pointer}
+.smartDrawQuickActions button:hover{border-color:#be123c;background:#fff1f2}.smartDrawQuickActions button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:1350px){.smartDrawQuickActions{display:none}.smartDrawSettings{max-width:470px}.shapeTools{max-width:330px}}

@@ -15,8 +15,10 @@ import {
 
 type ViewMode = '2d' | '3d' | 'splitVertical' | 'splitHorizontal';
 type Tab = 'dashboard' | 'project' | 'chat' | 'image' | 'video3d' | 'terrain' | 'hardscape' | 'architecture' | 'building' | 'scan' | 'library' | 'materials' | 'layers' | 'costs' | 'analysis' | 'water' | 'climate' | 'agents' | 'scene' | 'reports' | 'export';
-type Tool = 'select' | 'move' | 'shapeRect' | 'shapeCircle' | 'shapeTriangle' | 'shapeRounded' | 'freeLine' | 'connector' | 'terrain' | 'gardenWall' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
-type CanvasShapeKind = 'rectangle' | 'ellipse' | 'triangle' | 'rounded';
+type Tool = 'select' | 'move' | 'shapeRect' | 'shapeCircle' | 'shapeTriangle' | 'shapeRounded' | 'shapePentagon' | 'shapeHexagon' | 'shapeStar' | 'freeLine' | 'connector' | 'terrain' | 'gardenWall' | 'mound' | 'depression' | 'plantZone' | 'hardscape' | 'building' | 'pool' | 'pond' | 'pergola' | 'wall' | 'fence' | 'gate' | 'stairs' | 'path' | 'tree' | 'shrub' | 'hedge' | 'planter' | 'bench' | 'light' | 'firepit' | 'rock' | 'irrigation' | 'drainage' | 'floor' | 'interiorWall' | 'roof' | 'window' | 'door' | 'slidingDoor' | 'balcony' | 'railing' | 'column' | 'carport' | 'winterGarden';
+type CanvasShapeKind = 'rectangle' | 'ellipse' | 'triangle' | 'rounded' | 'pentagon' | 'hexagon' | 'star';
+type ToolbarLineStyle = 'solid' | 'dashed' | 'dotted';
+type ToolbarConnectorRoute = 'straight' | 'elbow' | 'curve';
 
 type ElevationPoint = {
   id: number;
@@ -439,6 +441,11 @@ type GardenObject = {
   strokeWidth?: number;
   connectionStartId?: number;
   connectionEndId?: number;
+  strokePattern?: ToolbarLineStyle;
+  arrowStart?: boolean;
+  arrowEnd?: boolean;
+  connectorRoute?: ToolbarConnectorRoute;
+  locked?: boolean;
 };
 
 const MATERIAL_LIBRARY: MaterialDefinition[] = [
@@ -1896,9 +1903,44 @@ function resolveConnectedObject(obj: GardenObject, objects: GardenObject[]) {
   if (!source || !target) return obj;
   const start=connectionPointOnObject(source,target);
   const end=connectionPointOnObject(target,source);
-  const center=polylineCenter([start,end]);
-  const points=relativePolyline([start,end],center);
-  return {...obj,x:center.x,y:center.y,width:Math.max(0.2,Math.abs(end.x-start.x)),depth:Math.max(0.2,Math.abs(end.y-start.y)),points};
+  const routed=connectorRoutePoints(start,end,obj.connectorRoute || 'straight');
+  const center=polylineCenter(routed);
+  const points=relativePolyline(routed,center);
+  return {...obj,x:center.x,y:center.y,width:Math.max(0.2,Math.abs(end.x-start.x)),depth:Math.max(0.2,Math.abs(end.y-start.y)),points,curve:obj.connectorRoute==='curve'};
+}
+
+function connectorRoutePoints(start: {x:number;y:number}, end: {x:number;y:number}, route: ToolbarConnectorRoute = 'straight') {
+  if (route==='elbow') {
+    const horizontalFirst=Math.abs(end.x-start.x)>=Math.abs(end.y-start.y);
+    const corner=horizontalFirst?{x:end.x,y:start.y}:{x:start.x,y:end.y};
+    return uniquePolylinePoints([start,corner,end]);
+  }
+  if (route==='curve') {
+    const dx=end.x-start.x;
+    const dy=end.y-start.y;
+    const distance=Math.max(0.01,Math.hypot(dx,dy));
+    const normal={x:-dy/distance,y:dx/distance};
+    const bend=Math.min(2.2,Math.max(0.45,distance*0.18));
+    return [start,{x:(start.x+end.x)/2+normal.x*bend,y:(start.y+end.y)/2+normal.y*bend},end];
+  }
+  return [start,end];
+}
+
+function toolbarDashArray(style: ToolbarLineStyle | undefined, strokeWidth = 2) {
+  if (style==='dashed') return `${Math.max(7,strokeWidth*3.5)} ${Math.max(5,strokeWidth*2.4)}`;
+  if (style==='dotted') return `1 ${Math.max(5,strokeWidth*2.5)}`;
+  return undefined;
+}
+
+function canvasShapePolygonPoints(kind: CanvasShapeKind, width: number, depth: number) {
+  const vertexCount=kind==='triangle'?3:kind==='pentagon'?5:kind==='hexagon'?6:kind==='star'?10:4;
+  const points: {x:number;y:number}[]=[];
+  for (let index=0;index<vertexCount;index+=1) {
+    const angle=-Math.PI/2+(Math.PI*2*index/vertexCount);
+    const radius=kind==='star' && index%2===1?0.44:1;
+    points.push({x:Math.cos(angle)*width*SCALE/2*radius,y:Math.sin(angle)*depth*SCALE/2*radius});
+  }
+  return points.map(point=>`${point.x},${point.y}`).join(' ');
 }
 
 function uniquePolylinePoints(points: {x:number;y:number}[]) {
@@ -1915,12 +1957,21 @@ export default function LandscapePlatform() {
   const [toolbarStrokeColor, setToolbarStrokeColor] = useState('#3b0d17');
   const [toolbarFillOpacity, setToolbarFillOpacity] = useState(0.72);
   const [toolbarShapeSize, setToolbarShapeSize] = useState(2.4);
+  const [toolbarShapeDepth, setToolbarShapeDepth] = useState(1.8);
   const [toolbarLineWidth, setToolbarLineWidth] = useState(0.16);
+  const [toolbarLineStyle, setToolbarLineStyle] = useState<ToolbarLineStyle>('solid');
+  const [toolbarLineCurve, setToolbarLineCurve] = useState(false);
+  const [toolbarLineOrthogonal, setToolbarLineOrthogonal] = useState(false);
+  const [toolbarArrowStart, setToolbarArrowStart] = useState(false);
+  const [toolbarArrowEnd, setToolbarArrowEnd] = useState(false);
+  const [toolbarConnectorRoute, setToolbarConnectorRoute] = useState<ToolbarConnectorRoute>('straight');
   const [toolbarLinePoints, setToolbarLinePoints] = useState<{x:number;y:number}[]>([]);
   const [toolbarAutoConnect, setToolbarAutoConnect] = useState(true);
   const [connectorStartId, setConnectorStartId] = useState<number | null>(null);
+  const [toolbarRecentColors, setToolbarRecentColors] = useState<string[]>([]);
+  const [toolbarCopiedStyle, setToolbarCopiedStyle] = useState<Partial<GardenObject> | null>(null);
   const toolbarPalette = ['#7f1d1d','#be123c','#f59e0b','#84cc16','#16a34a','#0ea5e9','#2563eb','#8b5cf6','#8b5e3c','#64748b','#111827','#ffffff'];
-  const [status, setStatus] = useState('Bereit: V0.36 SMART DRAW TOOLBAR – Objekte, Gelände und Zonen sind in 2D verschiebbar; Objekte auch in 3D.');
+  const [status, setStatus] = useState('Bereit: V0.37 EXTENDED STUDIO – erweiterte Formen, Linien, Verbindungen, Farben und CAD-Schnellaktionen.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -1999,6 +2050,9 @@ export default function LandscapePlatform() {
       if (key==='r') setTool('shapeRect');
       if (key==='o') setTool('shapeCircle');
       if (key==='t') setTool('shapeTriangle');
+      if (key==='p') setTool('shapePentagon');
+      if (key==='h') setTool('shapeHexagon');
+      if (key==='k') setTool('shapeStar');
       if (key==='l') setTool('freeLine');
       if (key==='c') setTool('connector');
     };
@@ -2738,7 +2792,7 @@ export default function LandscapePlatform() {
   function nudgeSelected(dx: number, dy: number) {
     if (selectedKind === 'object' && selectedId !== null) {
       const ids=selectedObjectIds.length?selectedObjectIds:[selectedId];
-      setObjects(v=>v.map(o=>ids.includes(o.id)?{...o,x:snapValue(o.x+dx,true),y:snapValue(o.y+dy,true)}:o));
+      setObjects(v=>v.map(o=>ids.includes(o.id) && !o.locked?{...o,x:snapValue(o.x+dx,true),y:snapValue(o.y+dy,true)}:o));
     }
     if (selectedKind === 'zone' && selectedId !== null) setZones(v=>v.map(z=>z.id===selectedId?{...z,x:snapValue(z.x+dx,true),y:snapValue(z.y+dy,true)}:z));
     if (selectedKind === 'terrain' && selectedId !== null) setTerrainBlobs(v=>v.map(b=>b.id===selectedId?{...b,x:snapValue(b.x+dx,true),y:snapValue(b.y+dy,true)}:b));
@@ -2964,6 +3018,92 @@ export default function LandscapePlatform() {
       return {...o,y:maxY-o.depth/2};
     }));
     setStatus(`${selectedObjectIds.length} Objekte ausgerichtet.`);
+  }
+
+  function distributeSelected(axis: 'x'|'y') {
+    if (selectedObjectIds.length < 3) {
+      setStatus('Zum gleichmäßigen Verteilen werden mindestens drei Objekte benötigt.');
+      return;
+    }
+    snapshot();
+    const list=objects.filter(object=>selectedObjectIds.includes(object.id)).sort((a,b)=>axis==='x'?a.x-b.x:a.y-b.y);
+    const first=axis==='x'?list[0].x:list[0].y;
+    const last=axis==='x'?list[list.length-1].x:list[list.length-1].y;
+    const step=(last-first)/(list.length-1);
+    const positions=new Map(list.map((object,index)=>[object.id,first+step*index]));
+    setObjects(current=>current.map(object=>{
+      const value=positions.get(object.id);
+      if (value===undefined || object.locked) return object;
+      return axis==='x'?{...object,x:value}:{...object,y:value};
+    }));
+    setStatus(`${list.length} Objekte gleichmäßig ${axis==='x'?'horizontal':'vertikal'} verteilt.`);
+  }
+
+  function matchSelectedSize(mode: 'width'|'depth'|'both') {
+    if (selectedObjectIds.length < 2) return;
+    const reference=objects.find(object=>object.id===selectedObjectIds[0]);
+    if (!reference) return;
+    snapshot();
+    setObjects(current=>current.map(object=>{
+      if (!selectedObjectIds.includes(object.id) || object.id===reference.id || object.locked) return object;
+      if (mode==='width') return {...object,width:reference.width};
+      if (mode==='depth') return {...object,depth:reference.depth};
+      return {...object,width:reference.width,depth:reference.depth};
+    }));
+    setStatus(`Auswahl an Größe von „${reference.name}“ angepasst.`);
+  }
+
+  function rotateSelected(delta: number) {
+    if (!selectedObjectIds.length) return;
+    snapshot();
+    setObjects(current=>current.map(object=>selectedObjectIds.includes(object.id) && !object.locked?{...object,rotation:(object.rotation+delta+360)%360}:object));
+    setStatus(`Auswahl um ${Math.abs(delta)}° ${delta<0?'links':'rechts'} gedreht.`);
+  }
+
+  function toggleSelectedLock() {
+    if (!selectedObjectIds.length) return;
+    const shouldLock=objects.filter(object=>selectedObjectIds.includes(object.id)).some(object=>!object.locked);
+    snapshot();
+    setObjects(current=>current.map(object=>selectedObjectIds.includes(object.id)?{...object,locked:shouldLock}:object));
+    setStatus(shouldLock?'Auswahl gesperrt.':'Sperre aufgehoben.');
+  }
+
+  function moveSelectionLayer(direction: 'front'|'back') {
+    if (!selectedObjectIds.length) return;
+    snapshot();
+    setObjects(current=>{
+      const selected=current.filter(object=>selectedObjectIds.includes(object.id));
+      const rest=current.filter(object=>!selectedObjectIds.includes(object.id));
+      return direction==='front'?[...rest,...selected]:[...selected,...rest];
+    });
+    setStatus(direction==='front'?'Auswahl nach vorne gestellt.':'Auswahl nach hinten gestellt.');
+  }
+
+  function copyToolbarStyle() {
+    const source=objects.find(object=>object.id===selectedObjectIds[0]);
+    if (!source) {
+      setStatus('Bitte zuerst ein Objekt auswählen.');
+      return;
+    }
+    setToolbarCopiedStyle({
+      color:source.color,fillOpacity:source.fillOpacity,strokeColor:source.strokeColor,strokeWidth:source.strokeWidth,
+      strokePattern:source.strokePattern,arrowStart:source.arrowStart,arrowEnd:source.arrowEnd,material:source.material,materialId:source.materialId
+    });
+    setToolbarFillColor(source.color);
+    if (source.strokeColor) setToolbarStrokeColor(source.strokeColor);
+    if (source.fillOpacity!==undefined) setToolbarFillOpacity(source.fillOpacity);
+    if (source.strokePattern) setToolbarLineStyle(source.strokePattern);
+    setStatus(`Stil von „${source.name}“ kopiert.`);
+  }
+
+  function pasteToolbarStyle() {
+    if (!toolbarCopiedStyle || !selectedObjectIds.length) {
+      setStatus('Kein kopierter Stil oder keine Auswahl vorhanden.');
+      return;
+    }
+    snapshot();
+    setObjects(current=>current.map(object=>selectedObjectIds.includes(object.id)?{...object,...toolbarCopiedStyle}:object));
+    setStatus(`Stil auf ${selectedObjectIds.length} Objekt(e) übertragen.`);
   }
 
   function groupSelected() {
@@ -4533,6 +4673,7 @@ export default function LandscapePlatform() {
 
   function applyToolbarFill(color = toolbarFillColor) {
     setToolbarFillColor(color);
+    setToolbarRecentColors(current=>[color,...current.filter(item=>item!==color)].slice(0,6));
     if (selectedKind==='object' && selectedObjectIds.length) {
       snapshot();
       setObjects(current=>current.map(object=>selectedObjectIds.includes(object.id)?{...object,color,fillOpacity:toolbarFillOpacity,strokeColor:toolbarStrokeColor}:object));
@@ -4558,8 +4699,11 @@ export default function LandscapePlatform() {
     snapshot();
     const id=Date.now();
     const width=Math.max(0.25,toolbarShapeSize);
-    const depth=shapeKind==='ellipse'?width*0.72:shapeKind==='triangle'?width*0.88:width;
-    const names: Record<CanvasShapeKind,string>={rectangle:'Rechteckfläche',ellipse:'Kreis-/Ellipsenfläche',triangle:'Dreiecksfläche',rounded:'Abgerundete Fläche'};
+    const depth=Math.max(0.25,toolbarShapeDepth);
+    const names: Record<CanvasShapeKind,string>={
+      rectangle:'Rechteckfläche',ellipse:'Kreis-/Ellipsenfläche',triangle:'Dreiecksfläche',rounded:'Abgerundete Fläche',
+      pentagon:'Fünfeckfläche',hexagon:'Sechseckfläche',star:'Sternfläche'
+    };
     const object: GardenObject={
       id,type:'floor',name:names[shapeKind],x:point.x,y:point.y,width,depth,height:0.08,rotation:0,
       color:toolbarFillColor,material:'Freie Zeichenfläche',unitCost:0,level:activeLevel,shapeKind,
@@ -4588,9 +4732,13 @@ export default function LandscapePlatform() {
 
   function addToolbarLinePoint(point: {x:number;y:number}) {
     const anchor=toolbarAutoConnect?toolbarAnchorNear(point):null;
-    const next=anchor?.point || point;
+    let next=anchor?.point || point;
+    const previous=toolbarLinePoints[toolbarLinePoints.length-1];
+    if (previous && toolbarLineOrthogonal && !anchor) {
+      next=Math.abs(next.x-previous.x)>=Math.abs(next.y-previous.y)?{x:next.x,y:previous.y}:{x:previous.x,y:next.y};
+    }
     setToolbarLinePoints(current=>[...current,next]);
-    setStatus(anchor?`Linienpunkt mit ${objects.find(object=>object.id===anchor.id)?.name || 'Objekt'} verbunden.`:`Linienpunkt ${toolbarLinePoints.length+1} gesetzt.`);
+    setStatus(anchor?`Linienpunkt mit ${objects.find(object=>object.id===anchor.id)?.name || 'Objekt'} verbunden.`:`Linienpunkt ${toolbarLinePoints.length+1} gesetzt${toolbarLineOrthogonal?' · orthogonal':''}.`);
   }
 
   function finishToolbarLine() {
@@ -4608,8 +4756,8 @@ export default function LandscapePlatform() {
     const object: GardenObject={
       id,type:'path',name:'Freie Zeichenlinie',x:center.x,y:center.y,
       width:Math.max(0.2,Math.max(...xs)-Math.min(...xs)),depth:Math.max(0.2,Math.max(...ys)-Math.min(...ys)),height:0.03,rotation:0,
-      color:toolbarFillColor,material:'Zeichenlinie',unitCost:0,points:relative,pathWidth:Math.max(0.03,toolbarLineWidth),curve:false,
-      fillOpacity:1,strokeColor:toolbarStrokeColor,strokeWidth:2
+      color:toolbarFillColor,material:'Zeichenlinie',unitCost:0,points:relative,pathWidth:Math.max(0.03,toolbarLineWidth),curve:toolbarLineCurve,
+      fillOpacity:1,strokeColor:toolbarStrokeColor,strokeWidth:2,strokePattern:toolbarLineStyle,arrowStart:toolbarArrowStart,arrowEnd:toolbarArrowEnd
     };
     setObjects(current=>[...current,object]);
     setToolbarLinePoints([]);
@@ -4638,13 +4786,15 @@ export default function LandscapePlatform() {
     snapshot();
     const start=connectionPointOnObject(source,object);
     const end=connectionPointOnObject(object,source);
-    const center=polylineCenter([start,end]);
+    const routed=connectorRoutePoints(start,end,toolbarConnectorRoute);
+    const center=polylineCenter(routed);
     const idNew=Date.now();
     const connector: GardenObject={
       id:idNew,type:'path',name:`Verbindung ${source.name} – ${object.name}`,x:center.x,y:center.y,
       width:Math.max(0.2,Math.abs(end.x-start.x)),depth:Math.max(0.2,Math.abs(end.y-start.y)),height:0.03,rotation:0,
-      color:toolbarFillColor,material:'Dynamische Verbindung',unitCost:0,points:relativePolyline([start,end],center),pathWidth:Math.max(0.03,toolbarLineWidth),curve:false,
-      connectionStartId:source.id,connectionEndId:object.id,strokeColor:toolbarStrokeColor,strokeWidth:2
+      color:toolbarFillColor,material:'Dynamische Verbindung',unitCost:0,points:relativePolyline(routed,center),pathWidth:Math.max(0.03,toolbarLineWidth),curve:toolbarConnectorRoute==='curve',
+      connectionStartId:source.id,connectionEndId:object.id,connectorRoute:toolbarConnectorRoute,strokeColor:toolbarStrokeColor,strokeWidth:2,
+      strokePattern:toolbarLineStyle,arrowStart:toolbarArrowStart,arrowEnd:toolbarArrowEnd
     };
     setObjects(current=>[...current,connector]);
     setConnectorStartId(null);
@@ -4662,8 +4812,14 @@ export default function LandscapePlatform() {
     const rawPoint = worldFromEvent(svgRef.current, e);
     const p = snapPointToWallEndpoints(rawPoint);
 
-    if (tool==='shapeRect' || tool==='shapeCircle' || tool==='shapeTriangle' || tool==='shapeRounded') {
-      const shapeKind: CanvasShapeKind=tool==='shapeCircle'?'ellipse':tool==='shapeTriangle'?'triangle':tool==='shapeRounded'?'rounded':'rectangle';
+    if (['shapeRect','shapeCircle','shapeTriangle','shapeRounded','shapePentagon','shapeHexagon','shapeStar'].includes(tool)) {
+      const shapeKind: CanvasShapeKind=
+        tool==='shapeCircle'?'ellipse':
+        tool==='shapeTriangle'?'triangle':
+        tool==='shapeRounded'?'rounded':
+        tool==='shapePentagon'?'pentagon':
+        tool==='shapeHexagon'?'hexagon':
+        tool==='shapeStar'?'star':'rectangle';
       createToolbarShape(shapeKind,p);
       return;
     }
@@ -4766,6 +4922,10 @@ export default function LandscapePlatform() {
     const p=worldFromClient(svgRef.current,e.clientX,e.clientY);
     svgRef.current?.setPointerCapture?.(e.pointerId);
     const obj=objects.find(o=>o.id===id);
+    if (kind==='object' && obj?.locked) {
+      setSelection('object',id,`${obj.name} ist gesperrt. Sperre zuerst aufheben.`);
+      return;
+    }
     let ids=kind==='object' && selectedObjectIds.includes(id) ? selectedObjectIds : [id];
     if (kind==='object' && obj?.groupId && !e.shiftKey && !e.ctrlKey && !e.metaKey) ids=objects.filter(o=>o.groupId===obj.groupId).map(o=>o.id);
     const groupStart=kind==='object'?objects.filter(o=>ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y})):[];
@@ -4777,6 +4937,7 @@ export default function LandscapePlatform() {
 
   function startScaleObject(e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) {
     e.stopPropagation();
+    if (obj.locked) { setStatus(`${obj.name} ist gesperrt.`); return; }
     svgRef.current?.setPointerCapture?.(e.pointerId);
     setDrag2D({mode:'scale',kind:'object',id:obj.id,pointerId:e.pointerId,startWidth:obj.width,startDepth:obj.depth,startX:obj.x,startY:obj.y,rotation:obj.rotation});
     setStatus('Skalieren: Ecke ziehen. Alt um Raster zu umgehen.');
@@ -4784,6 +4945,7 @@ export default function LandscapePlatform() {
 
   function startRotateObject(e: React.PointerEvent<SVGCircleElement>, obj: GardenObject) {
     e.stopPropagation();
+    if (obj.locked) { setStatus(`${obj.name} ist gesperrt.`); return; }
     const p=worldFromClient(svgRef.current,e.clientX,e.clientY);
     svgRef.current?.setPointerCapture?.(e.pointerId);
     const startAngle=Math.atan2(p.y-obj.y,p.x-obj.x)*180/Math.PI;
@@ -7121,7 +7283,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.36 SMART DRAW TOOLBAR</span>
+          <span className="pill brandPill">V0.37 EXTENDED STUDIO</span>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -7155,6 +7317,9 @@ Annahmen: ${result.assumptions.join(' · ')}`
                 <button title="Kreis oder Ellipse einbauen (O)" className={tool==='shapeCircle'?'active':''} onClick={()=>setTool('shapeCircle')}>○<span>Kreis</span></button>
                 <button title="Dreieck einbauen (T)" className={tool==='shapeTriangle'?'active':''} onClick={()=>setTool('shapeTriangle')}>△<span>Dreieck</span></button>
                 <button title="Abgerundete Form einbauen" className={tool==='shapeRounded'?'active':''} onClick={()=>setTool('shapeRounded')}>▢<span>Rundform</span></button>
+                <button title="Fünfeck einbauen (P)" className={tool==='shapePentagon'?'active':''} onClick={()=>setTool('shapePentagon')}>⬠<span>Fünfeck</span></button>
+                <button title="Sechseck einbauen (H)" className={tool==='shapeHexagon'?'active':''} onClick={()=>setTool('shapeHexagon')}>⬡<span>Sechseck</span></button>
+                <button title="Stern einbauen (K)" className={tool==='shapeStar'?'active':''} onClick={()=>setTool('shapeStar')}>★<span>Stern</span></button>
               </div>
 
               <div className="smartDrawDivider" />
@@ -7171,14 +7336,34 @@ Annahmen: ${result.assumptions.join(' · ')}`
                 <div className="smartDrawSwatches">
                   {toolbarPalette.map(color=><button key={color} title={`Farbe ${color}`} aria-label={`Farbe ${color}`} className={toolbarFillColor===color?'active':''} style={{background:color}} onClick={()=>applyToolbarFill(color)}/>) }
                 </div>
+                {toolbarRecentColors.length>0 && <div className="smartDrawRecentColors" title="Zuletzt verwendete Farben">{toolbarRecentColors.map(color=><button key={`recent-${color}`} style={{background:color}} onClick={()=>applyToolbarFill(color)} aria-label={`Letzte Farbe ${color}`}/>)}</div>}
               </div>
 
               <div className="smartDrawSettings">
-                <label>Formgröße<input type="number" min="0.25" step="0.25" value={toolbarShapeSize} onChange={event=>setToolbarShapeSize(Math.max(0.25,Number(event.target.value)||2.4))}/><span>m</span></label>
+                <label>Breite<input type="number" min="0.25" step="0.25" value={toolbarShapeSize} onChange={event=>setToolbarShapeSize(Math.max(0.25,Number(event.target.value)||2.4))}/><span>m</span></label>
+                <label>Tiefe<input type="number" min="0.25" step="0.25" value={toolbarShapeDepth} onChange={event=>setToolbarShapeDepth(Math.max(0.25,Number(event.target.value)||1.8))}/><span>m</span></label>
                 <label>Linienstärke<input type="number" min="0.03" max="2" step="0.03" value={toolbarLineWidth} onChange={event=>setToolbarLineWidth(Math.max(0.03,Number(event.target.value)||0.16))}/><span>m</span></label>
+                <label>Linienart<select value={toolbarLineStyle} onChange={event=>setToolbarLineStyle(event.target.value as ToolbarLineStyle)}><option value="solid">Durchgezogen</option><option value="dashed">Gestrichelt</option><option value="dotted">Gepunktet</option></select></label>
                 <label className="opacitySetting">Deckkraft<input type="range" min="0.1" max="1" step="0.05" value={toolbarFillOpacity} onChange={event=>setToolbarFillOpacity(Number(event.target.value))}/><span>{Math.round(toolbarFillOpacity*100)}%</span></label>
-                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarAutoConnect} onChange={event=>setToolbarAutoConnect(event.target.checked)}/> Punkte automatisch verbinden</label>
+                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarAutoConnect} onChange={event=>setToolbarAutoConnect(event.target.checked)}/> Magnetisch verbinden</label>
+                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarLineOrthogonal} onChange={event=>setToolbarLineOrthogonal(event.target.checked)}/> 90°-Linien</label>
+                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarLineCurve} onChange={event=>setToolbarLineCurve(event.target.checked)}/> Kurve</label>
+                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarArrowStart} onChange={event=>setToolbarArrowStart(event.target.checked)}/> Pfeil Start</label>
+                <label className="autoConnectSetting"><input type="checkbox" checked={toolbarArrowEnd} onChange={event=>setToolbarArrowEnd(event.target.checked)}/> Pfeil Ende</label>
+                {tool==='connector' && <label>Verlauf<select value={toolbarConnectorRoute} onChange={event=>setToolbarConnectorRoute(event.target.value as ToolbarConnectorRoute)}><option value="straight">Gerade</option><option value="elbow">Rechtwinklig</option><option value="curve">Gebogen</option></select></label>}
               </div>
+
+              {selectedObjectIds.length>0 && (
+                <div className="smartDrawQuickActions">
+                  <button onClick={copyToolbarStyle}>Stil kopieren</button>
+                  <button disabled={!toolbarCopiedStyle} onClick={pasteToolbarStyle}>Stil einsetzen</button>
+                  <button onClick={()=>rotateSelected(-15)}>↶ 15°</button>
+                  <button onClick={()=>rotateSelected(15)}>↷ 15°</button>
+                  <button onClick={()=>moveSelectionLayer('front')}>Nach vorne</button>
+                  <button onClick={()=>moveSelectionLayer('back')}>Nach hinten</button>
+                  <button onClick={toggleSelectedLock}>{selectedObjects.some(object=>object.locked)?'Entsperren':'Sperren'}</button>
+                </div>
+              )}
 
               {tool==='freeLine' && (
                 <div className="smartDrawDraftActions">
@@ -7225,6 +7410,8 @@ Annahmen: ${result.assumptions.join(' · ')}`
               onContextMenu={handleContextMenu}
             >
               <defs>
+                <marker id="toolbarArrowStart" markerWidth="8" markerHeight="8" refX="1.5" refY="4" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 0 L 0 4 L 8 8 z" fill="context-stroke"/></marker>
+                <marker id="toolbarArrowEnd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="context-stroke"/></marker>
                 {layers.terrain && terrainBlobs.map(blob => (
                   <radialGradient id={`g-${blob.id}`} key={blob.id}>
                     <stop offset="0%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0.85" />
@@ -7465,7 +7652,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
               {toolbarLinePoints.length>0 && (
                 <g pointerEvents="none">
-                  <polyline points={toolbarLinePoints.map(point=>`${point.x*SCALE},${point.y*SCALE}`).join(' ')} fill="none" stroke={toolbarStrokeColor} strokeWidth={Math.max(2,toolbarLineWidth*SCALE)} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="9 5"/>
+                  <polyline points={toolbarLinePoints.map(point=>`${point.x*SCALE},${point.y*SCALE}`).join(' ')} fill="none" stroke={toolbarStrokeColor} strokeWidth={Math.max(2,toolbarLineWidth*SCALE)} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={toolbarDashArray(toolbarLineStyle,Math.max(2,toolbarLineWidth*SCALE))} markerStart={toolbarArrowStart?'url(#toolbarArrowStart)':undefined} markerEnd={toolbarArrowEnd?'url(#toolbarArrowEnd)':undefined}/>
                   {toolbarLinePoints.map((point,index)=><circle key={`toolbar-line-point-${index}`} cx={point.x*SCALE} cy={point.y*SCALE} r="5" fill={toolbarFillColor} stroke="#ffffff" strokeWidth="2"/>)}
                 </g>
               )}
@@ -7474,8 +7661,8 @@ Annahmen: ${result.assumptions.join(' · ')}`
                 <g key={zone.id} onClick={(e)=>{e.stopPropagation(); setSelection('zone', zone.id, `${zone.name} ausgewählt.`);}} onPointerDown={(e)=>start2DDrag(e,'zone',zone.id,zone.x,zone.y,zone.name)}>
                   {zone.shapeKind==='ellipse' ? (
                     <ellipse cx={zone.x*SCALE} cy={zone.y*SCALE} rx={zone.width*SCALE/2} ry={zone.depth*SCALE/2} fill={zone.color} fillOpacity={zone.fillOpacity ?? 0.42} stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':(zone.strokeColor || '#334155')} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : (zone.strokeWidth || 1.5)} />
-                  ) : zone.shapeKind==='triangle' ? (
-                    <polygon points={`${zone.x*SCALE},${(zone.y-zone.depth/2)*SCALE} ${(zone.x-zone.width/2)*SCALE},${(zone.y+zone.depth/2)*SCALE} ${(zone.x+zone.width/2)*SCALE},${(zone.y+zone.depth/2)*SCALE}`} fill={zone.color} fillOpacity={zone.fillOpacity ?? 0.42} stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':(zone.strokeColor || '#334155')} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : (zone.strokeWidth || 1.5)} />
+                  ) : zone.shapeKind && ['triangle','pentagon','hexagon','star'].includes(zone.shapeKind) ? (
+                    <polygon points={canvasShapePolygonPoints(zone.shapeKind,zone.width,zone.depth)} transform={`translate(${zone.x*SCALE},${zone.y*SCALE})`} fill={zone.color} fillOpacity={zone.fillOpacity ?? 0.42} stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':(zone.strokeColor || '#334155')} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : (zone.strokeWidth || 1.5)} strokeLinejoin="round"/>
                   ) : (
                     <rect x={(zone.x - zone.width/2) * SCALE} y={(zone.y - zone.depth/2) * SCALE} width={zone.width * SCALE} height={zone.depth * SCALE} fill={zone.color} fillOpacity={zone.fillOpacity ?? 0.42} stroke={selectedKind==='zone' && selectedId===zone.id ? '#f59e0b':(zone.strokeColor || '#334155')} strokeWidth={selectedKind==='zone' && selectedId===zone.id ? 3 : (zone.strokeWidth || 1.5)} rx={zone.shapeKind==='rounded'?14:6} />
                   )}
@@ -7637,6 +7824,14 @@ Annahmen: ${result.assumptions.join(' · ')}`
               <button className="tool" onClick={()=>alignSelected('top')}>Oben</button>
               <button className="tool" onClick={()=>alignSelected('centerY')}>Mitte Y</button>
               <button className="tool" onClick={()=>alignSelected('bottom')}>Unten</button>
+            </div>
+            <div className="grid3" style={{marginTop:8}}>
+              <button className="tool" disabled={selectedObjectIds.length<3} onClick={()=>distributeSelected('x')}>Horizontal verteilen</button>
+              <button className="tool" disabled={selectedObjectIds.length<3} onClick={()=>distributeSelected('y')}>Vertikal verteilen</button>
+              <button className="tool" onClick={()=>matchSelectedSize('both')}>Gleiche Größe</button>
+              <button className="tool" onClick={()=>matchSelectedSize('width')}>Gleiche Breite</button>
+              <button className="tool" onClick={()=>matchSelectedSize('depth')}>Gleiche Tiefe</button>
+              <button className="tool" onClick={toggleSelectedLock}>{selectedObjects.some(object=>object.locked)?'Entsperren':'Sperren'}</button>
             </div>
             <div className="grid2" style={{marginTop:8}}>
               <button className="btn primary" onClick={groupSelected}>Gruppieren</button>
@@ -7977,12 +8172,13 @@ function GardenObject2D({ obj, openings = [], selected, growthYear = 0, showMatu
       <g onClick={onClick} onPointerDown={onPointerDown} transform={`translate(${tx},${ty}) rotate(${rot})`}>
         {obj.shapeKind==='ellipse' ? (
           <ellipse cx="0" cy="0" rx={obj.width*SCALE/2} ry={obj.depth*SCALE/2} fill={obj.color} fillOpacity={fillOpacity} stroke={shapeStroke} strokeWidth={shapeStrokeWidth}/>
-        ) : obj.shapeKind==='triangle' ? (
-          <polygon points={`0,${-obj.depth*SCALE/2} ${-obj.width*SCALE/2},${obj.depth*SCALE/2} ${obj.width*SCALE/2},${obj.depth*SCALE/2}`} fill={obj.color} fillOpacity={fillOpacity} stroke={shapeStroke} strokeWidth={shapeStrokeWidth} strokeLinejoin="round"/>
+        ) : ['triangle','pentagon','hexagon','star'].includes(obj.shapeKind) ? (
+          <polygon points={canvasShapePolygonPoints(obj.shapeKind,obj.width,obj.depth)} fill={obj.color} fillOpacity={fillOpacity} stroke={shapeStroke} strokeWidth={shapeStrokeWidth} strokeLinejoin="round"/>
         ) : (
           <rect x={-obj.width*SCALE/2} y={-obj.depth*SCALE/2} width={obj.width*SCALE} height={obj.depth*SCALE} rx={obj.shapeKind==='rounded'?18:2} fill={obj.color} fillOpacity={fillOpacity} stroke={shapeStroke} strokeWidth={shapeStrokeWidth}/>
         )}
         <text x="0" y="0" fontSize="11" textAnchor="middle" paintOrder="stroke" stroke="#fff" strokeWidth="3">{obj.name}</text>
+        {obj.locked && <text x={obj.width*SCALE/2-8} y={-obj.depth*SCALE/2+14} fontSize="13" textAnchor="middle">🔒</text>}
       </g>
     );
   }
@@ -8032,13 +8228,13 @@ function GardenObject2D({ obj, openings = [], selected, growthYear = 0, showMatu
         {obj.type==='path' ? (
           <>
             <path d={localPath} fill="none" stroke={stroke} strokeWidth={pathStrokeWidth+6} strokeLinecap="round" strokeLinejoin="round" opacity={selected?1:0.45}/>
-            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
-            <path d={localPath} fill="none" stroke="#ffffff" strokeOpacity="0.28" strokeWidth="2" strokeDasharray="12 8"/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={toolbarDashArray(obj.strokePattern,pathStrokeWidth)} markerStart={obj.arrowStart?'url(#toolbarArrowStart)':undefined} markerEnd={obj.arrowEnd?'url(#toolbarArrowEnd)':undefined}/>
+            <path d={localPath} fill="none" stroke="#ffffff" strokeOpacity="0.22" strokeWidth="2" strokeDasharray={obj.strokePattern==='solid' || !obj.strokePattern?'12 8':undefined}/>
           </>
         ) : (
           <>
             <path d={localPath} fill="none" stroke={stroke} strokeWidth={pathStrokeWidth+5} strokeLinecap="round" strokeLinejoin="round"/>
-            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={localPath} fill="none" stroke={obj.color} strokeWidth={pathStrokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={toolbarDashArray(obj.strokePattern,pathStrokeWidth)} markerStart={obj.arrowStart?'url(#toolbarArrowStart)':undefined} markerEnd={obj.arrowEnd?'url(#toolbarArrowEnd)':undefined}/>
           </>
         )}
         {selected && obj.points.map((point,index)=><circle key={`poly-point-${index}`} cx={point.x*SCALE} cy={point.y*SCALE} r="5" fill="#fff" stroke="#f59e0b" strokeWidth="2"/>)}
@@ -8159,6 +8355,8 @@ function PlanOverview2D({
   return (
     <svg className="canvas splitPlan" viewBox={`${VIEWBOX.x * SCALE} ${VIEWBOX.y * SCALE} ${VIEWBOX.width * SCALE} ${VIEWBOX.height * SCALE}`}>
       <defs>
+        <marker id="splitToolbarArrowStart" markerWidth="8" markerHeight="8" refX="1.5" refY="4" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 0 L 0 4 L 8 8 z" fill="context-stroke"/></marker>
+        <marker id="splitToolbarArrowEnd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="context-stroke"/></marker>
         {terrainBlobs.map(blob => (
           <radialGradient id={`split-g-${blob.id}`} key={blob.id}>
             <stop offset="0%" stopColor={blob.height >= 0 ? '#84cc16' : '#60a5fa'} stopOpacity="0.7"/>
@@ -8186,10 +8384,10 @@ function PlanOverview2D({
         const obj=resolveConnectedObject(sourceObject,objects);
         const selected = selectedKind==='object'&&selectedId===obj.id;
         if ((obj.type==='path'||obj.type==='gardenWall') && obj.points?.length) {
-          return <path key={obj.id} d={svgPathForPolyline(obj.points,!!obj.curve)} transform={`translate(${obj.x*SCALE},${obj.y*SCALE})`} fill="none" stroke={obj.color} strokeWidth={Math.max(2,(obj.pathWidth||obj.thickness||0.16)*SCALE)} strokeLinecap="round" strokeLinejoin="round"/>;
+          return <path key={obj.id} d={svgPathForPolyline(obj.points,!!obj.curve)} transform={`translate(${obj.x*SCALE},${obj.y*SCALE})`} fill="none" stroke={obj.color} strokeWidth={Math.max(2,(obj.pathWidth||obj.thickness||0.16)*SCALE)} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={toolbarDashArray(obj.strokePattern,Math.max(2,(obj.pathWidth||obj.thickness||0.16)*SCALE))} markerStart={obj.arrowStart?'url(#splitToolbarArrowStart)':undefined} markerEnd={obj.arrowEnd?'url(#splitToolbarArrowEnd)':undefined}/>;
         }
         if (obj.shapeKind==='ellipse') return <ellipse key={obj.id} cx={obj.x*SCALE} cy={obj.y*SCALE} rx={obj.width*SCALE/2} ry={obj.depth*SCALE/2} fill={obj.color} fillOpacity={obj.fillOpacity ?? 0.72} stroke={selected?'#f59e0b':(obj.strokeColor||'#1f2937')} strokeWidth={selected?3:(obj.strokeWidth||1.2)} transform={`rotate(${obj.rotation} ${obj.x*SCALE} ${obj.y*SCALE})`}/>;
-        if (obj.shapeKind==='triangle') return <polygon key={obj.id} points={`${obj.x*SCALE},${(obj.y-obj.depth/2)*SCALE} ${(obj.x-obj.width/2)*SCALE},${(obj.y+obj.depth/2)*SCALE} ${(obj.x+obj.width/2)*SCALE},${(obj.y+obj.depth/2)*SCALE}`} fill={obj.color} fillOpacity={obj.fillOpacity ?? 0.72} stroke={selected?'#f59e0b':(obj.strokeColor||'#1f2937')} strokeWidth={selected?3:(obj.strokeWidth||1.2)} transform={`rotate(${obj.rotation} ${obj.x*SCALE} ${obj.y*SCALE})`}/>;
+        if (obj.shapeKind && ['triangle','pentagon','hexagon','star'].includes(obj.shapeKind)) return <polygon key={obj.id} points={canvasShapePolygonPoints(obj.shapeKind,obj.width,obj.depth)} fill={obj.color} fillOpacity={obj.fillOpacity ?? 0.72} stroke={selected?'#f59e0b':(obj.strokeColor||'#1f2937')} strokeWidth={selected?3:(obj.strokeWidth||1.2)} transform={`translate(${obj.x*SCALE},${obj.y*SCALE}) rotate(${obj.rotation})`}/>;
         if (['tree','shrub','rock','firepit','light','column'].includes(obj.type)) {
           return <circle key={obj.id} cx={obj.x*SCALE} cy={obj.y*SCALE} r={Math.max(5,obj.width*SCALE/2)} fill={obj.color} fillOpacity="0.75" stroke={selected?'#f59e0b':'#1f2937'} strokeWidth={selected?3:1.2}/>;
         }
