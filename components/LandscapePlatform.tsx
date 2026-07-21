@@ -449,6 +449,18 @@ type GardenObject = {
   locked?: boolean;
 };
 
+const LAYER_META: Record<string,{label:string;icon:string;color:string;description:string}> = {
+  terrain:{label:'Gelände',icon:'⛰',color:'#84a98c',description:'Höhenmodell, Konturen und Geländeverformung'},
+  zones:{label:'Flächen & Zonen',icon:'▧',color:'#d4a373',description:'Terrassen, Rasen-, Pflanz- und Nutzflächen'},
+  buildings:{label:'Gebäude',icon:'⌂',color:'#e9c46a',description:'Hauskörper, Wände, Dächer, Fenster und Türen'},
+  plants:{label:'Bepflanzung',icon:'✿',color:'#6a994e',description:'Bäume, Sträucher, Stauden, Gräser und Hecken'},
+  water:{label:'Wasser',icon:'≈',color:'#3a86ff',description:'Pool, Teich und Wasserflächen'},
+  structures:{label:'Bauteile',icon:'▤',color:'#b08968',description:'Pergolen, Mauern, Zäune, Treppen und Carports'},
+  lighting:{label:'Beleuchtung',icon:'✦',color:'#f4d35e',description:'Leuchten, Lichtpunkte und Nachtszenen'},
+  utilities:{label:'Technik',icon:'⌁',color:'#9d4edd',description:'Bewässerung, Drainage und Leitungen'},
+  furniture:{label:'Ausstattung',icon:'▱',color:'#bc6c25',description:'Bänke, Pflanzgefäße, Feuerstellen und Findlinge'}
+};
+
 const MATERIAL_LIBRARY: MaterialDefinition[] = [
   {id:'stone-gneiss',name:'Naturstein Gneis',category:'stone',baseColor:'#8b8178',roughness:0.9,metalness:0,opacity:1,texturePattern:'stone',textureScale:1.2,unitCostM2:135,description:'Lebendige Natursteinoberfläche für Wege, Mauern und Terrassen.',recommendedFor:['path','gardenWall','wall','stairs','floor']},
   {id:'stone-limestone',name:'Kalkstein hell',category:'stone',baseColor:'#d6c9b5',roughness:0.82,metalness:0,opacity:1,texturePattern:'stone',textureScale:1.4,unitCostM2:150,description:'Helle, elegante Natursteinoberfläche.',recommendedFor:['path','gardenWall','stairs','floor']},
@@ -1278,6 +1290,25 @@ function threeMaterialForObject(
   return material;
 }
 
+function materialFromLibrary(
+  materialId:string,
+  fallbackColor:string | number,
+  overrides?:Partial<THREE.MeshStandardMaterialParameters>
+) {
+  const definition=materialDefinitionById(materialId);
+  const texture=definition ? proceduralTextureForMaterial(definition,definition.textureScale) : null;
+  return new THREE.MeshStandardMaterial({
+    color:(definition?.baseColor || fallbackColor) as THREE.ColorRepresentation,
+    roughness:definition?.roughness ?? 0.82,
+    metalness:definition?.metalness ?? 0,
+    transparent:(definition?.opacity ?? 1)<0.999,
+    opacity:definition?.opacity ?? 1,
+    map:texture || undefined,
+    side:THREE.DoubleSide,
+    ...overrides
+  });
+}
+
 function defaultSurfaceLayersForMaterial(materialId:string):SurfaceLayer[] {
   const definition=materialDefinitionById(materialId);
   if(!definition) return [];
@@ -1882,6 +1913,50 @@ function buildWallWithOpenings3D(
 }
 
 
+function deterministicUnit(seed:number) {
+  const raw=Math.sin(seed*12.9898+78.233)*43758.5453;
+  return raw-Math.floor(raw);
+}
+
+function applySceneShadows(root:THREE.Object3D, enabled:boolean) {
+  root.traverse(node=>{
+    if(node instanceof THREE.Mesh){
+      node.castShadow=enabled;
+      node.receiveShadow=enabled;
+    }
+  });
+}
+
+function addFacadeWindow(
+  parent:THREE.Group,
+  width:number,
+  height:number,
+  x:number,
+  y:number,
+  z:number,
+  rotationY=0
+) {
+  const frameMaterial=new THREE.MeshStandardMaterial({color:'#24272d',roughness:0.34,metalness:0.66});
+  const glassMaterial=new THREE.MeshPhysicalMaterial({
+    color:'#bfe8f4',roughness:0.08,metalness:0.02,transparent:true,opacity:0.48,
+    transmission:0.22,thickness:0.06,clearcoat:0.45,clearcoatRoughness:0.12
+  });
+  const assembly=new THREE.Group();
+  assembly.position.set(x,y,z);
+  assembly.rotation.y=rotationY;
+  const pane=new THREE.Mesh(new THREE.BoxGeometry(width,height,0.045),glassMaterial);
+  assembly.add(pane);
+  const t=Math.max(0.035,Math.min(width,height)*0.045);
+  const top=new THREE.Mesh(new THREE.BoxGeometry(width+t*2,t,0.075),frameMaterial); top.position.y=height/2;
+  const bottom=top.clone(); bottom.position.y=-height/2;
+  const left=new THREE.Mesh(new THREE.BoxGeometry(t,height,0.075),frameMaterial); left.position.x=-width/2;
+  const right=left.clone(); right.position.x=width/2;
+  const mullion=left.clone(); mullion.position.x=0;
+  assembly.add(top,bottom,left,right,mullion);
+  parent.add(assembly);
+}
+
+
 function connectionPointOnObject(source: GardenObject, target: GardenObject) {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
@@ -1972,7 +2047,7 @@ export default function LandscapePlatform() {
   const [toolbarRecentColors, setToolbarRecentColors] = useState<string[]>([]);
   const [toolbarCopiedStyle, setToolbarCopiedStyle] = useState<Partial<GardenObject> | null>(null);
   const toolbarPalette = ['#7f1d1d','#be123c','#f59e0b','#84cc16','#16a34a','#0ea5e9','#2563eb','#8b5cf6','#8b5e3c','#64748b','#111827','#ffffff'];
-  const [status, setStatus] = useState('Bereit: V0.38 3D BRAND & PREMIUM INTERFACE – plastische Werkzeuge, dreidimensionales Markenlogo und Premium-Studio.');
+  const [status, setStatus] = useState('Bereit: V0.39 DETAILED SCENE & LAYER STUDIO – plastische Werkzeuge, dreidimensionales Markenlogo und Premium-Studio.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -5855,7 +5930,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
     return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${projectInfo.name} – AL Green Design Bericht</title><style>
       @page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#32101a;margin:0;background:#fff}header{border-bottom:4px solid #881337;padding-bottom:16px;margin-bottom:24px}.brand{display:flex;align-items:center;gap:14px}.logo{width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,#7f1d1d,#be123c);color:#fff;display:grid;place-items:center;font-weight:900;font-size:22px}.brand h1{margin:0;color:#5f0f22}.brand p{margin:4px 0 0;color:#9f3952}.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.card,.score{padding:12px;border:1px solid #ead7dc;border-radius:12px;background:#fff7f7}.card small{display:block;color:#9f3952}.card strong{display:block;margin-top:4px}h2{margin-top:28px;color:#6b1024;border-bottom:1px solid #ead7dc;padding-bottom:7px}h3{color:#7f1d1d}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border-bottom:1px solid #ead7dc;padding:7px;text-align:left}th{background:#fff1f2;color:#6b1024}.num{text-align:right}.total{font-size:20px;color:#7f1d1d}.footer{margin-top:30px;padding-top:10px;border-top:1px solid #ead7dc;font-size:10px;color:#9f3952}@media print{button{display:none}.card,.score{break-inside:avoid}table{break-inside:auto}tr{break-inside:avoid}}
     </style></head><body>
-      <header><div class="brand"><div class="logo">AL</div><div><h1>AL Green Design</h1><p>Landscape Architecture Studio · Projektbericht V0.38</p></div></div></header>
+      <header><div class="brand"><div class="logo">AL</div><div><h1>AL Green Design</h1><p>Landscape Architecture Studio · Projektbericht V0.39</p></div></div></header>
       <section><h2>Projekt</h2><div class="meta"><div class="card"><small>Name</small><strong>${projectInfo.name}</strong></div><div class="card"><small>Standort</small><strong>${projectInfo.location || '—'}</strong></div><div class="card"><small>Projektfläche</small><strong>${projectInfo.area.toFixed(0)} m²</strong></div><div class="card"><small>Budget</small><strong>${formatEuro(projectInfo.budget)}</strong></div></div></section>
       <section><h2>Kostenübersicht</h2><table><thead><tr><th>Kategorie</th><th class="num">Summe</th></tr></thead><tbody>${costRows}</tbody></table><p class="total"><strong>Gesamtschätzung: ${formatEuro(projectGrandTotal)}</strong></p><p>Budgetdifferenz: <strong>${formatEuro(budgetDifference)}</strong></p></section>
       <section><h2>Mengen und Positionen</h2><table><thead><tr><th>Kategorie</th><th>Position</th><th>Einheit</th><th class="num">Menge</th><th class="num">EP</th><th class="num">Gesamt</th></tr></thead><tbody>${quantityRows}</tbody></table></section>
@@ -7148,16 +7223,93 @@ Annahmen: ${result.assumptions.join(' · ')}`
         )}
 
         {tab === 'layers' && (
-          <>
-            <h2>Layerverwaltung</h2>
-            {Object.keys(layers).map(key => (
-              <div className="item" key={key} style={{marginBottom:8}}>
-                <strong>{key}</strong>
-                <label><input type="checkbox" checked={(layers as any)[key]} onChange={e=>setLayers({...layers,[key]:e.target.checked})}/> sichtbar</label>
-                <label><input type="checkbox" checked={(lockedLayers as any)[key]} onChange={e=>setLockedLayers({...lockedLayers,[key]:e.target.checked})}/> gesperrt</label>
+          <section className="detailedLayerStudio">
+            <div className="layerStudioHeader">
+              <div>
+                <span className="eyebrow">PLANSTRUKTUR</span>
+                <h2>Detaillierte Ebenenverwaltung</h2>
+                <p>Geschosse, Fachlayer und enthaltene Objekte mit Sichtbarkeit, Sperre und Höhenlage.</p>
               </div>
-            ))}
-          </>
+              <div className="layerHeaderActions">
+                <button className="btn" onClick={()=>setLayers(current=>Object.fromEntries(Object.keys(current).map(key=>[key,true])) as typeof current)}>Alle zeigen</button>
+                <button className="btn" onClick={()=>setLayers(current=>Object.fromEntries(Object.keys(current).map(key=>[key,false])) as typeof current)}>Alle aus</button>
+                <button className="btn" onClick={()=>setLockedLayers(current=>Object.fromEntries(Object.keys(current).map(key=>[key,false])) as typeof current)}>Entsperren</button>
+              </div>
+            </div>
+
+            <h3>Geschosse und Höhenebenen</h3>
+            <div className="buildingLevelCards">
+              {levels.map(level=>{
+                const levelObjects=objects.filter(object=>(object.level ?? 0)===level.id && isLevelBoundObject(object));
+                return (
+                  <article key={level.id} className={`buildingLevelCard ${activeLevel===level.id?'active':''}`}>
+                    <button className="levelPreview" onClick={()=>setActiveLevel(level.id)} aria-label={`${level.name} aktivieren`}>
+                      <span className="levelSlab" style={{transform:`translateY(${Math.min(14,Math.max(-14,level.elevation*2))}px)`}}/>
+                      <span className="levelMiniPlan">
+                        {levelObjects.slice(0,9).map((object,index)=>(
+                          <i key={object.id} style={{
+                            left:`${12+((index*29)%68)}%`,
+                            top:`${16+((index*19)%60)}%`,
+                            width:`${Math.max(10,Math.min(38,object.width*5))}%`,
+                            height:`${Math.max(8,Math.min(30,object.depth*5))}%`,
+                            background:object.color
+                          }}/>
+                        ))}
+                      </span>
+                    </button>
+                    <div className="levelCardBody">
+                      <div><strong>{level.name}</strong><span>{level.elevation>=0?'+':''}{level.elevation.toFixed(2)} m · Höhe {level.height.toFixed(2)} m</span></div>
+                      <div className="levelBadges"><span>{levelObjects.length} Objekte</span><span>{level.visible?'sichtbar':'ausgeblendet'}</span></div>
+                    </div>
+                    <div className="levelCardActions">
+                      <button className={activeLevel===level.id?'active':''} onClick={()=>setActiveLevel(level.id)}>Aktiv</button>
+                      <button onClick={()=>updateBuildingLevel(level.id,{visible:!level.visible})}>{level.visible?'◉':'○'}</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <h3>Fachlayer</h3>
+            <div className="professionalLayerList">
+              {Object.keys(layers).map(key => {
+                const meta=LAYER_META[key] || {label:key,icon:'◫',color:'#94a3b8',description:'Projektobjekte'};
+                const layerObjects=objects.filter(object=>objectLayer(object)===key);
+                const total=layerObjects.length+(key==='zones'?zones.length:0)+(key==='terrain'?terrainBlobs.length+elevationPoints.length:0);
+                return (
+                  <article className={`professionalLayerCard ${(layers as any)[key]?'visible':'hidden'} ${(lockedLayers as any)[key]?'locked':''}`} key={key}>
+                    <div className="layerColorRail" style={{background:meta.color}}/>
+                    <div className="layerIcon3D" style={{color:meta.color}}>{meta.icon}</div>
+                    <div className="layerCardContent">
+                      <div className="layerCardTitle"><strong>{meta.label}</strong><span>{total} Elemente</span></div>
+                      <p>{meta.description}</p>
+                      <div className="layerObjectPreview">
+                        {layerObjects.slice(0,5).map(object=>(
+                          <button key={object.id} onClick={()=>setSelection('object',object.id,`${object.name} über Layer ausgewählt.`)}>
+                            <i style={{background:object.color}}/><span>{object.name}</span><small>{object.height.toFixed(2)} m</small>
+                          </button>
+                        ))}
+                        {!layerObjects.length && key==='zones' && zones.slice(0,5).map(zone=>(
+                          <button key={zone.id} onClick={()=>setSelection('zone',zone.id,`${zone.name} über Layer ausgewählt.`)}>
+                            <i style={{background:zone.color}}/><span>{zone.name}</span><small>{(zone.width*zone.depth).toFixed(1)} m²</small>
+                          </button>
+                        ))}
+                        {!layerObjects.length && key==='terrain' && terrainBlobs.slice(0,5).map(blob=>(
+                          <button key={blob.id} onClick={()=>setSelection('terrain',blob.id,`${blob.name} über Layer ausgewählt.`)}>
+                            <i style={{background:blob.height>=0?'#84cc16':'#60a5fa'}}/><span>{blob.name}</span><small>{blob.height>=0?'+':''}{blob.height.toFixed(2)} m</small>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="layerSwitches">
+                      <label title="Sichtbarkeit"><input type="checkbox" checked={(layers as any)[key]} onChange={e=>setLayers({...layers,[key]:e.target.checked})}/><span>◉</span></label>
+                      <label title="Sperren"><input type="checkbox" checked={(lockedLayers as any)[key]} onChange={e=>setLockedLayers({...lockedLayers,[key]:e.target.checked})}/><span>▣</span></label>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {tab === 'costs' && (
@@ -7282,7 +7434,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
       <div className="workspace">
         <div className="topbar">
-          <div className="topbarBrand3D"><BrandLogo3D compact={true} animated={false} /><span><strong>V0.38</strong><small>3D PREMIUM STUDIO</small></span></div>
+          <div className="topbarBrand3D"><BrandLogo3D compact={true} animated={false} /><span><strong>V0.39</strong><small>DETAIL SCENE STUDIO</small></span></div>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -8464,7 +8616,8 @@ function Terrain3D({
     const mount = mountRef.current;
     if (!mount) return;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(nightMode ? 0x0f172a : season==='Winter' ? 0xe2e8f0 : 0xeaf2fb);
+    scene.background = new THREE.Color(nightMode ? 0x0b1324 : season==='Winter' ? 0xe2e8f0 : 0xdceaf1);
+    scene.fog = new THREE.Fog(nightMode ? 0x0b1324 : 0xdceaf1, 34, 86);
     const camera = new THREE.PerspectiveCamera(55, mount.clientWidth / mount.clientHeight, 0.1, 1000);
     camera.position.set(cameraMode==='top'?0:cameraMode==='walk'?7:16, cameraMode==='top'?24:cameraMode==='walk'?2.2:13, cameraMode==='top'?0.1:cameraMode==='walk'?9:18);
     const resolvedPerformance: Exclude<PerformanceMode,'auto'> =
@@ -8478,6 +8631,9 @@ function Terrain3D({
     });
 
     renderer.setSize(mount.clientWidth, mount.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = nightMode ? 0.82 : 1.08;
     renderer.setPixelRatio(
       Math.min(
         window.devicePixelRatio,
@@ -8495,7 +8651,11 @@ function Terrain3D({
     controls.enableDamping = resolvedPerformance!=='fast';
     controls.target.set(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(nightMode ? 0x9db4ff : 0xffffff, nightMode ? 0.38 : 0.82));
+    scene.add(new THREE.HemisphereLight(nightMode ? 0x8aa4d8 : 0xeaf6ff, nightMode ? 0x172033 : 0x6f7f62, nightMode ? 0.62 : 1.18));
+    scene.add(new THREE.AmbientLight(nightMode ? 0x8396c8 : 0xfff6e9, nightMode ? 0.18 : 0.34));
+    const fillLight = new THREE.DirectionalLight(nightMode ? 0x4d5f8d : 0xffe4c2, nightMode ? 0.22 : 0.42);
+    fillLight.position.set(-18,10,-12);
+    scene.add(fillLight);
     const sun = new THREE.DirectionalLight(nightMode ? 0x94a3b8 : 0xffffff, nightMode ? 0.35 : 1.25);
     const az = degToRad(sunAzimuth);
     const el = degToRad(sunElevation);
@@ -8541,9 +8701,17 @@ function Terrain3D({
 
     zones.forEach(zone => {
       const h = terrainSurfaceHeight(zone.x, zone.y, elevationPoints, terrainBlobs, elevationPoints.some(point=>point.kind==='proposed')?'proposed':'existing');
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(zone.width, zone.kind === 'hardscape' ? 0.12 : 0.05, zone.depth), new THREE.MeshStandardMaterial({ color: zone.color, transparent: true, opacity: zone.kind === 'hardscape' ? 0.92 : 0.55 }));
-      mesh.position.set(zone.x, h + (zone.kind === 'hardscape' ? 0.08 : 0.03), zone.y);
+      const zoneMaterial=zone.kind==='hardscape'
+        ? materialFromLibrary('stone-limestone',zone.color,{roughness:0.84})
+        : new THREE.MeshStandardMaterial({color:zone.color,roughness:0.98,transparent:true,opacity:0.78});
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(zone.width, zone.kind === 'hardscape' ? 0.12 : 0.055, zone.depth), zoneMaterial);
+      mesh.position.set(zone.x, h + (zone.kind === 'hardscape' ? 0.08 : 0.035), zone.y);
+      mesh.receiveShadow=renderer.shadowMap.enabled;
       scene.add(mesh);
+      if(zone.kind==='hardscape'){
+        const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:0x8b8178,transparent:true,opacity:0.48}));
+        mesh.add(edge);
+      }
     });
 
     const importedModelGroups: { id: string; group: THREE.Group }[] = [];
@@ -8745,35 +8913,97 @@ function Terrain3D({
       }
 
       if (obj.type === 'building') {
-        const body = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), threeMaterialForObject(obj,obj.color));
-        body.position.y = obj.height / 2;
-        group.add(body);
-        addEdge(body, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(obj.width, obj.depth) * 0.75, 1.0, 4), new THREE.MeshStandardMaterial({ color: '#8b5a3c' }));
-        roof.position.y = obj.height + 0.5;
-        roof.rotation.y = Math.PI / 4;
-        group.add(roof);
+        const wallHeight=Math.max(1.8,obj.height);
+        const plinth=new THREE.Mesh(new THREE.BoxGeometry(obj.width+0.14,0.22,obj.depth+0.14),new THREE.MeshStandardMaterial({color:'#64615d',roughness:0.96}));
+        plinth.position.y=0.11; group.add(plinth);
+        const body=new THREE.Mesh(new THREE.BoxGeometry(obj.width,wallHeight-0.18,obj.depth),threeMaterialForObject(obj,obj.color,{roughness:0.88}));
+        body.position.y=0.18+(wallHeight-0.18)/2; group.add(body);
+
+        const accentWidth=Math.min(Math.max(obj.width*0.18,0.55),1.35);
+        const accent=new THREE.Mesh(new THREE.BoxGeometry(accentWidth,wallHeight*0.92,0.055),new THREE.MeshStandardMaterial({color:'#6b1024',roughness:0.78}));
+        accent.position.set(obj.width/2-accentWidth*0.65,wallHeight*0.48,obj.depth/2+0.032); group.add(accent);
+
+        const frontWindowCount=resolvedPerformance==='fast'?1:Math.max(2,Math.min(4,Math.floor(obj.width/1.6)));
+        const usableWidth=Math.max(0.8,obj.width-accentWidth-0.9);
+        const windowWidth=Math.min(1.15,Math.max(0.55,usableWidth/frontWindowCount*0.72));
+        for(let index=0;index<frontWindowCount;index++){
+          const x=-obj.width/2+0.48+(index+0.5)*(usableWidth/frontWindowCount);
+          addFacadeWindow(group,windowWidth,Math.min(1.25,wallHeight*0.42),x,wallHeight*0.56,obj.depth/2+0.035);
+        }
+        if(resolvedPerformance!=='fast'){
+          const sideCount=Math.max(1,Math.min(3,Math.floor(obj.depth/2.2)));
+          for(let index=0;index<sideCount;index++){
+            const z=-obj.depth/2+(index+1)*(obj.depth/(sideCount+1));
+            addFacadeWindow(group,Math.min(1.0,obj.depth/(sideCount+2)),Math.min(1.05,wallHeight*0.36),obj.width/2+0.035,wallHeight*0.57,z,Math.PI/2);
+          }
+        }
+
+        const doorWidth=Math.min(1.05,Math.max(0.75,obj.width*0.16));
+        const doorHeight=Math.min(2.15,wallHeight*0.76);
+        const door=new THREE.Mesh(new THREE.BoxGeometry(doorWidth,doorHeight,0.08),new THREE.MeshStandardMaterial({color:'#4a2f25',roughness:0.62,metalness:0.08}));
+        door.position.set(-obj.width/2+doorWidth*0.68,doorHeight/2,obj.depth/2+0.045); group.add(door);
+        const handle=new THREE.Mesh(new THREE.SphereGeometry(0.035,10,8),new THREE.MeshStandardMaterial({color:'#d6b27d',roughness:0.26,metalness:0.78}));
+        handle.position.set(doorWidth*0.28,0,0.055); door.add(handle);
+
+        const roofMaterial=new THREE.MeshStandardMaterial({color:'#4a302c',roughness:0.78});
+        if((obj.subtype||'gable')==='flat'){
+          const roof=new THREE.Mesh(new THREE.BoxGeometry(obj.width+0.34,0.18,obj.depth+0.34),roofMaterial); roof.position.y=wallHeight+0.09; group.add(roof);
+        } else {
+          const pitch=Math.PI/7;
+          const halfWidth=(obj.width+0.44)/2;
+          const slopeLength=halfWidth/Math.cos(pitch);
+          const roofY=wallHeight+Math.sin(pitch)*halfWidth/2+0.05;
+          [-1,1].forEach(side=>{
+            const plane=new THREE.Mesh(new THREE.BoxGeometry(slopeLength,0.14,obj.depth+0.5),roofMaterial);
+            plane.rotation.z=side*pitch; plane.position.set(side*obj.width*0.245,roofY,0); group.add(plane);
+          });
+        }
+        const terrace=new THREE.Mesh(new THREE.BoxGeometry(Math.min(obj.width*0.72,5.4),0.12,Math.min(1.65,obj.depth*0.42)),materialFromLibrary('wood-thermo','#5b3a29',{roughness:0.76}));
+        terrace.position.set(0,0.07,obj.depth/2+Math.min(0.82,obj.depth*0.21)); group.add(terrace);
+        if(selectedKind === 'object' && selectedId === obj.id) group.add(new THREE.BoxHelper(body,0xf59e0b));
       }
       if (obj.type === 'pool') {
-        const border = new THREE.Mesh(new THREE.BoxGeometry(obj.width, 0.16, obj.depth), new THREE.MeshStandardMaterial({ color: '#d6eaf8' }));
-        border.position.y = 0.08;
-        group.add(border);
-        addEdge(border, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
-        const water = new THREE.Mesh(new THREE.BoxGeometry(obj.width * 0.9, 0.06, obj.depth * 0.9), new THREE.MeshStandardMaterial({ color: '#38bdf8', transparent: true, opacity: 0.85 }));
-        water.position.y = 0.02;
-        group.add(water);
+        const coping=materialFromLibrary(obj.materialId || 'stone-limestone','#d6c9b5',{roughness:0.78});
+        const t=0.2;
+        const innerWidth=Math.max(0.3,obj.width-0.42);
+        const innerDepth=Math.max(0.3,obj.depth-0.42);
+        const bottom=new THREE.Mesh(new THREE.BoxGeometry(innerWidth,0.08,innerDepth),new THREE.MeshStandardMaterial({color:'#dbeafe',roughness:0.72}));
+        bottom.position.y=-0.18; group.add(bottom);
+        const north=new THREE.Mesh(new THREE.BoxGeometry(obj.width,0.22,t),coping); north.position.set(0,0.03,obj.depth/2-t/2);
+        const south=north.clone(); south.position.z=-obj.depth/2+t/2;
+        const east=new THREE.Mesh(new THREE.BoxGeometry(t,0.22,innerDepth),coping); east.position.set(obj.width/2-t/2,0.03,0);
+        const west=east.clone(); west.position.x=-obj.width/2+t/2;
+        group.add(north,south,east,west);
+        const water=new THREE.Mesh(new THREE.BoxGeometry(innerWidth,0.055,innerDepth),new THREE.MeshPhysicalMaterial({color:'#168aad',roughness:0.12,transparent:true,opacity:0.82,transmission:0.24,thickness:0.18,clearcoat:0.6,clearcoatRoughness:0.15}));
+        water.position.y=-0.01; group.add(water);
+        if(resolvedPerformance==='quality'){
+          for(let index=1;index<4;index++){
+            const line=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.012,innerDepth*0.86),new THREE.MeshBasicMaterial({color:'#e0f2fe',transparent:true,opacity:0.45}));
+            line.position.set(-innerWidth/2+innerWidth*index/4,0.025,0); group.add(line);
+          }
+        }
+        if(selectedKind === 'object' && selectedId === obj.id) group.add(new THREE.BoxHelper(north,0xf59e0b));
       }
       if (obj.type === 'pergola') {
-        const roof = new THREE.Mesh(new THREE.BoxGeometry(obj.width, 0.16, obj.depth), threeMaterialForObject(obj,obj.color));
-        roof.position.y = obj.height;
-        group.add(roof);
-        addEdge(roof, selectedKind === 'object' && selectedId === obj.id ? 0xf59e0b : 0x475569);
-        const postPos = [[-obj.width/2+0.12,-obj.depth/2+0.12],[obj.width/2-0.12,-obj.depth/2+0.12],[-obj.width/2+0.12,obj.depth/2-0.12],[obj.width/2-0.12,obj.depth/2-0.12]];
-        postPos.forEach(([x,z]) => {
-          const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, obj.height, 0.12), threeMaterialForObject(obj,obj.color));
-          post.position.set(x, obj.height/2, z);
-          group.add(post);
+        const pergolaMaterial=threeMaterialForObject(obj,obj.color,{roughness:0.62,metalness:obj.materialId?.startsWith('metal')?0.58:0.06});
+        const postSize=Math.max(0.11,Math.min(0.18,Math.min(obj.width,obj.depth)*0.04));
+        [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
+          const post=new THREE.Mesh(new THREE.BoxGeometry(postSize,obj.height,postSize),pergolaMaterial);
+          post.position.set(sx*(obj.width/2-postSize),obj.height/2,sz*(obj.depth/2-postSize)); group.add(post);
         });
+        const beamT=Math.max(0.12,postSize*1.05);
+        const front=new THREE.Mesh(new THREE.BoxGeometry(obj.width,beamT,postSize),pergolaMaterial); front.position.set(0,obj.height,-obj.depth/2+postSize);
+        const back=front.clone(); back.position.z=obj.depth/2-postSize;
+        const left=new THREE.Mesh(new THREE.BoxGeometry(postSize,beamT,obj.depth),pergolaMaterial); left.position.set(-obj.width/2+postSize,obj.height,0);
+        const right=left.clone(); right.position.x=obj.width/2-postSize;
+        group.add(front,back,left,right);
+        const slatCount=resolvedPerformance==='fast'?5:Math.max(7,Math.min(18,Math.round(obj.width/0.35)));
+        for(let index=0;index<slatCount;index++){
+          const x=-obj.width/2+(index+0.5)*(obj.width/slatCount);
+          const slat=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.045,obj.width/slatCount*0.34),0.075,obj.depth),pergolaMaterial);
+          slat.position.set(x,obj.height+0.085,0); group.add(slat);
+        }
+        if(selectedKind === 'object' && selectedId === obj.id) group.add(new THREE.BoxHelper(front,0xf59e0b));
       }
       if (obj.type === 'wall' || obj.type === 'interiorWall') {
         const openings = objects.filter(opening => opening.parentId === obj.id && isOpeningObject(opening));
@@ -8965,22 +9195,34 @@ function Terrain3D({
         rock.scale.set(1,obj.height/Math.max(obj.width,obj.depth),obj.depth/obj.width);rock.position.y=obj.height/2;group.add(rock);
       }
       if (obj.type === 'tree') {
-        const growthData = obj.speciesId ? currentPlantDimensions(obj,growthYear) : null;
-        const growthFactor = growthData
-          ? Math.max(0.08,growthData.height/Math.max(obj.height,0.1))
-          : growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9;
-        const widthGrowthFactor = growthData
-          ? Math.max(0.08,growthData.width/Math.max(obj.width,0.1))
-          : growthFactor;
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, obj.height * 0.45 * growthFactor, 12), new THREE.MeshStandardMaterial({ color: '#7c4a2d' }));
-        trunk.position.y = obj.height * 0.225 * growthFactor;
-        group.add(trunk);
-        const leafColor = season==='Herbst'?'#d97706':season==='Winter'?'#94a3b8':season==='Frühling'?'#22c55e':obj.color;
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max(obj.width * 0.6 * widthGrowthFactor, 0.18), 18, 14), new THREE.MeshStandardMaterial({ color: leafColor, transparent: season==='Winter', opacity: season==='Winter'?0.45:1 }));
-        crown.position.y = obj.height * 0.7 * growthFactor;
-        if (obj.plantForm==='columnar') crown.scale.set(0.68,1.35,0.68);
-        if (obj.plantForm==='multiStem') crown.scale.set(1.12,0.82,1.02);
-        group.add(crown);
+        const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
+        const renderHeight=dims?.height || obj.height*(growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9);
+        const renderWidth=dims?.width || obj.width*(growthYear===0?1:growthYear===3?1.2:growthYear===10?1.55:1.9);
+        const trunkHeight=Math.max(0.45,renderHeight*0.42);
+        const trunk=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.055,renderWidth*0.055),Math.max(0.08,renderWidth*0.075),trunkHeight,resolvedPerformance==='fast'?8:14),new THREE.MeshStandardMaterial({color:'#71462e',roughness:0.96}));
+        trunk.position.y=trunkHeight/2; group.add(trunk);
+        if(resolvedPerformance!=='fast'){
+          for(let branchIndex=0;branchIndex<4;branchIndex++){
+            const angle=branchIndex*Math.PI/2+deterministicUnit(obj.id+branchIndex)*0.65;
+            const length=renderWidth*(0.22+deterministicUnit(obj.id*7+branchIndex)*0.12);
+            const branch=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.055,length,8),new THREE.MeshStandardMaterial({color:'#755039',roughness:0.95}));
+            branch.rotation.z=Math.PI/2.7; branch.rotation.y=angle;
+            branch.position.set(Math.cos(angle)*length*0.18,trunkHeight*0.82,Math.sin(angle)*length*0.18); group.add(branch);
+          }
+        }
+        const leafColor=season==='Herbst'?'#c96f24':season==='Winter'?'#8b9b8e':season==='Frühling'?'#3e9b52':obj.color;
+        const crownMaterial=new THREE.MeshStandardMaterial({color:leafColor,roughness:0.92,transparent:season==='Winter',opacity:season==='Winter'?0.42:1});
+        const crownCount=resolvedPerformance==='fast'?2:resolvedPerformance==='balanced'?5:8;
+        for(let index=0;index<crownCount;index++){
+          const angle=(index/crownCount)*Math.PI*2+deterministicUnit(obj.id+index)*0.5;
+          const radial=renderWidth*(index===0?0:0.18+deterministicUnit(obj.id*11+index)*0.18);
+          const radius=renderWidth*(0.24+deterministicUnit(obj.id*17+index)*0.11);
+          const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(0.16,radius),resolvedPerformance==='quality'?2:1),crownMaterial);
+          crown.position.set(Math.cos(angle)*radial,trunkHeight+renderHeight*0.2+deterministicUnit(obj.id*23+index)*renderHeight*0.18,Math.sin(angle)*radial);
+          crown.scale.y=obj.plantForm==='columnar'?1.28:0.88+deterministicUnit(obj.id*29+index)*0.28;
+          if(obj.plantForm==='columnar') crown.scale.x=crown.scale.z=0.66;
+          group.add(crown);
+        }
       }
       if (obj.type === 'shrub' && obj.plantForm === 'grass') {
         const grassMaterial=new THREE.MeshStandardMaterial({color:obj.color,roughness:0.95});
@@ -9018,19 +9260,39 @@ function Terrain3D({
       }
 
       if (obj.type === 'shrub' && obj.plantForm !== 'grass' && obj.plantForm !== 'perennial') {
-        const shrubColor = season==='Herbst'?'#b45309':season==='Winter'?'#94a3b8':obj.color;
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(Math.max((obj.speciesId?currentPlantDimensions(obj,growthYear).width:obj.width*(growthYear===0?1:growthYear===3?1.15:growthYear===10?1.4:1.65))*0.5, 0.16), 16, 14), new THREE.MeshStandardMaterial({ color: shrubColor }));
-        crown.position.y = obj.height * 0.45;
-        crown.scale.y = 0.8;
-        group.add(crown);
+        const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
+        const renderWidth=dims?.width || obj.width;
+        const renderHeight=dims?.height || obj.height;
+        const shrubColor=season==='Herbst'?'#9a5a22':season==='Winter'?'#87958b':obj.color;
+        const shrubMaterial=new THREE.MeshStandardMaterial({color:shrubColor,roughness:0.94});
+        const count=resolvedPerformance==='fast'?1:resolvedPerformance==='balanced'?4:7;
+        for(let index=0;index<count;index++){
+          const angle=index*Math.PI*2/count;
+          const radial=index===0?0:renderWidth*0.22;
+          const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(0.11,renderWidth*(index===0?0.34:0.23)),resolvedPerformance==='quality'?2:1),shrubMaterial);
+          lump.position.set(Math.cos(angle)*radial,renderHeight*(0.36+deterministicUnit(obj.id+index)*0.18),Math.sin(angle)*radial);
+          lump.scale.y=0.72+deterministicUnit(obj.id*5+index)*0.26; group.add(lump);
+        }
       }
       if (obj.type === 'hedge') {
-    const dims=obj.speciesId?currentPlantDimensions(obj,growthYear):null;
-    const renderDepth=dims?Math.min(obj.depth,Math.max(0.25,dims.width*0.35)):obj.depth;
-        const hedge = new THREE.Mesh(new THREE.BoxGeometry(obj.width, obj.height, obj.depth), threeMaterialForObject(obj,obj.color));
-        hedge.position.y = obj.height / 2;
-        group.add(hedge);
+        if(resolvedPerformance==='fast'){
+          const hedge=new THREE.Mesh(new THREE.BoxGeometry(obj.width,obj.height,obj.depth),threeMaterialForObject(obj,obj.color,{roughness:0.96}));
+          hedge.position.y=obj.height/2; group.add(hedge);
+        } else {
+          const count=Math.max(3,Math.min(16,Math.ceil(obj.width/0.55)));
+          const hedgeMaterial=new THREE.MeshStandardMaterial({color:obj.color,roughness:0.96});
+          for(let index=0;index<count;index++){
+            const x=-obj.width/2+(index+0.5)*(obj.width/count);
+            const lump=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(obj.depth*0.48,obj.width/count*0.72),resolvedPerformance==='quality'?2:1),hedgeMaterial);
+            lump.position.set(x,obj.height*0.52,0);
+            lump.scale.set(1,obj.height/Math.max(obj.depth,0.2)*0.68,Math.max(0.72,obj.depth/Math.max(obj.width/count,0.2)));
+            group.add(lump);
+          }
+        }
       }
+
+
+      applySceneShadows(group,renderer.shadowMap.enabled);
     });
 
     const getPointer = (event: PointerEvent) => {

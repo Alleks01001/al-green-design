@@ -102,7 +102,7 @@ export default function ScanStudio() {
   return (
     <main className="scanPage">
       <section className="scanHero">
-        <p>AL Green Design · V0.38 WEB SCAN BRIDGE</p>
+        <p>AL Green Design · V0.39 WEB SCAN BRIDGE</p>
         <h1>Scan- und Import-Studio</h1>
         <p>Webbasierter Scan- und Dateiimport mit optionaler nativer Geräte-Bridge. Es ist kein Apple-/iOS-Projekt enthalten.</p>
       </section>

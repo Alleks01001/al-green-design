@@ -9,7 +9,7 @@ export default function Home() {
           <div className="premiumHeroBrand">
             <BrandLogo3D />
             <div>
-              <p>AL Green Design · V0.38 3D BRAND & PREMIUM INTERFACE</p>
+              <p>AL Green Design · V0.39 DETAILED SCENE & LAYER STUDIO</p>
               <strong>Landscape Architecture Studio</strong>
             </div>
           </div>
@@ -28,7 +28,7 @@ export default function Home() {
           <img src="/brand/al-green-design-3d-studio.webp" alt="3D Designkonzept von AL Green Design" />
           <div className="premiumHeroVisualGlass">
             <BrandLogo3D compact={true} animated={false} />
-            <div><strong>V0.38</strong><span>3D Brand System</span></div>
+            <div><strong>V0.39</strong><span>Detailed Scene System</span></div>
           </div>
         </div>
       </section>
