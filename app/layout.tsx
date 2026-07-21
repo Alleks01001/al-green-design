@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – V0.37 EXTENDED STUDIO',
-  description: 'Erweitertes Garten- und Landschaftsplanungsstudio mit Projektverwaltung, Layern, Soft Terrain, verschiebbaren Gebäuden/Zonen, Kosten, Analysen und lokaler lernfähiger Befehlslogik sowie erweiterter CAD-Zeichenwerkzeugleiste für zusätzliche Formen, variable Maße, Linienarten, Pfeile, dynamische Verbindungsrouten, Ebenenreihenfolge und Stilübertragung.',
+  title: 'AL Green Design – V0.38 3D BRAND & PREMIUM INTERFACE',
+  description: 'Premium Garten- und Landschaftsplanungsstudio mit dreidimensionalem AL-Green-Design-Markenauftritt, plastischer CAD-Werkzeugleiste, 2D-/3D-Studio, Gelände, Architektur, Pflanzen, Wasser und Adaptive Garden Intelligence.',
   robots: { index: false, follow: false }
 };
 

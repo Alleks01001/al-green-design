@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import BrandLogo3D from '@/components/BrandLogo3D';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ImportedReliefModel, IMPORTED_MODEL_STORAGE_KEY } from '@/types/importedModel';
@@ -1971,7 +1972,7 @@ export default function LandscapePlatform() {
   const [toolbarRecentColors, setToolbarRecentColors] = useState<string[]>([]);
   const [toolbarCopiedStyle, setToolbarCopiedStyle] = useState<Partial<GardenObject> | null>(null);
   const toolbarPalette = ['#7f1d1d','#be123c','#f59e0b','#84cc16','#16a34a','#0ea5e9','#2563eb','#8b5cf6','#8b5e3c','#64748b','#111827','#ffffff'];
-  const [status, setStatus] = useState('Bereit: V0.37 EXTENDED STUDIO – erweiterte Formen, Linien, Verbindungen, Farben und CAD-Schnellaktionen.');
+  const [status, setStatus] = useState('Bereit: V0.38 3D BRAND & PREMIUM INTERFACE – plastische Werkzeuge, dreidimensionales Markenlogo und Premium-Studio.');
   const [chat, setChat] = useState('Erstelle ein sanftes Gelände mit zwei Hügeln, einer Terrasse im Süden und einem modernen Glashaus im Norden.');
   const [chatEngine, setChatEngine] = useState<ChatEngine>('local');
   const [openAiModel, setOpenAiModel] = useState('gpt-4o');
@@ -5854,7 +5855,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
     return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${projectInfo.name} – AL Green Design Bericht</title><style>
       @page{size:A4;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#32101a;margin:0;background:#fff}header{border-bottom:4px solid #881337;padding-bottom:16px;margin-bottom:24px}.brand{display:flex;align-items:center;gap:14px}.logo{width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,#7f1d1d,#be123c);color:#fff;display:grid;place-items:center;font-weight:900;font-size:22px}.brand h1{margin:0;color:#5f0f22}.brand p{margin:4px 0 0;color:#9f3952}.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}.card,.score{padding:12px;border:1px solid #ead7dc;border-radius:12px;background:#fff7f7}.card small{display:block;color:#9f3952}.card strong{display:block;margin-top:4px}h2{margin-top:28px;color:#6b1024;border-bottom:1px solid #ead7dc;padding-bottom:7px}h3{color:#7f1d1d}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border-bottom:1px solid #ead7dc;padding:7px;text-align:left}th{background:#fff1f2;color:#6b1024}.num{text-align:right}.total{font-size:20px;color:#7f1d1d}.footer{margin-top:30px;padding-top:10px;border-top:1px solid #ead7dc;font-size:10px;color:#9f3952}@media print{button{display:none}.card,.score{break-inside:avoid}table{break-inside:auto}tr{break-inside:avoid}}
     </style></head><body>
-      <header><div class="brand"><div class="logo">AL</div><div><h1>AL Green Design</h1><p>Landscape Architecture Studio · Projektbericht V0.31</p></div></div></header>
+      <header><div class="brand"><div class="logo">AL</div><div><h1>AL Green Design</h1><p>Landscape Architecture Studio · Projektbericht V0.38</p></div></div></header>
       <section><h2>Projekt</h2><div class="meta"><div class="card"><small>Name</small><strong>${projectInfo.name}</strong></div><div class="card"><small>Standort</small><strong>${projectInfo.location || '—'}</strong></div><div class="card"><small>Projektfläche</small><strong>${projectInfo.area.toFixed(0)} m²</strong></div><div class="card"><small>Budget</small><strong>${formatEuro(projectInfo.budget)}</strong></div></div></section>
       <section><h2>Kostenübersicht</h2><table><thead><tr><th>Kategorie</th><th class="num">Summe</th></tr></thead><tbody>${costRows}</tbody></table><p class="total"><strong>Gesamtschätzung: ${formatEuro(projectGrandTotal)}</strong></p><p>Budgetdifferenz: <strong>${formatEuro(budgetDifference)}</strong></p></section>
       <section><h2>Mengen und Positionen</h2><table><thead><tr><th>Kategorie</th><th>Position</th><th>Einheit</th><th class="num">Menge</th><th class="num">EP</th><th class="num">Gesamt</th></tr></thead><tbody>${quantityRows}</tbody></table></section>
@@ -5987,14 +5988,12 @@ Annahmen: ${result.assumptions.join(' · ')}`
   return (
     <section className={`platform ${presentationMode?'presentationMode':''}`}>
       <aside className="panel">
-        <div className="brandBlock">
-          <div className="brandLogo" aria-hidden="true">
-            <span className="brandLeaf"></span>
-            <span className="brandGrid"></span>
-          </div>
-          <div>
+        <div className="brandBlock brandBlock3D">
+          <BrandLogo3D compact={true} />
+          <div className="brandBlockCopy">
             <strong>AL Green Design</strong>
             <span>Landscape Architecture Studio</span>
+            <small>Design · Plan · Visualize · Realize</small>
           </div>
         </div>
         <h2>Module</h2>
@@ -7283,7 +7282,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
 
       <div className="workspace">
         <div className="topbar">
-          <span className="pill brandPill">V0.37 EXTENDED STUDIO</span>
+          <div className="topbarBrand3D"><BrandLogo3D compact={true} animated={false} /><span><strong>V0.38</strong><small>3D PREMIUM STUDIO</small></span></div>
           <span className="pill">Terrain {terrainBlobs.length}</span>
           <span className="pill">Zonen {zones.length}</span>
           <span className="pill">Objekte {objects.length}</span>
@@ -7385,7 +7384,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
           {presentationMode && (
             <div className="presentationToolbar">
               <div className="presentationBrand">
-                <div className="miniLogo">AL</div>
+                <BrandLogo3D compact={true} animated={false} />
                 <div><strong>{projectInfo.name}</strong><span>{presentationCaption}</span></div>
               </div>
               <div className="presentationActions">

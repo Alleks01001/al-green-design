@@ -1,13 +1,35 @@
 import LandscapePlatform from '@/components/LandscapePlatform';
+import BrandLogo3D from '@/components/BrandLogo3D';
 
 export default function Home() {
   return (
-    <main>
-      <section className="hero">
-        <p>AL Green Design · Entwicklungsstand V0.37 EXTENDED STUDIO</p>
-        <h1>Landscape Architecture – ADVANCED STUDIO – Gelände, Architektur, Pflanzen, Wasser, Licht, KI</h1>
-        <div>
-          Planungsstudio mit lernfähiger Garden Intelligence und um rund 30 % ausgebauter CAD-Werkzeugleiste: zusätzliche Formen, getrennte Maße, Linienarten, Pfeile, rechtwinklige und gebogene Verbindungen, Stilübertragung, Sperren, Ebenenreihenfolge und präzise Mehrfachbearbeitung.
+    <main className="premiumAppShell">
+      <section className="premiumHero3D">
+        <div className="premiumHeroCopy">
+          <div className="premiumHeroBrand">
+            <BrandLogo3D />
+            <div>
+              <p>AL Green Design · V0.38 3D BRAND & PREMIUM INTERFACE</p>
+              <strong>Landscape Architecture Studio</strong>
+            </div>
+          </div>
+          <h1>Planen, gestalten und präsentieren – in einer räumlichen Premium-Arbeitsumgebung.</h1>
+          <div className="premiumHeroText">
+            Burgunderrot, Roségold und echte Tiefenwirkung verbinden die erweiterte CAD-Werkzeugleiste, 2D-/3D-Planung, Gelände, Architektur, Pflanzen, Wasser und die Adaptive Garden Intelligence zu einem einheitlichen Studio.
+          </div>
+          <div className="premiumHeroFeatures" aria-label="Schwerpunkte">
+            <span>3D Markenlogo</span>
+            <span>Premium Werkzeugleiste</span>
+            <span>2D / 3D Split Studio</span>
+            <span>Präsentationsmodus</span>
+          </div>
+        </div>
+        <div className="premiumHeroVisual">
+          <img src="/brand/al-green-design-3d-studio.webp" alt="3D Designkonzept von AL Green Design" />
+          <div className="premiumHeroVisualGlass">
+            <BrandLogo3D compact={true} animated={false} />
+            <div><strong>V0.38</strong><span>3D Brand System</span></div>
+          </div>
         </div>
       </section>
       <LandscapePlatform />
