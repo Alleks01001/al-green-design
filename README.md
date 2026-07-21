@@ -1,32 +1,31 @@
+# AL Green Design V0.40 – Photoreal Render Core
 
-# AL Green Design Studio 2.0 – Foundation
+Vollständiges Next.js-Projekt für Garten-, Gelände- und Landschaftsplanung mit 2D-/3D-Studio, lokaler Garden Intelligence, detaillierter Ebenenverwaltung und erweitertem Echtzeit-Rendering.
 
-Professionelle, modular aufgebaute CAD-/BIM-ähnliche Webanwendung für Garten- und Landschaftsplanung.
+## Neu in V0.40
 
-## Bereits enthalten
+- Editor-, Präsentations- und Fotoreal-Profil
+- prozedurale Tag-, Golden-Hour-, Wolken- und Nachtumgebung
+- PBR-Umgebungsreflexionen
+- ACES, Reinhard, Cineon und Linear Tone Mapping
+- 4K-Schattenkarten im Fotoreal-Profil
+- Kontakt-Schatten und Bodenreflexionen
+- Kamera-Presets und einstellbare Brennweite
+- PNG-Export der aktuellen 3D-Ansicht
 
-- modularer Projektaufbau
-- typisiertes CAD-/BIM-Datenmodell
-- 2D-CAD-Arbeitsfläche
-- Three.js-3D-Engine
-- Layer
-- BIM-Inspector
-- lokale Garden-KI
-- Pflanzenbibliothek
-- Materialbibliothek
-- Kostenkern
-- vorbereitete Export-, Terrain-, Render- und Agentenmodule
-
-## Installation
+## Lokal starten
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-## Build
+## Produktionsprüfung
 
 ```bash
 npm run typecheck
 npm run build
+npm start
 ```
+
+Die ausgeführte Validierung ist in `BUILD_VERIFIED_V040.md` dokumentiert.
