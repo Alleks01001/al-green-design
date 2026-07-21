@@ -5657,7 +5657,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
       setCopilotError(message);
       setCopilotMessages(current => [...current,{
         id:`assistant-error-${Date.now()}`,
-        role:'assistant',
+        role:'assistant' as AiChatRole,
         content:`Die lokale Anweisung konnte nicht verarbeitet werden: ${message}`,
         createdAt:new Date().toISOString()
       }].slice(-40));
@@ -5670,7 +5670,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
     setShowLearningGuide(current=>!current);
     setCopilotMessages(current => [...current,{
       id:`learning-guide-${Date.now()}`,
-      role:'assistant',
+      role:'assistant' as AiChatRole,
       content:LOCAL_GARDEN_TEACHING_GUIDE,
       createdAt:new Date().toISOString()
     }].slice(-40));
@@ -5696,7 +5696,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
       setLocalGardenMemory({...DEFAULT_LOCAL_GARDEN_MEMORY,...parsed,version:2});
       setCopilotMessages(current => [...current,{
         id:`memory-import-${Date.now()}`,
-        role:'assistant',
+        role:'assistant' as AiChatRole,
         content:'Wissensdatei importiert. '+describeLocalGardenMemory(parsed),
         createdAt:new Date().toISOString()
       }].slice(-40));
@@ -5726,7 +5726,7 @@ Annahmen: ${result.assumptions.join(' · ')}`
     localStorage.removeItem('al-green-v034-local-memory');
     setCopilotMessages(current => [...current,{
       id:`memory-reset-${Date.now()}`,
-      role:'assistant',
+      role:'assistant' as AiChatRole,
       content:'Der lokale Lernspeicher wurde auf die Grundeinstellungen zurückgesetzt.',
       createdAt:new Date().toISOString()
     }].slice(-40));

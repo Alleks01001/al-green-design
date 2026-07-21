@@ -1,113 +1,56 @@
-# AL Green Design – V0.32 AI COPILOT
+# AL Green Design V0.38 – Full Consolidated Project
 
-V0.31 integriert die bisher aufgebauten Module in einen gemeinsamen finalen Studio-Prototyp.
+Dies ist der vollständig zusammengeführte Projektstand aus dem aktuellen GitHub-Repository.
 
-## Kernworkflow
+## Enthalten
 
-```text
-2D planen
-→ 3D kontrollieren
-→ Gelände bearbeiten
-→ Architektur ergänzen
-→ Wege / Mauern / Treppen
-→ Pflanzen und Wachstum
-→ Sonne / Schatten
-→ Wasser / Entwässerung
-→ Bewässerung
-→ Materialien
-→ KI-Varianten
-→ Projektprüfung
-→ Präsentation
-→ Mengen / Kosten / Bericht
+- V0.31 Complete Studio als funktionale Basis
+- lokale und adaptive Garden Intelligence
+- Lernspeicher, Makros, Standards, Korrekturen sowie Wissensimport/-export
+- Smart Draw Toolbar
+- Auswahl, Bewegen, Füllen, Formen, Linien und dynamische Verbindungen
+- erweiterte CAD-Funktionen aus V0.37
+- 3D-Logo und Premium-Burgunder-Interface aus V0.38
+- 2D-, 3D- und Split-Ansichten
+- Gelände, Architektur, Pflanzen, Materialien, Wasser und Bewässerung
+- Mengen, Kosten, Projektprüfung, Präsentation und Berichte
+- Video-zu-3D-Vorbereitung und webbasiertes Scan-/Import-Studio
+- optionale serverseitige OpenAI-Routen; die lokale Garden Intelligence funktioniert ohne API-Schlüssel
+
+## Bereinigt
+
+Nicht mehr enthalten sind:
+
+- alte V1.0-Testarchitektur
+- doppelte Root-Dateien
+- alte Patch- und Diagnosefragmente
+- nicht verwendete Demo-Komponenten
+- native Apple-/iOS-Quelldateien
+- Build-Ausgaben und `node_modules`
+
+## Installation
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+npm run dev
 ```
 
-## Präsentationsmodus
+Danach: `http://localhost:3000`
 
-Neu:
+## Vercel
 
-- Gesamtübersicht
-- Tagansicht
-- Nachtansicht
-- Vegetationsentwicklung Jahr 10
-- reduzierte Bedienoberfläche für Kundengespräche
-- ESC beendet den Präsentationsmodus
+- Framework: Next.js
+- Node.js: 20.x
+- Root Directory: Projektwurzel
+- Build Command: `npm run build`
+- Install Command: `npm ci`
 
-## Mengen und Kosten
-
-Automatisch zusammengeführt werden unter anderem:
-
-- Wege und Flächen in m²
-- Mauern und lineare Bauteile in lfm
-- Pflanzen und Ausstattung in Stück
-- Technikleitungen in lfm
-- Erdarbeiten in m³
-
-Ausgabe:
-
-- Kosten nach Kategorie
-- Gesamtschätzung
-- Budgetauslastung
-- Budgetreserve oder Überschreitung
-- CSV-Export
-
-## Finaler Projektbericht
-
-Enthalten:
-
-- Projektdaten
-- Kostenübersicht
-- Mengenliste
-- Geländebilanz
-- Planungskennzahlen
-- Projektprüfung
-- Empfehlungen
-
-Der HTML-Bericht kann heruntergeladen werden. Die Druckansicht ist für A4 aufbereitet und kann über den Browser-Druckdialog als PDF gespeichert werden.
-
-## Projektprüfung
-
-V0.31 übernimmt die V0.30-Prüfung mit:
-
-- Geometrie
-- Gelände
-- Bepflanzung
-- Wasser
-- Sonne
-- Materialien
-- Budget
-- Architektur
-
-## Enthaltene Module aus V0.19–V0.30
-
-- stabilere Video-Frame-Extraktion
-- Video-Relief zu Hauptprojekt
-- CAD-Auswahl / Gruppierung / Ausrichtung
-- Architektur und Geschosse
-- Räume
-- professionelles Gelände
-- Wege / Mauern / Treppen
-- Pflanzenbibliothek
-- Pflanzenwachstum
-- Sonne / Schatten
-- Performance-Modi
-- Abfluss / Tiefpunkte / Retention
-- Smart Irrigation
-- Material- und Oberflächenbibliothek
-- KI-Planungsvarianten
-- Projekt-Audit
-
-## Wichtige technische Grenze
-
-Die schnelle Video-3D-Funktion erzeugt weiterhin ein bildbasiertes Relief. Eine echte hochqualitative Multi-View-Photogrammetrie benötigt einen separaten Rechen-Worker / Backend-Prozess.
-
-## Version
+Optional für externe KI-Funktionen:
 
 ```text
-0.32.0
+OPENAI_API_KEY=...
 ```
 
-## V0.32 – AI Copilot
-
-Neu hinzugekommen ist ein projektbewusster Mehr-Runden-Chat über die OpenAI Responses API.
-
-Der Copilot kann nicht nur Text beantworten, sondern den aktuellen Plan über validierte Aktionen verändern. Löschaktionen benötigen eine ausdrückliche Bestätigung. Details zur Einrichtung stehen in `AI_COPILOT_SETUP.md`.
+Die lokale Garden Intelligence benötigt keinen API-Schlüssel.

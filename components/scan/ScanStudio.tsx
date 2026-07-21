@@ -102,9 +102,9 @@ export default function ScanStudio() {
   return (
     <main className="scanPage">
       <section className="scanHero">
-        <p>AL Green Design · V0.18.1 NATIVE LIDAR</p>
-        <h1>Mobile Scan / LiDAR Studio</h1>
-        <p>Echter LiDAR-/Depth-Scan über native Bridge. Kamera nur als visueller Fallback.</p>
+        <p>AL Green Design · V0.38 WEB SCAN BRIDGE</p>
+        <h1>Scan- und Import-Studio</h1>
+        <p>Webbasierter Scan- und Dateiimport mit optionaler nativer Geräte-Bridge. Es ist kein Apple-/iOS-Projekt enthalten.</p>
       </section>
 
       <section className="scanGrid">
