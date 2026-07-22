@@ -1,0 +1,141 @@
+"use client";
+
+import { useRef, useState, type ChangeEvent } from "react";
+import { BrandLogo } from "@/components/layout/BrandLogo";
+import { CadCanvas } from "@/components/cad/CadCanvas";
+import { ThreeViewport } from "@/components/render/ThreeViewport";
+import { GardenAI } from "@/components/ai/GardenAI";
+import { LibraryPanel } from "@/components/library/LibraryPanel";
+import { BimInspector } from "@/components/bim/BimInspector";
+import { TerrainPanel } from "@/components/terrain/TerrainPanel";
+import { PlantIntelligencePanel } from "@/components/plants/PlantIntelligencePanel";
+import { useProjectStore } from "@/stores/projectStore";
+import type { CadTool, ProjectFile } from "@/types/domain";
+
+const tools: Array<{ id: CadTool; label: string; icon: string }> = [
+  { id: "select", label: "Auswahl", icon: "↖" },
+  { id: "pan", label: "Pan", icon: "✋" },
+  { id: "move", label: "Verschieben", icon: "✥" },
+  { id: "line", label: "Linie", icon: "╱" },
+  { id: "polyline", label: "Polylinie", icon: "⌁" },
+  { id: "rectangle", label: "Rechteck", icon: "▭" },
+  { id: "circle", label: "Kreis", icon: "○" },
+  { id: "wall", label: "Mauer", icon: "▥" },
+  { id: "plant", label: "Pflanze", icon: "✦" }
+];
+
+export function StudioShell() {
+  const store = useProjectStore();
+  const {
+    activeTool,
+    setTool,
+    viewMode,
+    setViewMode,
+    gridVisible,
+    snapEnabled,
+    showDimensions,
+    toggleGrid,
+    toggleSnap,
+    toggleDimensions,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    layers,
+    activeLayerId,
+    setActiveLayerId,
+    exportProjectFile,
+    importProjectFile
+  } = store;
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const [fileMessage, setFileMessage] = useState("Automatisch lokal gespeichert");
+
+  function exportProject() {
+    const file = exportProjectFile();
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `AL_Green_Design_${new Date().toISOString().slice(0, 10)}.algreen`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setFileMessage("Projektdatei exportiert");
+  }
+
+  async function importProject(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as ProjectFile;
+      importProjectFile(parsed);
+      setFileMessage(`${file.name} geladen`);
+    } catch (error) {
+      setFileMessage(error instanceof Error ? error.message : "Projekt konnte nicht geladen werden");
+    }
+  }
+
+  return (
+    <main className="studio">
+      <header className="topbar">
+        <BrandLogo />
+        <div className="topbarMain">
+          <div className="topActions" aria-label="CAD-Werkzeuge">
+            {tools.map(tool => (
+              <button
+                key={tool.id}
+                type="button"
+                title={tool.label}
+                className={activeTool === tool.id ? "active" : ""}
+                onClick={() => setTool(tool.id)}
+              >
+                <span className="toolIcon">{tool.icon}</span>
+                <span>{tool.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="cadControlRow">
+            <button type="button" disabled={!canUndo} onClick={undo} title="Strg/Cmd + Z">↶ Rückgängig</button>
+            <button type="button" disabled={!canRedo} onClick={redo} title="Strg/Cmd + Umschalt + Z">↷ Wiederholen</button>
+            <button type="button" className={gridVisible ? "toggleOn" : ""} onClick={toggleGrid}>Raster</button>
+            <button type="button" className={snapEnabled ? "toggleOn" : ""} onClick={toggleSnap}>Objektfang</button>
+            <button type="button" className={showDimensions ? "toggleOn" : ""} onClick={toggleDimensions}>Maße</button>
+            <label className="layerSelect">
+              <span>Aktiver Layer</span>
+              <select value={activeLayerId} onChange={event => setActiveLayerId(event.target.value)}>
+                {layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
+              </select>
+            </label>
+            <div className="fileActions">
+              <button type="button" onClick={() => fileInput.current?.click()}>Projekt öffnen</button>
+              <button type="button" onClick={exportProject}>.algreen speichern</button>
+              <input ref={fileInput} type="file" accept=".algreen,.json,application/json" onChange={importProject} hidden />
+              <small>{fileMessage}</small>
+            </div>
+          </div>
+        </div>
+        <div className="viewSwitch">
+          {(["2d", "3d", "split"] as const).map(mode => (
+            <button key={mode} type="button" className={viewMode === mode ? "active" : ""} onClick={() => setViewMode(mode)}>
+              {mode === "split" ? "2D + 3D" : mode.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <section className="studioGrid">
+        <div className="leftColumn">
+          <TerrainPanel />
+          <LibraryPanel />
+          <PlantIntelligencePanel />
+          <GardenAI />
+        </div>
+        <div className={`workspace view-${viewMode}`}>
+          {(viewMode === "2d" || viewMode === "split") && <CadCanvas />}
+          {(viewMode === "3d" || viewMode === "split") && <ThreeViewport />}
+        </div>
+        <BimInspector />
+      </section>
+    </main>
+  );
+}

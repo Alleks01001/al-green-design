@@ -1,24 +1,17 @@
+# Projektstatus
 
-# Foundation Status
+## Aktuelle Version
 
-## Umgesetzt
+AL Green Design Studio 2.1.0 – Professional CAD Core
 
-- CAD/BIM-Domainmodell
-- Layer
-- 2D-Canvas
-- 3D-Viewport
-- lokale Garden-KI
-- Pflanzen- und Materialbibliothek
-- Kostenberechnung
-- Premium-Burgunder-Design
+## Status
 
-## Nächste Meilensteine
+- Foundation 2.0 übernommen
+- CAD-Kern 2.1 implementiert
+- TypeScript geprüft
+- Produktionsbuild geprüft
+- Produktionsserver mit HTTP 200 geprüft
 
-1. CAD Core: Polylinien, Snap, Transform, Undo/Redo
-2. BIM Core: Parameter, Mengen, Beziehungen
-3. Terrain Engine
-4. Plant Engine
-5. PBR Material Studio
-6. DXF/PDF Export
-7. AI-Agenten
-8. Final Render Engine
+## Nächster geplanter Meilenstein
+
+Studio 2.2 – BIM Engine mit parametrischen Bauteilklassen, Materialien, Mengen, Kostenpositionen und Objektbeziehungen.

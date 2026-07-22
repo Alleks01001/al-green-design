@@ -1,16 +1,11 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata } from "next";
+import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: 'AL Green Design – V0.39 DETAILED SCENE & LAYER STUDIO',
-  description: 'Premium Garten- und Landschaftsplanungsstudio mit dreidimensionalem AL-Green-Design-Markenauftritt, plastischer CAD-Werkzeugleiste, 2D-/3D-Studio, Gelände, Architektur, Pflanzen, Wasser und Adaptive Garden Intelligence.',
-  robots: { index: false, follow: false }
+  title: "AL Green Design Studio 2.1",
+  description: "Professioneller CAD-Kern für Garten- und Landschaftsplanung"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="de">
-      <body>{children}</body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="de"><body>{children}</body></html>;
 }

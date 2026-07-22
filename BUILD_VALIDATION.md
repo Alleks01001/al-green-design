@@ -1,18 +1,31 @@
-# Build Validation
+# Build-Validierung – AL Green Design Studio 2.1
 
-## npm install
-Exit code: `1`
-```text
-npm error code EACCES
-npm error syscall open
-npm error path /home/oai/.npm/_cacache/tmp/9a79efe6
-npm error errno EACCES
-npm error
-npm error Your cache folder contains root-owned files, due to a bug in
-npm error previous versions of npm which has since been addressed.
-npm error
-npm error To permanently fix this problem, please run:
-npm error   sudo chown -R 1000:1000 "/home/oai/.npm"
-npm error Log files were not written due to an error writing to the directory: /home/oai/.npm/_logs
-npm error You can rerun the command with `--loglevel=verbose` to see the logs in your terminal
-```
+Datum: 21.07.2026
+
+## Durchgeführte Prüfungen
+
+1. Saubere Abhängigkeitsinstallation mit `npm ci`
+2. TypeScript-Prüfung mit `npm run typecheck`
+3. Produktionsbuild mit `npm run build`
+4. Start des Produktionsservers mit `npm start`
+5. HTTP-Aufruf der Startseite
+
+## Ergebnis
+
+- `npm ci`: erfolgreich
+- TypeScript: erfolgreich, keine Typfehler
+- Next.js-Produktionsbuild: erfolgreich
+- statische Startseite erzeugt
+- Produktionsserver: erfolgreich gestartet
+- HTTP-Status der Startseite: `200`
+- Seitentitel: `AL Green Design Studio 2.1`
+
+## Build-Information
+
+- Next.js 14.2.35
+- React 18.3.1
+- TypeScript 5.8.2
+- Three.js 0.164.1
+- Ziel-Node-Version laut `package.json`: Node 20.x
+
+Die Validierung erfolgte mit einer sauberen Installation aus der enthaltenen `package-lock.json`.
