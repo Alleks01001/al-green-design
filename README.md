@@ -1,25 +1,22 @@
-# AL Green Design Studio 2.2 – BIM Engine
+# AL Green Design Studio 3.0 Alpha
 
-Vollständige Weiterentwicklung von Studio 2.1.
-
-## Neu in 2.2
-- parametrische BIM-Datensätze je CAD-Objekt
-- Klassifikation und Projektphase
-- Mengen, Verschnitt, Material- und Arbeitskosten
-- CO₂-Bilanz pro Einheit und Projekt
-- Hersteller, Modell, Lieferant, Lebensdauer und Wartungszyklus
-- Netto-, USt.- und Bruttoberechnung
-- CSV-Export für Mengen, Kosten und CO₂
-- Migration älterer 2.1-Projektdateien auf Schema 2.2
+Stabile Plattformbasis für die professionelle Garten-, Landschafts- und Außenanlagenplanung.
 
 ## Start
+
 ```bash
 npm ci
+npm run typecheck
+npm run build
 npm run dev
 ```
 
-## Prüfung
-```bash
-npm run typecheck
-npm run build
-```
+## V3-Grundlagen
+
+- zentrale Projektverwaltung
+- Event Bus
+- Modul-/Plugin-Registry
+- lokale Wiederherstellungspunkte
+- rückwärtskompatible Projektmigration
+
+Details: `VERSION_3_0_ALPHA.md`
