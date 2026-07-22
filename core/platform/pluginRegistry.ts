@@ -10,17 +10,17 @@ export type StudioPlugin = {
 };
 
 const plugins: StudioPlugin[] = [
-  { id: "cad", name: "Professional CAD Core", version: "3.1-alpha.2", status: "active", capabilities: ["detail-tools", "draw", "object-snap", "intersection-snap", "ortho", "precision-transform", "groups", "blocks", "layers", "associative-dimensions", "align", "dynamic-connectors", "undo-redo"] },
+  { id: "cad", name: "Professional CAD Core", version: "3.1-alpha.3", status: "active", capabilities: ["detail-tools", "draw", "object-snap", "intersection-snap", "ortho", "precision-transform", "groups", "blocks", "layers", "associative-dimensions", "offset", "mirror", "rectangular-array", "polar-array", "trim-extend", "align", "dynamic-connectors", "undo-redo"] },
   { id: "bim", name: "Landscape BIM", version: "2.2", status: "active", capabilities: ["properties", "quantities", "costs", "carbon"] },
   { id: "terrain", name: "Terrain Engine", version: "2.3", status: "active", capabilities: ["terrain-grid", "contours", "cut-fill"] },
   { id: "plants", name: "Plant Intelligence", version: "2.4", status: "active", capabilities: ["suitability", "bloom-calendar", "growth"] },
   { id: "render", name: "Render Engine", version: "2.5", status: "active", capabilities: ["presets", "lighting", "png-export"] },
   { id: "ai-designer", name: "AI Garden Designer", version: "2.6", status: "active", capabilities: ["variants", "budget", "editable-output"] },
-  { id: "object-library", name: "Object Database", version: "3.1-alpha.2", status: "active", capabilities: ["objects", "plants", "materials", "bim-placement"] },
-  { id: "media-import", name: "Media & Reality Capture", version: "3.1-alpha.2", status: "active", capabilities: ["image-reference", "pdf-plan-import", "video-to-3d", "scan-lidar"] },
-  { id: "documentation", name: "Documentation", version: "3.1-alpha.2", status: "foundation", capabilities: ["pdf-plan-export", "printable-layers", "plan-layout", "reports", "revision-data"] },
-  { id: "collaboration", name: "Collaboration", version: "3.1-alpha.2", status: "planned", capabilities: ["comments", "tasks", "versioning"] },
-  { id: "exchange", name: "Professional Import/Export", version: "3.1-alpha.2", status: "foundation", capabilities: ["algreen", "pdf", "png", "csv"] }
+  { id: "object-library", name: "Object Database", version: "3.1-alpha.3", status: "active", capabilities: ["objects", "plants", "materials", "bim-placement"] },
+  { id: "media-import", name: "Media & Reality Capture", version: "3.1-alpha.3", status: "active", capabilities: ["image-reference", "pdf-plan-import", "video-to-3d", "scan-lidar"] },
+  { id: "documentation", name: "Documentation", version: "3.1-alpha.3", status: "foundation", capabilities: ["pdf-plan-export", "printable-layers", "plan-layout", "reports", "revision-data"] },
+  { id: "collaboration", name: "Collaboration", version: "3.1-alpha.3", status: "planned", capabilities: ["comments", "tasks", "versioning"] },
+  { id: "exchange", name: "Professional Import/Export", version: "3.1-alpha.3", status: "foundation", capabilities: ["algreen", "pdf", "png", "csv"] }
 ];
 
 export function getStudioPlugins(): StudioPlugin[] {

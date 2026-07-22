@@ -10,6 +10,7 @@ import {
   type ReactNode
 } from "react";
 import { distance, entitiesBounds, entityCenter, makeId, transformEntityAround, translateEntity } from "@/core/cad/geometry";
+import { mirrorEntity, offsetEntity, polarTransformEntity, trimOrExtendLine, type LineEditMode, type MirrorAxis } from "@/core/cad/modify";
 import { applyTerrainPreset, createTerrainGrid } from "@/engines/terrain/terrainEngine";
 import type {
   CadEntity,
@@ -57,6 +58,11 @@ type Store = ProjectState & {
   moveEntities: (ids: string[], delta: Vec2, label?: string) => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
+  offsetSelected: (distance: number) => void;
+  mirrorSelected: (axis: MirrorAxis, copy: boolean) => void;
+  createRectangularArray: (options: { rows: number; columns: number; spacingX: number; spacingY: number }) => void;
+  createPolarArray: (options: { count: number; totalAngle: number; center: Vec2; rotateItems: boolean }) => void;
+  trimOrExtendSelected: (mode: LineEditMode) => void;
   undo: () => void;
   redo: () => void;
   toggleGrid: () => void;
@@ -95,8 +101,9 @@ type Store = ProjectState & {
   clearProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-3.1-alpha.2";
+const STORAGE_KEY = "al-green-design-studio-3.1-alpha.3";
 const LEGACY_STORAGE_KEYS = [
+  "al-green-design-studio-3.1-alpha.2",
   "al-green-design-studio-3.1-alpha.1",
   "al-green-design-studio-3.0-alpha.6",
   "al-green-design-studio-3.0-alpha.5",
@@ -109,7 +116,7 @@ const LEGACY_STORAGE_KEYS = [
 ];
 
 const initialProject: ProjectState = {
-  schemaVersion: "3.1-alpha.2",
+  schemaVersion: "3.1-alpha.3",
   id: "project-main",
   name: "AL Green Design Studio 3.1 Professional CAD",
   activeTool: "select",
@@ -263,10 +270,68 @@ function cloneProject(project: ProjectState): ProjectState {
   return JSON.parse(JSON.stringify(project)) as ProjectState;
 }
 
+function editableSelection(project: ProjectState) {
+  const byId = new Map(project.entities.map(entity => [entity.id, entity]));
+  return project.selectedIds
+    .map(id => byId.get(id))
+    .filter((entity): entity is CadEntity => Boolean(entity && !entity.locked && !project.layers.find(layer => layer.id === entity.layerId)?.locked));
+}
+
+function cloneSelectionBatch(
+  source: CadEntity[],
+  bim: BimProperties[],
+  transform: (entity: CadEntity) => CadEntity | null,
+  nameSuffix: string
+) {
+  const transformed = source.flatMap(entity => {
+    const result = transform(entity);
+    return result ? [{ source: entity, result }] : [];
+  });
+  const idMap = new Map(transformed.map(({ source }) => [source.id, makeId(source.kind)]));
+  const groupMap = new Map<string, string>();
+  const instanceMap = new Map<string, string>();
+  const entities = transformed.map(({ source: original, result }) => {
+    const metadata = { ...(result.metadata ?? {}) };
+    const oldGroupId = typeof metadata.groupId === "string" ? metadata.groupId : undefined;
+    const oldInstanceId = typeof metadata.blockInstanceId === "string" ? metadata.blockInstanceId : undefined;
+    if (oldGroupId) {
+      if (!groupMap.has(oldGroupId)) groupMap.set(oldGroupId, makeId("group"));
+      metadata.groupId = groupMap.get(oldGroupId)!;
+    }
+    if (oldInstanceId) {
+      if (!instanceMap.has(oldInstanceId)) instanceMap.set(oldInstanceId, makeId("instance"));
+      metadata.blockInstanceId = instanceMap.get(oldInstanceId)!;
+    }
+    const startId = typeof metadata.connectionStartId === "string" ? metadata.connectionStartId : undefined;
+    const endId = typeof metadata.connectionEndId === "string" ? metadata.connectionEndId : undefined;
+    if (startId && endId && idMap.has(startId) && idMap.has(endId)) {
+      metadata.connectionStartId = idMap.get(startId)!;
+      metadata.connectionEndId = idMap.get(endId)!;
+    } else if (startId || endId) {
+      delete metadata.connectionStartId;
+      delete metadata.connectionEndId;
+      delete metadata.dynamicConnection;
+      delete metadata.associativeDimension;
+    }
+    return {
+      ...result,
+      id: idMap.get(original.id)!,
+      name: `${original.name} · ${nameSuffix}`,
+      metadata,
+      locked: false
+    };
+  });
+  const bimCopies = bim.flatMap(item => {
+    const entityId = idMap.get(item.entityId);
+    return entityId ? [{ ...item, entityId, custom: { ...item.custom } }] : [];
+  });
+  return { entities, bim: bimCopies };
+}
+
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "3.1-alpha.2",
+    schemaVersion: "3.1-alpha.3",
     selectedIds: [],
     activeTool: "select",
     snapModes: project.snapModes?.length ? Array.from(new Set([...project.snapModes, "intersection" as SnapMode])) : ["grid", "endpoint", "midpoint", "center", "intersection"],
@@ -357,7 +422,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "3.1-alpha.2",
+      version: "3.1-alpha.3",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
@@ -490,6 +555,100 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
             selectedIds: duplicates.map(entity => entity.id)
           };
         });
+      },
+      offsetSelected: offset => {
+        if (!Number.isFinite(offset) || Math.abs(offset) < 0.001 || editableSelection(project).length === 0) return;
+        commit("Versatzkopie erstellt", current => {
+          const source = editableSelection(current);
+          const copies = cloneSelectionBatch(source, current.bim, entity => offsetEntity(entity, offset), `Versatz ${offset.toFixed(2)} m`);
+          if (!copies.entities.length) return current;
+          return {
+            ...current,
+            entities: refreshDynamicConnections([...current.entities, ...copies.entities]),
+            bim: [...current.bim, ...copies.bim],
+            selectedIds: copies.entities.map(entity => entity.id)
+          };
+        });
+      },
+      mirrorSelected: (axis, copy) => {
+        const selected = editableSelection(project);
+        if (!selected.length) return;
+        const bounds = entitiesBounds(selected);
+        const origin = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+        commit(copy ? "Spiegelkopie erstellt" : "Auswahl gespiegelt", current => {
+          const source = editableSelection(current);
+          if (copy) {
+            const copies = cloneSelectionBatch(source, current.bim, entity => mirrorEntity(entity, axis, origin), axis === "vertical" ? "Spiegel Y" : "Spiegel X");
+            return {
+              ...current,
+              entities: refreshDynamicConnections([...current.entities, ...copies.entities]),
+              bim: [...current.bim, ...copies.bim],
+              selectedIds: copies.entities.map(entity => entity.id)
+            };
+          }
+          const ids = new Set(source.map(entity => entity.id));
+          return {
+            ...current,
+            entities: refreshDynamicConnections(current.entities.map(entity => ids.has(entity.id) ? mirrorEntity(entity, axis, origin) : entity))
+          };
+        });
+      },
+      createRectangularArray: options => {
+        const rows = Math.min(10, Math.max(1, Math.round(options.rows)));
+        const columns = Math.min(10, Math.max(1, Math.round(options.columns)));
+        if (rows * columns <= 1 || editableSelection(project).length === 0) return;
+        const spacingX = Number.isFinite(options.spacingX) ? options.spacingX : 0;
+        const spacingY = Number.isFinite(options.spacingY) ? options.spacingY : 0;
+        commit("Rechteckige Anordnung erstellt", current => {
+          const source = editableSelection(current);
+          const batches = [] as ReturnType<typeof cloneSelectionBatch>[];
+          for (let row = 0; row < rows; row += 1) {
+            for (let column = 0; column < columns; column += 1) {
+              if (row === 0 && column === 0) continue;
+              const delta = { x: column * spacingX, y: row * spacingY };
+              batches.push(cloneSelectionBatch(source, current.bim, entity => translateEntity(entity, delta), `Array ${row + 1}/${column + 1}`));
+            }
+          }
+          const entities = batches.flatMap(batch => batch.entities);
+          const bim = batches.flatMap(batch => batch.bim);
+          return {
+            ...current,
+            entities: refreshDynamicConnections([...current.entities, ...entities]),
+            bim: [...current.bim, ...bim],
+            selectedIds: entities.map(entity => entity.id)
+          };
+        });
+      },
+      createPolarArray: options => {
+        const count = Math.min(48, Math.max(2, Math.round(options.count)));
+        const totalAngle = Number.isFinite(options.totalAngle) ? options.totalAngle : 360;
+        if (Math.abs(totalAngle) < 0.01 || editableSelection(project).length === 0) return;
+        const step = Math.abs(totalAngle) >= 359.999 ? totalAngle / count : totalAngle / (count - 1);
+        commit("Polare Anordnung erstellt", current => {
+          const source = editableSelection(current);
+          const batches = Array.from({ length: count - 1 }, (_, index) => {
+            const angle = step * (index + 1);
+            return cloneSelectionBatch(source, current.bim, entity => polarTransformEntity(entity, options.center, angle, options.rotateItems), `Polar ${index + 2}/${count}`);
+          });
+          const entities = batches.flatMap(batch => batch.entities);
+          const bim = batches.flatMap(batch => batch.bim);
+          return {
+            ...current,
+            entities: refreshDynamicConnections([...current.entities, ...entities]),
+            bim: [...current.bim, ...bim],
+            selectedIds: entities.map(entity => entity.id)
+          };
+        });
+      },
+      trimOrExtendSelected: mode => {
+        const selected = editableSelection(project);
+        if (selected.length !== 2) return;
+        const result = trimOrExtendLine(selected[0], selected[1], mode);
+        if (!result) return;
+        commit(mode === "trim" ? "Linie bis Schnittpunkt gekürzt" : "Linie bis Schnittpunkt verlängert", current => ({
+          ...current,
+          entities: refreshDynamicConnections(current.entities.map(entity => entity.id === result.id ? result : entity))
+        }));
       },
       undo: () => {
         setInternal(current => {
@@ -777,7 +936,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "3.1-alpha.2",
+        version: "3.1-alpha.3",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),

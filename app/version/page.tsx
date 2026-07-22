@@ -26,6 +26,10 @@ export default function VersionPage() {
         <li>Vollständiger Layer-Manager mit Sichtbarkeit, Sperre, Farbe, Deckkraft, Reihenfolge, Isolation und Objektanzahl</li>
         <li>Ausgerichtete, horizontale, vertikale und assoziative Bemaßungen mit Meter-, Zentimeter- und Millimeterdarstellung</li>
         <li>Nicht druckbare Layer werden beim PDF-Planexport automatisch ausgeblendet</li>
+        <li>Versatzkopien für Linien, Polylinien, Polygone und flächenbasierte Objekte</li>
+        <li>Spiegeln an der horizontalen oder vertikalen Auswahlachse – wahlweise als Kopie</li>
+        <li>Rechteckige und polare Anordnungen mit konfigurierbaren Abständen, Winkeln und Zentren</li>
+        <li>Gerade Linien bis zu einer gewählten Begrenzungslinie kürzen oder verlängern</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>

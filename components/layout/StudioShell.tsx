@@ -6,6 +6,7 @@ import { CadCanvas } from "@/components/cad/CadCanvas";
 import { DetailToolsPanel } from "@/components/cad/DetailToolsPanel";
 import { ProfessionalCadPanel } from "@/components/cad/ProfessionalCadPanel";
 import { LayerDimensionPanel } from "@/components/cad/LayerDimensionPanel";
+import { AdvancedModifyPanel } from "@/components/cad/AdvancedModifyPanel";
 import { ThreeViewport } from "@/components/render/ThreeViewport";
 import { RenderSettingsPanel } from "@/components/render/RenderSettingsPanel";
 import { GardenAI } from "@/components/ai/GardenAI";
@@ -185,6 +186,7 @@ export function StudioShell() {
           <MediaImportPanel />
           <ProfessionalCadPanel />
           <LayerDimensionPanel />
+          <AdvancedModifyPanel />
           <DetailToolsPanel />
           <LibraryPanel />
           <TerrainPanel />

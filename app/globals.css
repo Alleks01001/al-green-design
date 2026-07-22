@@ -269,3 +269,17 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .layerControls{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}.layerControls button,.layerControls input[type=color]{display:grid;place-items:center;width:100%;height:25px;border:1px solid #dbc8cd;border-radius:6px;background:#fff;color:#682134;padding:2px;font-size:7px;font-weight:800}.layerControls input[type=color]{padding:2px}.layerControls button.on{background:#6c2639;color:#fff;border-color:#6c2639}.layerControls .dangerMini{color:#9c2334;border-color:#e2b8c0}.layerControls button:disabled{opacity:.3}
 .cadDimension text{user-select:none}
 @media(max-width:760px){.dimensionSettingsGrid,.dimensionActions{grid-template-columns:1fr}.dimensionScaleField{grid-column:auto}.layerList article{grid-template-columns:24px minmax(0,1fr) 69px}}
+
+/* V3.1 Professional CAD Alpha 3 – advanced modify engine */
+.advancedModifyPanel{padding:13px;background:rgba(255,250,248,.98);border:1px solid #c9b5bc;border-radius:17px;box-shadow:var(--shadow)}
+.advancedModifyPanel h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6d2d3e;margin:13px 0 6px}
+.modifyInlineRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:5px;align-items:end}
+.modifyInlineRow label,.modifyFieldGrid label{font-size:8px;color:#76545c}
+.modifyInlineRow input,.modifyFieldGrid input{display:block;width:100%;margin-top:3px;border:1px solid #d8c4c9;border-radius:7px;padding:6px;background:#fff;color:#4e2832}
+.modifyInlineRow button,.modifyButtonGrid button,.modifyPrimary{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#642033;padding:8px;font-size:8px;font-weight:800}
+.modifyButtonGrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.modifyCheck{display:flex;align-items:flex-start;gap:7px;font-size:8px;color:#76545c;line-height:1.35;margin:7px 0}.modifyCheck input{margin:1px 0 0;accent-color:#6d2639}
+.modifyFieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.modifyPrimary{width:100%;margin-top:7px;background:linear-gradient(#82263e,#5b1226);border-color:#6d1d32;color:#fff}
+.lineEditSelection{display:grid;gap:3px;padding:8px;margin-bottom:6px;border-radius:9px;background:#f3e8ea;color:#6d2d3e;font-size:8px}.lineEditSelection strong{color:#4f1222}
+@media(max-width:760px){.modifyInlineRow{grid-template-columns:1fr 1fr}.modifyInlineRow label{grid-column:1/-1}.modifyFieldGrid{grid-template-columns:1fr}.modifyButtonGrid{grid-template-columns:1fr}}
