@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { makeId } from "@/core/cad/geometry";
 import { CONSTRUCTION_CATALOG, CONSTRUCTION_CATEGORIES, type ConstructionCategory } from "@/data/constructions/catalog";
 import { PLANT_CATALOG } from "@/data/plants/catalog";
@@ -53,6 +54,21 @@ export function LibraryPanel() {
   const [plantLight, setPlantLight] = useState<"Alle" | LightRequirement>("Alle");
   const [nativeOnly, setNativeOnly] = useState(false);
   const [materialCategory, setMaterialCategory] = useState<"Alle" | MaterialCategory>("Alle");
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [expanded]);
 
   const term = query.trim().toLowerCase();
   const filteredObjects = useMemo(() => OBJECT_CATALOG.filter(item => {
@@ -262,11 +278,23 @@ export function LibraryPanel() {
     for (const id of selectedIds) updateEntity(id, { materialId }, "Material zugewiesen");
   }
 
-  return (
-    <aside className="libraryPanel objectDatabasePanel" id="objektdatenbank">
+  const content = (
+    <aside
+      className={`libraryPanel objectDatabasePanel${expanded ? " libraryPanelExpanded" : ""}`}
+      id="objektdatenbank"
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded || undefined}
+      aria-label="Professional Library"
+      onMouseDown={event => event.stopPropagation()}
+    >
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 4</span><h3>Professional Library</h3></div>
-        <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
+        <div><span className="eyebrow">V3.1 Alpha 4.1</span><h3>Professional Library</h3></div>
+        <div className="libraryHeadingActions">
+          <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
+          <button type="button" className="libraryExpandButton" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>
+            {expanded ? "× Schließen" : "⛶ Groß öffnen"}
+          </button>
+        </div>
       </div>
 
       <div className="libraryTabs">
@@ -383,4 +411,14 @@ export function LibraryPanel() {
       <p className="libraryDisclaimer">Fachliche Vorplanung: Dimensionierung, Statik, Entwässerung, Normkonformität, lokale Eignung und Angebote sind je Projekt zu prüfen.</p>
     </aside>
   );
+
+  if (expanded && typeof document !== "undefined") {
+    return createPortal(
+      <div className="libraryOverlay" onMouseDown={() => setExpanded(false)}>
+        {content}
+      </div>,
+      document.body
+    );
+  }
+  return content;
 }

@@ -1,0 +1,16 @@
+AL Green Design Studio 3.1 Professional Library Alpha 4.1
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien überschreiben und Commit changes wählen.
+
+Commit-Nachricht:
+AL Green Studio 3.1 Professional Library Alpha 4.1 – Großansicht
+
+Kontrolle nach Vercel-Deployment:
+/version muss Paketversion 3.1.0-alpha.4.1 anzeigen.
+
+Zusatzprüfung im Studio:
+In der „Professional Library“ auf „Groß öffnen“ klicken. Die Bibliothek muss nahezu den gesamten Bildschirm belegen und sich mit Escape schließen lassen.

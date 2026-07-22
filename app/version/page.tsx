@@ -35,6 +35,8 @@ export default function VersionPage() {
         <li>{CONSTRUCTION_CATALOG.length} herstellerneutrale Bauweisen für Mauern, Zäune, Beläge, Terrassen, Böden und Einfassungen</li>
         <li>Mehrschichtige CAD/BIM-Aufbauten mit Kosten, Arbeitskosten, CO₂, Lebensdauer und technischer Bezugsbasis</li>
         <li>Fachfilter nach Pflanzenart, Licht, Herkunft, Bauweisen- und Materialkategorie</li>
+        <li>Bildschirmfüllender Großmodus der Professional Library mit großen Karten, Filtern und Escape-Steuerung</li>
+        <li>Einspaltige, gut lesbare Bibliothekskarten im schmalen Seitenpanel</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>
