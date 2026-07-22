@@ -1,5 +1,3 @@
-# AL Green Design Studio 2.4 – Plant Intelligence
-
 # AL Green Design Studio 2.2 – BIM Engine
 
 Vollständige Weiterentwicklung von Studio 2.1.
