@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -17,24 +13,62 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/layout/**/*.ts",
+    "components/layout/**/*.tsx",
+    "components/cad/**/*.ts",
+    "components/cad/**/*.tsx",
+    "components/render/**/*.ts",
+    "components/render/**/*.tsx",
+    "components/ai/**/*.ts",
+    "components/ai/**/*.tsx",
+    "components/library/**/*.ts",
+    "components/library/**/*.tsx",
+    "components/bim/**/*.ts",
+    "components/bim/**/*.tsx",
+    "components/terrain/**/*.ts",
+    "components/terrain/**/*.tsx",
+    "components/plants/**/*.ts",
+    "components/plants/**/*.tsx",
+    "components/video3d/**/*.ts",
+    "components/video3d/**/*.tsx",
+    "components/scan/**/*.ts",
+    "components/scan/**/*.tsx",
+    "core/**/*.ts",
+    "data/**/*.ts",
+    "engines/**/*.ts",
+    "stores/projectStore.tsx",
+    "types/**/*.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next",
+    "ios",
+    "docs",
+    "components/GardenStudio.tsx",
+    "components/LandscapePlatform.tsx",
+    "components/editor2d",
+    "components/editor3d",
+    "components/shell",
+    "components/panels",
+    "stores/editor-store.tsx",
+    "BrandLogo3D.tsx",
+    "GardenAI.tsx",
+    "LandscapePlatform.tsx",
+    "layout.tsx",
+    "page.tsx",
+    "robots.ts",
+    "route.ts",
+    "architecture.ts",
+    "importedModel.ts",
+    "lidarBridge.ts",
+    "scan.ts"
   ]
 }
