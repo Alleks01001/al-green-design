@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { makeId } from "@/core/cad/geometry";
 import { CONSTRUCTION_CATALOG, CONSTRUCTION_CATEGORIES, type ConstructionCategory } from "@/data/constructions/catalog";
 import { PLANT_CATALOG } from "@/data/plants/catalog";
@@ -10,7 +10,7 @@ import { OBJECT_CATALOG, OBJECT_CATEGORIES, type ObjectCategory } from "@/data/o
 import { useProjectStore } from "@/stores/projectStore";
 import type { BimProperties, CadEntity, LightRequirement, MaterialDefinition, PlantDefinition } from "@/types/domain";
 
-type LibraryTab = "objects" | "constructions" | "plants" | "materials";
+export type LibraryTab = "objects" | "constructions" | "plants" | "materials";
 type PlantCategory = PlantDefinition["category"];
 type MaterialCategory = MaterialDefinition["category"];
 
@@ -43,10 +43,10 @@ function constructionQuantity(unit: BimProperties["unit"], size: [number, number
   return 1;
 }
 
-export function LibraryPanel() {
+export function LibraryPanel({ workspace = false, initialTab = "objects" }: { workspace?: boolean; initialTab?: LibraryTab }) {
   const store = useProjectStore();
-  const { entities, selectedIds, addEntityWithBim, updateEntity } = store;
-  const [tab, setTab] = useState<LibraryTab>("objects");
+  const { entities, selectedIds, addEntityWithBim, updateEntity, isHydrated } = store;
+  const [tab, setTab] = useState<LibraryTab>(initialTab);
   const [query, setQuery] = useState("");
   const [objectCategory, setObjectCategory] = useState<"Alle" | ObjectCategory>("Alle");
   const [constructionCategory, setConstructionCategory] = useState<"Alle" | ConstructionCategory>("Alle");
@@ -54,21 +54,7 @@ export function LibraryPanel() {
   const [plantLight, setPlantLight] = useState<"Alle" | LightRequirement>("Alle");
   const [nativeOnly, setNativeOnly] = useState(false);
   const [materialCategory, setMaterialCategory] = useState<"Alle" | MaterialCategory>("Alle");
-  const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!expanded) return;
-    const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [expanded]);
+  const [lastAction, setLastAction] = useState("");
 
   const term = query.trim().toLowerCase();
   const filteredObjects = useMemo(() => OBJECT_CATALOG.filter(item => {
@@ -96,6 +82,31 @@ export function LibraryPanel() {
     const haystack = `${item.name} ${item.category} ${item.specification ?? ""} ${item.technicalNote ?? ""}`.toLowerCase();
     return matchesCategory && (!term || haystack.includes(term));
   }), [materialCategory, term]);
+
+  if (!workspace) {
+    return (
+      <aside className="libraryLauncherPanel" id="objektdatenbank">
+        <div className="panelHeading">
+          <div><span className="eyebrow">V3.1 Alpha 4.2</span><h3>Professional Library</h3></div>
+          <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
+        </div>
+        <p>Die Datenbank öffnet als eigene große Arbeitsseite. Kein eingebettetes Kartenraster und kein horizontaler Scrollbalken.</p>
+        <div className="libraryLauncherStats">
+          <span><strong>{PLANT_CATALOG.length}</strong>Pflanzen</span>
+          <span><strong>{CONSTRUCTION_CATALOG.length}</strong>Bauweisen</span>
+          <span><strong>{MATERIAL_CATALOG.length}</strong>Materialien</span>
+          <span><strong>{OBJECT_CATALOG.length}</strong>Objekte</span>
+        </div>
+        <div className="libraryLauncherLinks">
+          <Link className="libraryLauncherPrimary" href="/library?tab=plants">🌿 Pflanzendatenbank öffnen</Link>
+          <Link href="/library?tab=constructions">▥ Mauern, Beläge & Böden</Link>
+          <Link href="/library?tab=objects">▣ Objektdatenbank</Link>
+          <Link href="/library?tab=materials">◈ Materialdatenbank</Link>
+        </div>
+        <small>Hinzufügen erfolgt dort über eine eindeutige Schaltfläche. Danach mit „Zurück zum Studio“ weiterarbeiten.</small>
+      </aside>
+    );
+  }
 
   function nextPosition(kind: string) {
     const count = entities.filter(entity => entity.metadata?.databaseCategory === kind).length;
@@ -152,6 +163,7 @@ export function LibraryPanel() {
       maintenanceCycle: definition.maintenanceCycle,
       custom: { objectDefinitionId: definition.id, objectType: definition.objectType, priceBasis: "editierbarer Planungsrichtwert netto" }
     }, `${definition.name} aus Objektdatenbank platziert`);
+    setLastAction(`${definition.name} wurde zum Projekt hinzugefügt.`);
   }
 
   function addConstruction(definitionId: string) {
@@ -212,6 +224,7 @@ export function LibraryPanel() {
         ...definition.properties
       }
     }, `${definition.name} als CAD/BIM-Aufbau platziert`);
+    setLastAction(`${definition.name} wurde mit Schicht- und BIM-Daten hinzugefügt.`);
   }
 
   function addPlant(plantId: string) {
@@ -272,28 +285,22 @@ export function LibraryPanel() {
         priceBasis: "editierbarer Planungsrichtwert netto"
       }
     }, `${plant.commonName} mit Pflanz- und BIM-Daten platziert`);
+    setLastAction(`${plant.commonName} wurde als Pflanze zum Projekt hinzugefügt.`);
   }
 
   function applyMaterial(materialId: string) {
     for (const id of selectedIds) updateEntity(id, { materialId }, "Material zugewiesen");
+    const material = MATERIAL_CATALOG.find(item => item.id === materialId);
+    if (material) setLastAction(`${material.name} wurde auf ${selectedIds.length} ausgewählte Objekte angewendet.`);
   }
 
-  const content = (
-    <aside
-      className={`libraryPanel objectDatabasePanel${expanded ? " libraryPanelExpanded" : ""}`}
-      id="objektdatenbank"
-      role={expanded ? "dialog" : undefined}
-      aria-modal={expanded || undefined}
-      aria-label="Professional Library"
-      onMouseDown={event => event.stopPropagation()}
-    >
+  return (
+    <aside className="libraryPanel objectDatabasePanel libraryWorkspace" id="objektdatenbank" aria-label="Professional Library">
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 4.1</span><h3>Professional Library</h3></div>
+        <div><span className="eyebrow">V3.1 Alpha 4.2 · Vollseiten-Datenbank</span><h3>Professional Library</h3></div>
         <div className="libraryHeadingActions">
           <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
-          <button type="button" className="libraryExpandButton" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>
-            {expanded ? "× Schließen" : "⛶ Groß öffnen"}
-          </button>
+          <Link className="libraryBackLink" href="/">← Zurück zum Studio</Link>
         </div>
       </div>
 
@@ -302,6 +309,10 @@ export function LibraryPanel() {
         <button type="button" className={tab === "constructions" ? "active" : ""} onClick={() => { setTab("constructions"); setQuery(""); }}>Bauweisen ({CONSTRUCTION_CATALOG.length})</button>
         <button type="button" className={tab === "plants" ? "active" : ""} onClick={() => { setTab("plants"); setQuery(""); }}>Pflanzen ({PLANT_CATALOG.length})</button>
         <button type="button" className={tab === "materials" ? "active" : ""} onClick={() => { setTab("materials"); setQuery(""); }}>Materialien ({MATERIAL_CATALOG.length})</button>
+      </div>
+
+      <div className={`libraryActionStatus${isHydrated ? " ready" : " loading"}`} role="status" aria-live="polite">
+        {!isHydrated ? <span>Projekt wird geladen …</span> : lastAction ? <><strong>✓ {lastAction}</strong><Link href="/">Im Studio ansehen</Link></> : <span>Projekt geladen. Datensatz auswählen und „Zum Projekt hinzufügen“ drücken.</span>}
       </div>
 
       {tab === "objects" && (
@@ -316,11 +327,12 @@ export function LibraryPanel() {
           <p className="panelHint">Maßstäbliche Ausstattung und Bauteile mit editierbaren BIM-Kennwerten.</p>
           <div className="libraryGrid objectGrid">
             {filteredObjects.map(item => (
-              <button type="button" className="libraryItem objectLibraryItem" key={item.id} onClick={() => addObject(item.id)}>
+              <button type="button" className="libraryItem objectLibraryItem" key={item.id} onClick={() => addObject(item.id)} disabled={!isHydrated} aria-label={`${item.name} zum Projekt hinzufügen`}>
                 <span className="objectThumb">{item.icon}</span>
                 <strong>{item.name}</strong>
                 <small>{item.category} · {item.width} × {item.depth} × {item.height} m</small>
                 <em>{item.unitPrice.toLocaleString("de-DE")} € · {item.classification}</em>
+                <span className="libraryCardAction">＋ Zum Projekt hinzufügen</span>
               </button>
             ))}
           </div>
@@ -340,12 +352,13 @@ export function LibraryPanel() {
           <p className="panelHint">Herstellerneutrale Fachaufbauten. Ein Klick platziert Geometrie, Schichten, Kosten, CO₂ und Lebensdauer gemeinsam.</p>
           <div className="libraryGrid objectGrid constructionGrid">
             {filteredConstructions.map(item => (
-              <button type="button" className="libraryItem constructionItem" key={item.id} onClick={() => addConstruction(item.id)}>
+              <button type="button" className="libraryItem constructionItem" key={item.id} onClick={() => addConstruction(item.id)} disabled={!isHydrated} aria-label={`${item.name} zum Projekt hinzufügen`}>
                 <span className="objectThumb">{item.icon}</span>
                 <strong>{item.name}</strong>
                 <small>{item.category} · {item.layers.length} Schichten · {item.size[2]} m</small>
                 <em>{item.unitPrice.toLocaleString("de-DE")} €/{item.unit} · {item.classification}</em>
                 <span className="librarySpec">{item.layers.map(layer => `${layer.name} ${layer.thicknessMm} mm`).join(" · ")}</span>
+                <span className="libraryCardAction">＋ Zum Projekt hinzufügen</span>
               </button>
             ))}
           </div>
@@ -370,12 +383,13 @@ export function LibraryPanel() {
           <p className="panelHint">Reale Arten und Sorten mit Wuchs, Abstand, Standort, Blüte, Ökologie, Pflanzqualität und BIM-Daten.</p>
           <div className="libraryGrid plantLibraryGrid">
             {filteredPlants.map(item => (
-              <button type="button" className="libraryItem plantLibraryItem" key={item.id} onClick={() => addPlant(item.id)}>
+              <button type="button" className="libraryItem plantLibraryItem" key={item.id} onClick={() => addPlant(item.id)} disabled={!isHydrated} aria-label={`${item.commonName} zum Projekt hinzufügen`}>
                 <span className="plantThumb">{item.category === "tree" ? "♣" : item.category === "grass" ? "≋" : "✦"}</span>
                 <strong>{item.commonName}</strong>
                 <small>{item.botanicalName}</small>
                 <em>{item.matureHeight} × {item.matureWidth} m · Abstand {item.spacing} m</em>
                 <span className="librarySpec">{LIGHT_LABELS[item.light]} · Wasser {item.waterNeed}/5 · {item.native ? "heimisch" : "kultiviert"} · Insekten {item.pollinatorValue}/5</span>
+                <span className="libraryCardAction">＋ Zum Projekt hinzufügen</span>
               </button>
             ))}
           </div>
@@ -395,12 +409,13 @@ export function LibraryPanel() {
           <p className="panelHint">Material auf die aktuelle Auswahl anwenden. Preise sind editierbare Planungsrichtwerte, keine Händlerangebote.</p>
           <div className="libraryGrid materialLibraryGrid">
             {filteredMaterials.map(item => (
-              <button type="button" className="libraryItem materialLibraryItem" key={item.id} onClick={() => applyMaterial(item.id)} disabled={selectedIds.length === 0}>
+              <button type="button" className="libraryItem materialLibraryItem" key={item.id} onClick={() => applyMaterial(item.id)} disabled={!isHydrated || selectedIds.length === 0} aria-label={`${item.name} auf Auswahl anwenden`}>
                 <span className="materialThumb" style={{ background: item.color }} />
                 <strong>{item.name}</strong>
                 <small>{item.specification ?? item.category}</small>
                 <em>{item.pricePerSquareMeter} €/{item.priceUnit ?? "m²"}{item.serviceLifeYears ? ` · ${item.serviceLifeYears} a` : ""}</em>
                 {item.technicalNote && <span className="librarySpec">{item.technicalNote}</span>}
+                <span className="libraryCardAction">✓ Auf Auswahl anwenden</span>
               </button>
             ))}
           </div>
@@ -411,14 +426,4 @@ export function LibraryPanel() {
       <p className="libraryDisclaimer">Fachliche Vorplanung: Dimensionierung, Statik, Entwässerung, Normkonformität, lokale Eignung und Angebote sind je Projekt zu prüfen.</p>
     </aside>
   );
-
-  if (expanded && typeof document !== "undefined") {
-    return createPortal(
-      <div className="libraryOverlay" onMouseDown={() => setExpanded(false)}>
-        {content}
-      </div>,
-      document.body
-    );
-  }
-  return content;
 }

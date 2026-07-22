@@ -42,6 +42,7 @@ type InternalState = {
 };
 
 type Store = ProjectState & {
+  isHydrated: boolean;
   canUndo: boolean;
   canRedo: boolean;
   history: HistoryEntry[];
@@ -333,7 +334,7 @@ function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
     schemaVersion: "3.1-alpha.4",
-    selectedIds: [],
+    selectedIds: (project.selectedIds ?? []).filter(id => project.entities.some(entity => entity.id === id)),
     activeTool: "select",
     snapModes: project.snapModes?.length ? Array.from(new Set([...project.snapModes, "intersection" as SnapMode])) : ["grid", "endpoint", "midpoint", "center", "intersection"],
     orthogonalMode: project.orthogonalMode ?? false,
@@ -406,21 +407,26 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
     redo: [],
     history: []
   });
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY) ?? LEGACY_STORAGE_KEYS.map(key => window.localStorage.getItem(key)).find(Boolean);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as ProjectFile;
-      if (parsed.application === "AL Green Design Studio" && parsed.project) {
-        setInternal(current => ({ ...current, project: normalizeProject(parsed.project) }));
+      if (saved) {
+        const parsed = JSON.parse(saved) as ProjectFile;
+        if (parsed.application === "AL Green Design Studio" && parsed.project) {
+          setInternal(current => ({ ...current, project: normalizeProject(parsed.project) }));
+        }
       }
     } catch {
       // A damaged local file must never prevent the editor from starting.
+    } finally {
+      setIsHydrated(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!isHydrated) return;
     const file: ProjectFile = {
       application: "AL Green Design Studio",
       version: "3.1-alpha.4",
@@ -433,7 +439,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       // Large plan references can exceed the browser storage quota. The editor must keep running;
       // the full project can still be exported manually as an .algreen file.
     }
-  }, [internal.project]);
+  }, [internal.project, isHydrated]);
 
   const updateUi = useCallback((producer: (project: ProjectState) => ProjectState) => {
     setInternal(current => ({ ...current, project: producer(current.project) }));
@@ -456,6 +462,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
     const project = internal.project;
     return {
       ...project,
+      isHydrated,
       canUndo: internal.undo.length > 0,
       canRedo: internal.redo.length > 0,
       history: internal.history,
@@ -986,7 +993,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         });
       }
     };
-  }, [commit, internal, updateUi]);
+  }, [commit, internal, isHydrated, updateUi]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

@@ -1,0 +1,19 @@
+AL Green Design Studio 3.1 Professional Library Alpha 4.2
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien überschreiben und Commit changes wählen.
+
+Commit-Nachricht:
+AL Green Studio 3.1 Professional Library Alpha 4.2 – Datenbankseite und Persistenz
+
+Kontrolle nach Vercel-Deployment:
+/version muss Paketversion 3.1.0-alpha.4.2 anzeigen.
+
+Zusatzprüfung im Studio:
+1. In der Professional Library „Pflanzendatenbank öffnen“ wählen.
+2. Eine Pflanze über „Zum Projekt hinzufügen“ einfügen.
+3. Die grüne Bestätigung abwarten und „Im Studio ansehen“ wählen.
+4. Die Pflanze muss ausgewählt im Projekt erscheinen und nach einem Neuladen erhalten bleiben.
