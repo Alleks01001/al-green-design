@@ -65,6 +65,9 @@ export type PlantDefinition = {
   soil: SoilType[]; moisture: SiteMoisture[]; hardinessZoneMin: number; hardinessZoneMax: number;
   bloomMonths: number[]; flowerColor: string; evergreen: boolean; native: boolean;
   pollinatorValue: 1 | 2 | 3 | 4 | 5; growthRate: "slow" | "medium" | "fast";
+  cultivar?: string; usage?: string[]; plantingQuality?: string; siteNote?: string;
+  droughtTolerance?: 1 | 2 | 3 | 4 | 5; toxicity?: "none" | "mild" | "toxic";
+  sourceBasis?: string;
 };
 export type PlantingSettings = {
   siteLight: LightRequirement; soil: SoilType; moisture: SiteMoisture;
@@ -74,6 +77,9 @@ export type MaterialDefinition = {
   id: Id; name: string;
   category: "stone" | "wood" | "concrete" | "metal" | "glass" | "fabric" | "paving" | "soil" | "water";
   color: string; roughness: number; metalness: number; pricePerSquareMeter: number;
+  specification?: string; priceUnit?: BimUnit; embodiedCarbonKgPerUnit?: number;
+  serviceLifeYears?: number; frostResistant?: boolean; waterPermeable?: boolean;
+  technicalNote?: string; sourceBasis?: string;
 };
 export type HistoryEntry = { id: Id; label: string; timestamp: number };
 export type BlockDefinition = {

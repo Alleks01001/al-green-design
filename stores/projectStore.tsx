@@ -101,8 +101,9 @@ type Store = ProjectState & {
   clearProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-3.1-alpha.3";
+const STORAGE_KEY = "al-green-design-studio-3.1-alpha.4";
 const LEGACY_STORAGE_KEYS = [
+  "al-green-design-studio-3.1-alpha.3",
   "al-green-design-studio-3.1-alpha.2",
   "al-green-design-studio-3.1-alpha.1",
   "al-green-design-studio-3.0-alpha.6",
@@ -116,7 +117,7 @@ const LEGACY_STORAGE_KEYS = [
 ];
 
 const initialProject: ProjectState = {
-  schemaVersion: "3.1-alpha.3",
+  schemaVersion: "3.1-alpha.4",
   id: "project-main",
   name: "AL Green Design Studio 3.1 Professional CAD",
   activeTool: "select",
@@ -331,7 +332,7 @@ function cloneSelectionBatch(
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "3.1-alpha.3",
+    schemaVersion: "3.1-alpha.4",
     selectedIds: [],
     activeTool: "select",
     snapModes: project.snapModes?.length ? Array.from(new Set([...project.snapModes, "intersection" as SnapMode])) : ["grid", "endpoint", "midpoint", "center", "intersection"],
@@ -422,7 +423,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "3.1-alpha.3",
+      version: "3.1-alpha.4",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
@@ -936,7 +937,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "3.1-alpha.3",
+        version: "3.1-alpha.4",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),

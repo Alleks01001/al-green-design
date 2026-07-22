@@ -7,6 +7,7 @@ import {
 import { OBJECT_CATALOG } from "@/data/objects/catalog";
 import { PLANT_CATALOG } from "@/data/plants/catalog";
 import { MATERIAL_CATALOG } from "@/data/materials/catalog";
+import { CONSTRUCTION_CATALOG } from "@/data/constructions/catalog";
 
 export default function VersionPage() {
   return (
@@ -30,11 +31,15 @@ export default function VersionPage() {
         <li>Spiegeln an der horizontalen oder vertikalen Auswahlachse – wahlweise als Kopie</li>
         <li>Rechteckige und polare Anordnungen mit konfigurierbaren Abständen, Winkeln und Zentren</li>
         <li>Gerade Linien bis zu einer gewählten Begrenzungslinie kürzen oder verlängern</li>
+        <li>Professional Library mit {PLANT_CATALOG.length} realen Pflanzentaxa und -sorten samt Standort-, Qualitäts- und Ökologiedaten</li>
+        <li>{CONSTRUCTION_CATALOG.length} herstellerneutrale Bauweisen für Mauern, Zäune, Beläge, Terrassen, Böden und Einfassungen</li>
+        <li>Mehrschichtige CAD/BIM-Aufbauten mit Kosten, Arbeitskosten, CO₂, Lebensdauer und technischer Bezugsbasis</li>
+        <li>Fachfilter nach Pflanzenart, Licht, Herkunft, Bauweisen- und Materialkategorie</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>
         <li>Detailwerkzeuge, PDF- und Bildplanimport sowie PDF-Planexport</li>
-        <li>Objektdatenbank: {OBJECT_CATALOG.length} Objekte, {PLANT_CATALOG.length} Pflanzen und {MATERIAL_CATALOG.length} Materialien</li>
+        <li>Professional Library: {OBJECT_CATALOG.length} Objekte, {CONSTRUCTION_CATALOG.length} Bauweisen, {PLANT_CATALOG.length} Pflanzen und {MATERIAL_CATALOG.length} Materialien</li>
         <li>Video → 3D, Scan/LiDAR, Terrain, BIM, Pflanzenintelligenz, Rendering und Garden AI</li>
         <li>Fixierte Werkzeugleiste und unabhängig scrollbare Seitenbereiche</li>
         <li>Alles-löschen-Funktion mit unmittelbarer Rückgängig-Möglichkeit</li>

@@ -2,7 +2,7 @@
 
 Professionelle Garten-, Landschafts- und Außenanlagenplanung mit CAD, BIM, Terrain, Pflanzenintelligenz, Rendering, KI-Designer, Planimport, Video → 3D und Scan/LiDAR.
 
-## V3.1 Professional CAD Alpha 3
+## V3.1 Professional CAD Alpha 4
 
 Diese Version erweitert die stabile V3.0-Codebasis um:
 
@@ -22,11 +22,17 @@ Diese Version erweitert die stabile V3.0-Codebasis um:
 - rechteckige Anordnungen bis 10 × 10 und polare Anordnungen bis 48 Elemente
 - Kürzen und Verlängern gerader Linien bis zu einer gewählten Begrenzung
 - Material-, Layer-, Gruppen-, Block- und BIM-Daten bleiben bei Modify-Kopien erhalten
+- Professional Library mit 55 maßstäblichen Objekten
+- 38 reale Pflanzenarten und -sorten mit botanischem Namen, Wuchs, Standort, Abstand, Pflanzqualität und Ökologiedaten
+- 33 herstellerneutrale Bauweisen für Mauern, Zäune, Beläge, Terrassen, Bodenaufbauten und Einfassungen
+- 29 Materialien und Substrate mit technischer Spezifikation, Lebensdauer und Planungspreis
+- mehrschichtige Aufbauten werden gemeinsam mit Kosten, Arbeitskosten, CO₂ und Quellenbasis als CAD/BIM-Daten platziert
+- Suche und Fachfilter nach Kategorie, Lichtbedarf und heimischer Herkunft
 - weiterhin PDF-Planimport, PDF-Planexport und leerer Projektneustart
 - fixierte obere Werkzeugleiste und unabhängig scrollbare Seitenbereiche
 
-- Version: `3.1.0-alpha.3`
-- Projektschema: `3.1-alpha.3`
+- Version: `3.1.0-alpha.4`
+- Projektschema: `3.1-alpha.4`
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`
 - Produktionsprüfung: `/version`
