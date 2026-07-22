@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, t
 import { boundsIntersect, distance, entityBounds, entityCenter, makeId, polylineLength, roundMetric, translateEntity } from "@/core/cad/geometry";
 import { formatDimensionValue, resolveDimensionGeometry } from "@/core/cad/dimensions";
 import { snapPoint, type SnapResult } from "@/core/cad/snap";
+import { MATERIAL_CATALOG } from "@/data/materials/catalog";
 import { useProjectStore } from "@/stores/projectStore";
 import type { CadEntity, DimensionMode, DimensionUnit, Vec2 } from "@/types/domain";
 
@@ -58,8 +59,11 @@ function dashArray(pattern: CadEntity["linePattern"], zoom: number) {
 }
 
 function colorForEntity(entity: CadEntity) {
+  const material = MATERIAL_CATALOG.find(item => item.id === entity.materialId);
+  if (material) return material.color;
   if (entity.kind === "building") return "#c9beb5";
   if (entity.kind === "plant") return "#4e8757";
+  if (entity.fillColor) return entity.fillColor;
   if (entity.kind === "wall") return "#786e68";
   if (entity.kind === "water") return "#5ca5c6";
   if (entity.name.toLowerCase().includes("terrasse")) return "#b08c67";
@@ -672,7 +676,7 @@ export function CadCanvas() {
     const baseStroke = entity.strokeColor ?? layer?.color ?? "#5f1526";
     const stroke = selected ? "#ffb84d" : baseStroke;
     const strokeWidth = selected ? 4 / zoom : Math.max(1.2 / zoom, (entity.strokeWidth ?? 0.05) * BASE_SCALE / zoom);
-    const fill = entity.fillColor ?? colorForEntity(entity);
+    const fill = colorForEntity(entity);
     const layerOpacity = layer?.opacity ?? 1;
     const baseOpacity = (entity.opacity ?? 1) * layerOpacity;
     const opacity = locked ? Math.min(baseOpacity, .68) : baseOpacity;
@@ -767,6 +771,8 @@ export function CadCanvas() {
     const y = entity.position.y * BASE_SCALE;
     const width = entity.width * BASE_SCALE;
     const depth = entity.depth * BASE_SCALE;
+    const plantCategory = String(entity.metadata?.databaseCategory ?? "").toLowerCase();
+    const plantFlower = entity.fillColor ?? "#d8b2c1";
 
     return (
       <g
@@ -801,11 +807,37 @@ export function CadCanvas() {
             strokeDasharray={dashArray(entity.linePattern, zoom)}
           />
         ) : entity.kind === "plant" ? (
-          <>
-            <circle cx={0} cy={0} r={width / 2} fill={fill} fillOpacity={opacity * .78} stroke={stroke} strokeWidth={strokeWidth} />
-            <circle cx={0} cy={0} r={width * .28} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
-            <path d={`M ${-width * .34} 0 H ${width * .34} M 0 ${-width * .34} V ${width * .34}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
-          </>
+          plantCategory.includes("gras") ? (
+            <>
+              <circle cx={0} cy={0} r={width / 2} fill="#78905d" fillOpacity={opacity * .55} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
+              {Array.from({ length: 10 }, (_, index) => {
+                const angle = index / 10 * Math.PI * 2;
+                return <line key={index} x1={0} y1={0} x2={Math.cos(angle) * width * .42} y2={Math.sin(angle) * width * .42} stroke="#e7f0d7" strokeWidth={1.4 / zoom} />;
+              })}
+            </>
+          ) : plantCategory.includes("staude") ? (
+            <>
+              <circle cx={0} cy={0} r={width / 2} fill="#4e8757" fillOpacity={opacity * .34} stroke={stroke} strokeWidth={strokeWidth} />
+              {Array.from({ length: 6 }, (_, index) => {
+                const angle = index / 6 * Math.PI * 2;
+                return <circle key={index} cx={Math.cos(angle) * width * .18} cy={Math.sin(angle) * width * .18} r={width * .15} fill={plantFlower} fillOpacity={opacity * .9} stroke="#fff3ee" strokeWidth={.8 / zoom} />;
+              })}
+              <circle cx={0} cy={0} r={width * .1} fill="#e3b84d" />
+            </>
+          ) : plantCategory.includes("strauch") || plantCategory.includes("heck") ? (
+            <>
+              <circle cx={0} cy={0} r={width / 2} fill="#477848" fillOpacity={opacity * .38} stroke={stroke} strokeWidth={strokeWidth} />
+              {[[-.18, -.08], [.18, -.08], [0, .18], [0, 0]].map(([offsetX, offsetY], index) => (
+                <circle key={index} cx={width * offsetX} cy={width * offsetY} r={width * .24} fill="#568755" fillOpacity={opacity * .82} stroke="#e7f1df" strokeWidth={.8 / zoom} />
+              ))}
+            </>
+          ) : (
+            <>
+              <circle cx={0} cy={0} r={width / 2} fill="#477848" fillOpacity={opacity * .78} stroke={stroke} strokeWidth={strokeWidth} />
+              <circle cx={0} cy={0} r={width * .3} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
+              <path d={`M ${-width * .35} 0 H ${width * .35} M 0 ${-width * .35} V ${width * .35}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
+            </>
+          )
         ) : (
           <rect
             x={-width / 2}

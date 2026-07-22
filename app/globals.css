@@ -92,6 +92,7 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .threeCard{background:#e7e3e1}
 .threeViewport canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.threeViewport canvas:active{cursor:grabbing}
 .renderBadge{position:absolute;z-index:6;right:13px;top:13px;padding:7px 9px;border-radius:10px;background:rgba(255,250,248,.84);color:#682234;font-size:8px;border:1px solid rgba(104,34,52,.18);pointer-events:none}
+.threeSelectionHud{position:absolute;z-index:7;left:13px;bottom:13px;display:grid;gap:2px;max-width:min(360px,calc(100% - 26px));padding:8px 11px;border:1px solid rgba(255,255,255,.24);border-radius:11px;background:rgba(43,11,20,.78);color:#f3e5df;font-size:8px;pointer-events:none;backdrop-filter:blur(7px);box-shadow:0 6px 16px rgba(0,0,0,.2)}.threeSelectionHud.active{border-color:#e6b45e;background:rgba(68,30,18,.88)}.threeSelectionHud strong{color:#ffd487;font-size:10px}.threeSelectionHud span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inspector{padding:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;max-height:none}
 .inspectorSection{padding:14px;border-bottom:1px solid #eadcdf}
 .inspectorSection:last-child{border-bottom:0}

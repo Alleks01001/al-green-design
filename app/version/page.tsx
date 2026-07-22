@@ -38,6 +38,10 @@ export default function VersionPage() {
         <li>Eigenständige Professional-Library-Seite unter <code>/library</code> ohne eingeklemmte Innenansicht</li>
         <li>Explizite Hinzufügen-Schaltflächen mit sichtbarer Erfolgsbestätigung</li>
         <li>Ladesichere lokale Projektspeicherung ohne Überschreiben vorhandener Daten beim Start</li>
+        <li>Direkte 3D-Auswahl per Klick und Mehrfachauswahl mit Umschalt, synchron mit 2D und Eigenschaften</li>
+        <li>Unterschiedliche 3D-Wuchsformen für Bäume, Sträucher, Hecken, Stauden und Gräser</li>
+        <li>Materialgerechte 2D-Farben und PBR-Eigenschaften für Stein, Holz, Beton, Metall, Glas, Böden und Wasser</li>
+        <li>3D-Auswahlrahmen sowie erhaltener Orbit und Zoom beim Wechsel der Auswahl</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>

@@ -1,0 +1,21 @@
+AL Green Design Studio 3.1 Interactive 3D Alpha 5
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien überschreiben und Commit changes wählen.
+
+Commit-Nachricht:
+AL Green Studio 3.1 Alpha 5 – interaktive 3D-Auswahl und Pflanzendarstellung
+
+Kontrolle nach Vercel-Deployment:
+/version muss Paketversion 3.1.0-alpha.5 anzeigen.
+
+Zusatzprüfung im Studio:
+1. In der Professional Library eine Pflanze und eine Mauer oder Bodenfläche hinzufügen.
+2. Zurück zum Studio gehen und „2D + 3D“ wählen.
+3. Pflanze oder Bauteil direkt in 3D anklicken; ein orangefarbener Auswahlrahmen muss erscheinen.
+4. Mit Umschalt + Klick ein zweites Objekt wählen.
+5. In der Materialdatenbank ein Material auf die Auswahl anwenden und die Farb-/PBR-Änderung in 2D und 3D kontrollieren.
+6. Seite neu laden; Projektobjekte und Auswahl müssen erhalten bleiben.
