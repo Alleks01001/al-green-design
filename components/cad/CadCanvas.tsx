@@ -759,6 +759,7 @@ export function CadCanvas() {
         </div>
       )}
       <svg
+        data-algreen-cad-canvas="true"
         className={`cadCanvas tool-${activeTool}`}
         viewBox={`${-VIEW_WIDTH / 2} ${-VIEW_HEIGHT / 2} ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
         onPointerDown={handleBackgroundPointerDown}

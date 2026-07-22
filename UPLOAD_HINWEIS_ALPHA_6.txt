@@ -1,0 +1,14 @@
+AL GREEN DESIGN STUDIO 3.0 ALPHA.6
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien ersetzen und Commit changes ausführen.
+
+Commit:
+AL Green Studio 3.0 Alpha.6 – PDF Plan Import Export und Alles löschen
+
+Kontrolle nach Vercel-Deployment:
+/version
+Paketversion 3.0.0-alpha.6

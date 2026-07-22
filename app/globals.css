@@ -214,3 +214,14 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .objectDatabasePanel{max-height:720px}.libraryTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:8px 0}.libraryTabs button{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#6b2c3e;padding:7px 4px;font-size:7px;font-weight:700}.libraryTabs button.active{background:#6c2639;color:#fff;border-color:#6c2639}.libraryFilters{display:grid;grid-template-columns:1fr 1fr;gap:5px}.libraryFilters input,.libraryFilters select{width:100%;border:1px solid #d8c4c9;border-radius:8px;padding:7px;background:#fff;color:#4f2b35;font-size:8px}.objectGrid{grid-template-columns:1fr 1fr}.objectLibraryItem{min-height:95px}.objectThumb{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#f0e6e4;color:#6d2639;font-size:18px}.emptyLibrary{padding:10px;border-radius:8px;background:#f4ecee;text-align:center}.libraryPanel{scrollbar-width:thin}.primaryWide:hover,.referenceButtons button:hover,.moduleLinks a:hover,.compactButtonGrid button:hover:not(:disabled),.libraryTabs button:hover,.libraryItem:hover:not(:disabled){filter:brightness(.98);transform:translateY(-1px)}
 @media(max-width:760px){.detailToolGrid{grid-template-columns:repeat(4,1fr)}.objectGrid{grid-template-columns:1fr}.objectDatabasePanel{max-height:none}}
 .detailFields .checkField{display:flex;align-items:center;gap:6px;padding:6px;border:1px solid #d8c4c9;border-radius:7px;background:#fff}.detailFields .checkField input{width:auto;margin:0;accent-color:#6d2639}
+
+/* Studio 3.0 Alpha.6 – PDF plan workflow and clean-project reset */
+.mediaImportActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+.mediaImportActions .primaryWide{margin:0;min-height:38px}
+.pdfImportButton{background:linear-gradient(135deg,#6c2340,#3d1026)!important}
+.referenceMeta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px;border:1px solid #e2d1d5;border-radius:10px;background:#fff}
+.referenceMeta strong{font-size:9px;color:#561426;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.referenceMeta span{font-size:8px;color:#8b6370;white-space:nowrap}
+.topbar button.dangerAction{border-color:#d17272;background:linear-gradient(#8c2631,#4b0c16);color:#fff3ef}
+.topbar button.dangerAction:hover:not(:disabled){border-color:#ff9a8e;background:linear-gradient(#aa3541,#64121f)}
+@media(max-width:760px){.mediaImportActions{grid-template-columns:1fr}.referenceMeta{display:grid}}
