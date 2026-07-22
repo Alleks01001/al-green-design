@@ -51,8 +51,9 @@ async function svgToJpeg(svg: SVGSVGElement) {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-  clone.querySelectorAll(".draftGeometry").forEach(element => element.remove());
   inlineSvgStyles(svg, clone);
+  clone.querySelectorAll(".draftGeometry").forEach(element => element.remove());
+  clone.querySelectorAll('[data-layer-printable="false"]').forEach(element => element.remove());
 
   const viewBox = svg.viewBox.baseVal;
   const ratio = viewBox.width > 0 && viewBox.height > 0 ? viewBox.width / viewBox.height : 10 / 7;

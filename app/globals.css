@@ -214,3 +214,58 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .objectDatabasePanel{max-height:720px}.libraryTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:8px 0}.libraryTabs button{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#6b2c3e;padding:7px 4px;font-size:7px;font-weight:700}.libraryTabs button.active{background:#6c2639;color:#fff;border-color:#6c2639}.libraryFilters{display:grid;grid-template-columns:1fr 1fr;gap:5px}.libraryFilters input,.libraryFilters select{width:100%;border:1px solid #d8c4c9;border-radius:8px;padding:7px;background:#fff;color:#4f2b35;font-size:8px}.objectGrid{grid-template-columns:1fr 1fr}.objectLibraryItem{min-height:95px}.objectThumb{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#f0e6e4;color:#6d2639;font-size:18px}.emptyLibrary{padding:10px;border-radius:8px;background:#f4ecee;text-align:center}.libraryPanel{scrollbar-width:thin}.primaryWide:hover,.referenceButtons button:hover,.moduleLinks a:hover,.compactButtonGrid button:hover:not(:disabled),.libraryTabs button:hover,.libraryItem:hover:not(:disabled){filter:brightness(.98);transform:translateY(-1px)}
 @media(max-width:760px){.detailToolGrid{grid-template-columns:repeat(4,1fr)}.objectGrid{grid-template-columns:1fr}.objectDatabasePanel{max-height:none}}
 .detailFields .checkField{display:flex;align-items:center;gap:6px;padding:6px;border:1px solid #d8c4c9;border-radius:7px;background:#fff}.detailFields .checkField input{width:auto;margin:0;accent-color:#6d2639}
+
+/* Studio 3.0 Alpha.6 – PDF plan workflow and clean-project reset */
+.mediaImportActions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+.mediaImportActions .primaryWide{margin:0;min-height:38px}
+.pdfImportButton{background:linear-gradient(135deg,#6c2340,#3d1026)!important}
+.referenceMeta{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px;border:1px solid #e2d1d5;border-radius:10px;background:#fff}
+.referenceMeta strong{font-size:9px;color:#561426;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.referenceMeta span{font-size:8px;color:#8b6370;white-space:nowrap}
+.topbar button.dangerAction{border-color:#d17272;background:linear-gradient(#8c2631,#4b0c16);color:#fff3ef}
+.topbar button.dangerAction:hover:not(:disabled){border-color:#ff9a8e;background:linear-gradient(#aa3541,#64121f)}
+@media(max-width:760px){.mediaImportActions{grid-template-columns:1fr}.referenceMeta{display:grid}}
+
+/* V3.1 Professional CAD – precision, snaps, groups and reusable blocks */
+.professionalCadPanel{padding:13px;background:rgba(255,250,248,.98);border:1px solid #c9b5bc;border-radius:17px;box-shadow:var(--shadow)}
+.professionalCadPanel h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6d2d3e;margin:12px 0 6px}
+.snapModeGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:9px}
+.snapModeGrid button{display:grid;gap:2px;min-height:45px;place-items:center;border:1px solid #dac7cc;border-radius:9px;background:#fff;color:#642033;padding:5px}
+.snapModeGrid button strong{font-size:8px;letter-spacing:.05em}.snapModeGrid button small{font-size:7px;color:#8b6770}
+.snapModeGrid button.active{background:#6c2639;color:#fff;border-color:#6c2639}.snapModeGrid button.active small{color:#efdbe0}
+.precisionSettingsRow{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:5px;margin-top:7px}
+.precisionSettingsRow button{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#642033;padding:7px;font-size:8px;font-weight:800}
+.precisionSettingsRow button.active{background:#6c2639;color:#fff;border-color:#6c2639}
+.precisionSettingsRow label,.precisionTransformGrid label{font-size:8px;color:#76545c}
+.precisionSettingsRow input,.precisionTransformGrid input,.blockCreateRow input{width:100%;margin-top:3px;border:1px solid #d8c4c9;border-radius:7px;padding:6px;background:#fff;color:#4e2832}
+.precisionTransformGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.precisionTransformGrid .checkField{display:flex;align-items:center;gap:6px;padding:6px;border:1px solid #d8c4c9;border-radius:7px;background:#fff;margin-top:11px}
+.precisionTransformGrid .checkField input{width:auto;margin:0;accent-color:#6d2639}
+.primaryWideAction{width:100%;margin-top:7px;border:0;border-radius:10px;padding:9px;color:#fff;background:linear-gradient(#8d3049,#61152b);font-size:9px;font-weight:800}
+.blockCreateRow{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end}
+.blockCreateRow button,.blockDefinitionList button{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#642033;padding:7px;font-size:8px;font-weight:700}
+.blockDefinitionList{display:grid;gap:6px;margin-top:7px}
+.blockDefinitionList article{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid #ddcbd0;border-radius:10px;background:#fff}
+.blockDefinitionList article>div:first-child{min-width:0}.blockDefinitionList strong,.blockDefinitionList small{display:block}.blockDefinitionList strong{font-size:9px;color:#5d1829;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.blockDefinitionList small{font-size:7px;color:#8b6972;margin-top:2px}
+.blockDefinitionList article>div:last-child{display:flex;gap:4px}.blockDefinitionList .dangerMini{color:#9c2334;border-color:#e2b8c0;min-width:28px}
+@media(max-width:760px){.precisionSettingsRow{grid-template-columns:1fr 1fr}.precisionSettingsRow button{grid-column:1/-1}.snapModeGrid{grid-template-columns:repeat(2,1fr)}}
+
+/* V3.1 Professional CAD Alpha 2 – layer manager and professional dimensions */
+.layerDimensionPanel{padding:13px;background:rgba(255,250,248,.98);border:1px solid #c9b5bc;border-radius:17px;box-shadow:var(--shadow)}
+.layerDimensionPanel h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#6d2d3e;margin:12px 0 6px}
+.dimensionModeGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.dimensionModeGrid button{display:grid;place-items:center;gap:2px;min-height:45px;border:1px solid #dac7cc;border-radius:9px;background:#fff;color:#642033;padding:5px}
+.dimensionModeGrid button strong{font-size:17px;line-height:1}.dimensionModeGrid button small{font-size:7px}.dimensionModeGrid button.active{background:#6c2639;color:#fff;border-color:#6c2639}
+.dimensionSettingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}
+.dimensionSettingsGrid label{font-size:8px;color:#76545c}.dimensionSettingsGrid select{width:100%;margin-top:3px;border:1px solid #d8c4c9;border-radius:7px;padding:6px;background:#fff;color:#4e2832}
+.dimensionScaleField{grid-column:1/-1}.dimensionScaleField strong{float:right;color:#5d1829}.dimensionScaleField input{display:block;width:100%;margin-top:5px;accent-color:#6d2639}
+.dimensionActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}.dimensionActions button{border:1px solid #d8c4c9;border-radius:8px;background:#fff;color:#642033;padding:8px;font-size:8px;font-weight:800}.dimensionActions button.active{background:#6c2639;color:#fff;border-color:#6c2639}
+.layerHeadingRow{display:flex;align-items:center;justify-content:space-between;gap:8px}.layerHeadingRow>div{display:flex;gap:4px}.layerHeadingRow button{border:1px solid #d8c4c9;border-radius:7px;background:#fff;color:#642033;padding:5px 7px;font-size:7px;font-weight:800}
+.selectionLayerMove{display:grid;grid-template-columns:1fr;gap:4px;margin:7px 0;padding:8px;border-radius:9px;background:#f3e8ea;color:#6d2d3e;font-size:8px;font-weight:700}.selectionLayerMove select{width:100%;border:1px solid #d5bec4;border-radius:7px;padding:6px;background:#fff;color:#4e2832}
+.layerList{display:grid;gap:6px;margin-top:7px}.layerList article{display:grid;grid-template-columns:24px minmax(0,1fr) 69px;gap:7px;align-items:start;padding:8px;border:1px solid #ddcbd0;border-radius:10px;background:#fff}.layerList article.active{border-color:#9b4b62;box-shadow:inset 3px 0 0 #7b1c31}
+.layerColorButton{border:0;background:transparent;padding:2px}.layerColorButton span{display:block;width:18px;height:48px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.13)}
+.layerMain{min-width:0}.layerNameInput{width:100%;border:0;border-bottom:1px solid transparent;padding:2px 1px;background:transparent;color:#5d1829;font-size:9px;font-weight:800}.layerNameInput:focus{outline:0;border-bottom-color:#9b4b62}.layerMain small{display:block;margin-top:2px;color:#8b6972;font-size:7px}
+.layerOpacityRow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px;align-items:center;margin-top:5px}.layerOpacityRow span,.layerOpacityRow strong{font-size:7px;color:#80606a}.layerOpacityRow input{width:100%;accent-color:#6d2639}
+.layerControls{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}.layerControls button,.layerControls input[type=color]{display:grid;place-items:center;width:100%;height:25px;border:1px solid #dbc8cd;border-radius:6px;background:#fff;color:#682134;padding:2px;font-size:7px;font-weight:800}.layerControls input[type=color]{padding:2px}.layerControls button.on{background:#6c2639;color:#fff;border-color:#6c2639}.layerControls .dangerMini{color:#9c2334;border-color:#e2b8c0}.layerControls button:disabled{opacity:.3}
+.cadDimension text{user-select:none}
+@media(max-width:760px){.dimensionSettingsGrid,.dimensionActions{grid-template-columns:1fr}.dimensionScaleField{grid-column:auto}.layerList article{grid-template-columns:24px minmax(0,1fr) 69px}}

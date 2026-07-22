@@ -10,7 +10,15 @@ export type CadTool =
   | "line" | "polyline" | "freehand" | "rectangle" | "rounded" | "circle" | "ellipse" | "polygon"
   | "triangle" | "pentagon" | "hexagon" | "star"
   | "wall" | "fence" | "hedge" | "path" | "terrace" | "bed" | "water" | "pool" | "stairs" | "plant" | "dimension";
-export type SnapMode = "grid" | "endpoint" | "midpoint" | "center";
+export type SnapMode = "grid" | "endpoint" | "midpoint" | "center" | "intersection";
+export type DimensionMode = "aligned" | "horizontal" | "vertical";
+export type DimensionUnit = "m" | "cm" | "mm";
+export type DimensionSettings = {
+  mode: DimensionMode;
+  unit: DimensionUnit;
+  decimals: 0 | 1 | 2 | 3;
+  textScale: number;
+};
 export type BimUnit = "m" | "m²" | "m³" | "Stk.";
 export type ProjectPhase = "Bestand" | "Abbruch" | "Neubau" | "Optional";
 export type MaintenanceCycle = "keine" | "monatlich" | "quartalsweise" | "jährlich" | "mehrjährig";
@@ -68,6 +76,13 @@ export type MaterialDefinition = {
   color: string; roughness: number; metalness: number; pricePerSquareMeter: number;
 };
 export type HistoryEntry = { id: Id; label: string; timestamp: number };
+export type BlockDefinition = {
+  id: Id;
+  name: string;
+  createdAt: number;
+  entities: CadEntity[];
+  bim: BimProperties[];
+};
 export type RenderPreset = "daylight" | "golden-hour" | "overcast" | "night";
 export type RenderQuality = "preview" | "high" | "ultra";
 export type RenderSettings = {
@@ -90,12 +105,17 @@ export type PlanReference = {
   opacity: number;
   width: number;
   depth: number;
+  sourceType?: "image" | "pdf";
+  sourcePage?: number;
+  sourcePageCount?: number;
 };
 
 export type ProjectState = {
   schemaVersion: string;
   id: Id; name: string; entities: CadEntity[]; bim: BimProperties[]; layers: Layer[];
   terrain: TerrainModel; plantingSettings: PlantingSettings; renderSettings: RenderSettings; planReference?: PlanReference;
+  blockDefinitions: BlockDefinition[]; orthogonalMode: boolean; nudgeStep: number;
+  dimensionSettings: DimensionSettings;
   selectedIds: Id[]; activeLayerId: Id; activeTool: CadTool; viewMode: "2d" | "3d" | "split";
   gridSize: number; gridVisible: boolean; snapEnabled: boolean; snapModes: SnapMode[]; showDimensions: boolean;
   projectCurrency: "EUR"; vatPercent: number;

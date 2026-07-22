@@ -1,4 +1,4 @@
-import type { CadEntity, Vec2 } from "@/types/domain";
+import type { CadEntity, Vec2 } from "../../types/domain";
 
 export const EPSILON = 0.0001;
 
@@ -37,13 +37,40 @@ export function entityBounds(entity: CadEntity) {
   }
 
   const radius = entity.shape === "circle" ? (entity.radius ?? entity.width / 2) : undefined;
-  const halfWidth = radius ?? entity.width / 2;
-  const halfDepth = radius ?? entity.depth / 2;
+  if (radius !== undefined) {
+    return {
+      minX: entity.position.x - radius,
+      maxX: entity.position.x + radius,
+      minY: entity.position.y - radius,
+      maxY: entity.position.y + radius
+    };
+  }
+
+  const halfWidth = entity.width / 2;
+  const halfDepth = entity.depth / 2;
+  const angle = entity.rotation * Math.PI / 180;
+  if (entity.shape === "ellipse") {
+    const projectedHalfWidth = Math.sqrt((halfWidth * Math.cos(angle)) ** 2 + (halfDepth * Math.sin(angle)) ** 2);
+    const projectedHalfDepth = Math.sqrt((halfWidth * Math.sin(angle)) ** 2 + (halfDepth * Math.cos(angle)) ** 2);
+    return {
+      minX: entity.position.x - projectedHalfWidth,
+      maxX: entity.position.x + projectedHalfWidth,
+      minY: entity.position.y - projectedHalfDepth,
+      maxY: entity.position.y + projectedHalfDepth
+    };
+  }
+
+  const corners = [
+    { x: entity.position.x - halfWidth, y: entity.position.y - halfDepth },
+    { x: entity.position.x + halfWidth, y: entity.position.y - halfDepth },
+    { x: entity.position.x + halfWidth, y: entity.position.y + halfDepth },
+    { x: entity.position.x - halfWidth, y: entity.position.y + halfDepth }
+  ].map(point => rotatePoint(point, entity.position, entity.rotation));
   return {
-    minX: entity.position.x - halfWidth,
-    maxX: entity.position.x + halfWidth,
-    minY: entity.position.y - halfDepth,
-    maxY: entity.position.y + halfDepth
+    minX: Math.min(...corners.map(point => point.x)),
+    maxX: Math.max(...corners.map(point => point.x)),
+    minY: Math.min(...corners.map(point => point.y)),
+    maxY: Math.max(...corners.map(point => point.y))
   };
 }
 
@@ -102,4 +129,61 @@ export function entityVolume(entity: CadEntity) {
 
 export function makeId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function entitiesBounds(entities: CadEntity[]) {
+  if (entities.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  const bounds = entities.map(entityBounds);
+  return {
+    minX: Math.min(...bounds.map(item => item.minX)),
+    maxX: Math.max(...bounds.map(item => item.maxX)),
+    minY: Math.min(...bounds.map(item => item.minY)),
+    maxY: Math.max(...bounds.map(item => item.maxY))
+  };
+}
+
+export function rotatePoint(point: Vec2, center: Vec2, angleDegrees: number): Vec2 {
+  const angle = angleDegrees * Math.PI / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos
+  };
+}
+
+export function transformEntityAround(
+  entity: CadEntity,
+  center: Vec2,
+  options: { translate?: Vec2; scaleX?: number; scaleY?: number; rotationDegrees?: number }
+): CadEntity {
+  const translate = options.translate ?? { x: 0, y: 0 };
+  const scaleX = Number.isFinite(options.scaleX) ? options.scaleX! : 1;
+  const scaleY = Number.isFinite(options.scaleY) ? options.scaleY! : 1;
+  const rotationDegrees = options.rotationDegrees ?? 0;
+
+  const transformPoint = (point: Vec2) => {
+    const scaled = {
+      x: center.x + (point.x - center.x) * scaleX,
+      y: center.y + (point.y - center.y) * scaleY
+    };
+    const rotated = rotatePoint(scaled, center, rotationDegrees);
+    return { x: rotated.x + translate.x, y: rotated.y + translate.y };
+  };
+
+  const transformedPosition = transformPoint(entity.position);
+  const transformedPoints = entity.points.map(transformPoint);
+  const averageScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+
+  return {
+    ...entity,
+    position: transformedPosition,
+    points: transformedPoints,
+    width: Math.max(0.001, entity.width * Math.abs(scaleX)),
+    depth: Math.max(0.001, entity.depth * Math.abs(scaleY)),
+    radius: entity.radius === undefined ? undefined : Math.max(0.001, entity.radius * averageScale),
+    rotation: entity.rotation + rotationDegrees
+  };
 }

@@ -34,7 +34,7 @@ export function FoundationPanel() {
   return (
     <section className="panel foundationPanel">
       <button type="button" className="panelHeaderButton" onClick={() => setOpen(value => !value)} aria-expanded={open}>
-        <span><span className="eyebrow">V3.0 Alpha · {STUDIO_PACKAGE_VERSION}</span><strong>System & Wiederherstellung</strong></span>
+        <span><span className="eyebrow">V3.1 Professional CAD · {STUDIO_PACKAGE_VERSION}</span><strong>System & Wiederherstellung</strong></span>
         <span>{open ? "−" : "+"}</span>
       </button>
       {open && (

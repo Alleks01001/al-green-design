@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { distance, entityCenter, makeId, translateEntity } from "@/core/cad/geometry";
+import { distance, entitiesBounds, entityCenter, makeId, transformEntityAround, translateEntity } from "@/core/cad/geometry";
 import { applyTerrainPreset, createTerrainGrid } from "@/engines/terrain/terrainEngine";
 import type {
   CadEntity,
@@ -23,7 +23,9 @@ import type {
   TerrainModel,
   PlantingSettings,
   RenderSettings,
-  PlanReference
+  PlanReference,
+  SnapMode,
+  DimensionSettings
 } from "@/types/domain";
 
 type CommandRecord = {
@@ -59,9 +61,25 @@ type Store = ProjectState & {
   redo: () => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
+  toggleSnapMode: (mode: SnapMode) => void;
+  toggleOrthogonalMode: () => void;
   toggleDimensions: () => void;
   setGridSize: (size: number) => void;
+  setNudgeStep: (size: number) => void;
+  groupSelected: () => void;
+  ungroupSelected: () => void;
+  transformSelected: (options: { x?: number; y?: number; width?: number; depth?: number; rotationDelta?: number }, label?: string) => void;
+  createBlockFromSelected: (name: string) => void;
+  insertBlock: (definitionId: string) => void;
+  deleteBlockDefinition: (definitionId: string) => void;
+  addLayer: (name?: string) => void;
   updateLayer: (id: string, patch: Partial<Layer>) => void;
+  deleteLayer: (id: string) => void;
+  moveLayer: (id: string, direction: -1 | 1) => void;
+  moveSelectedToLayer: (layerId: string) => void;
+  isolateLayer: (id: string) => void;
+  showAllLayers: () => void;
+  updateDimensionSettings: (patch: Partial<DimensionSettings>) => void;
   updateBim: (entityId: string, patch: Partial<BimProperties>) => void;
   ensureBim: (entityId: string) => void;
   setVatPercent: (value: number) => void;
@@ -74,10 +92,15 @@ type Store = ProjectState & {
   exportProjectFile: () => ProjectFile;
   importProjectFile: (file: ProjectFile) => void;
   resetProject: () => void;
+  clearProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-3.0-alpha.4";
+const STORAGE_KEY = "al-green-design-studio-3.1-alpha.2";
 const LEGACY_STORAGE_KEYS = [
+  "al-green-design-studio-3.1-alpha.1",
+  "al-green-design-studio-3.0-alpha.6",
+  "al-green-design-studio-3.0-alpha.5",
+  "al-green-design-studio-3.0-alpha.4",
   "al-green-design-studio-3.0-alpha.3",
   "al-green-design-studio-3.0-alpha",
   "al-green-design-studio-2.6",
@@ -86,9 +109,9 @@ const LEGACY_STORAGE_KEYS = [
 ];
 
 const initialProject: ProjectState = {
-  schemaVersion: "3.0-alpha.4",
+  schemaVersion: "3.1-alpha.2",
   id: "project-main",
-  name: "AL Green Design Studio 3.0 Alpha",
+  name: "AL Green Design Studio 3.1 Professional CAD",
   activeTool: "select",
   viewMode: "split",
   selectedIds: [],
@@ -96,7 +119,11 @@ const initialProject: ProjectState = {
   gridSize: 0.5,
   gridVisible: true,
   snapEnabled: true,
-  snapModes: ["grid", "endpoint", "midpoint", "center"],
+  snapModes: ["grid", "endpoint", "midpoint", "center", "intersection"],
+  orthogonalMode: false,
+  nudgeStep: 0.1,
+  dimensionSettings: { mode: "aligned", unit: "m", decimals: 2, textScale: 1 },
+  blockDefinitions: [],
   showDimensions: true,
   projectCurrency: "EUR",
   vatPercent: 20,
@@ -239,10 +266,23 @@ function cloneProject(project: ProjectState): ProjectState {
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "3.0-alpha.4",
+    schemaVersion: "3.1-alpha.2",
     selectedIds: [],
     activeTool: "select",
-    snapModes: project.snapModes?.length ? project.snapModes : ["grid", "endpoint", "midpoint", "center"],
+    snapModes: project.snapModes?.length ? Array.from(new Set([...project.snapModes, "intersection" as SnapMode])) : ["grid", "endpoint", "midpoint", "center", "intersection"],
+    orthogonalMode: project.orthogonalMode ?? false,
+    nudgeStep: Number.isFinite(project.nudgeStep) ? Math.max(0.01, project.nudgeStep) : 0.1,
+    dimensionSettings: {
+      mode: project.dimensionSettings?.mode === "horizontal" || project.dimensionSettings?.mode === "vertical" ? project.dimensionSettings.mode : "aligned",
+      unit: project.dimensionSettings?.unit === "cm" || project.dimensionSettings?.unit === "mm" ? project.dimensionSettings.unit : "m",
+      decimals: Math.min(3, Math.max(0, Math.round(Number(project.dimensionSettings?.decimals ?? 2)))) as 0 | 1 | 2 | 3,
+      textScale: Number.isFinite(project.dimensionSettings?.textScale) ? Math.min(2, Math.max(0.65, project.dimensionSettings.textScale)) : 1
+    },
+    blockDefinitions: (project.blockDefinitions ?? []).map(definition => ({
+      ...definition,
+      entities: (definition.entities ?? []).map(entity => ({ ...entity, metadata: entity.metadata ?? {} })),
+      bim: definition.bim ?? []
+    })),
     entities: project.entities.map(entity => ({
       ...entity,
       shape: entity.shape ?? (entity.kind === "plant" ? "symbol" : "rectangle"),
@@ -276,12 +316,14 @@ function normalizeProject(project: ProjectState): ProjectState {
     layers: (() => {
       const normalized = project.layers.map(layer => ({
         ...layer,
+        color: /^#[0-9a-f]{6}$/i.test(layer.color) ? layer.color : "#7b3650",
         printable: layer.printable ?? true,
-        opacity: layer.opacity ?? 1
+        opacity: Number.isFinite(layer.opacity) ? Math.min(1, Math.max(0.1, layer.opacity)) : 1
       }));
       const required: Layer[] = [
         { id: "layer-furniture", name: "Ausstattung & Möbel", color: "#8a6448", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
-        { id: "layer-lighting", name: "Beleuchtung", color: "#d89b2b", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 }
+        { id: "layer-lighting", name: "Beleuchtung", color: "#d89b2b", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
+        { id: "layer-dimensions", name: "Bemaßung", color: "#6e2940", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 }
       ];
       for (const layer of required) if (!normalized.some(item => item.id === layer.id)) normalized.push(layer);
       return normalized;
@@ -315,11 +357,16 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "3.0-alpha.4",
+      version: "3.1-alpha.2",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
+    } catch {
+      // Large plan references can exceed the browser storage quota. The editor must keep running;
+      // the full project can still be exported manually as an .algreen file.
+    }
   }, [internal.project]);
 
   const updateUi = useCallback((producer: (project: ProjectState) => ProjectState) => {
@@ -355,7 +402,9 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
           ? current.selectedIds.filter(selectedId => selectedId !== id)
           : [...current.selectedIds, id]
       })),
-      setActiveLayerId: activeLayerId => updateUi(current => ({ ...current, activeLayerId })),
+      setActiveLayerId: activeLayerId => updateUi(current => current.layers.some(layer => layer.id === activeLayerId && layer.visible && !layer.locked)
+        ? { ...current, activeLayerId }
+        : current),
       setEntities: (entities, label = "Objekte aktualisiert") => commit(label, current => ({ ...current, entities: refreshDynamicConnections(entities) })),
       addEntity: (entity, label = "Objekt erstellt") => commit(label, current => ({
         ...current,
@@ -407,15 +456,40 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       duplicateSelected: () => {
         const selected = project.entities.filter(entity => project.selectedIds.includes(entity.id) && !entity.locked);
         if (selected.length === 0) return;
-        const duplicates = selected.map(entity => {
-          const copy = translateEntity(entity, { x: 0.5, y: 0.5 });
-          return { ...copy, id: makeId(entity.kind), name: `${entity.name} Kopie`, locked: false };
+        commit("Auswahl dupliziert", current => {
+          const idMap = new Map(selected.map(entity => [entity.id, makeId(entity.kind)]));
+          const groupMap = new Map<string, string>();
+          const instanceMap = new Map<string, string>();
+          const duplicates = selected.map(entity => {
+            const copy = translateEntity(entity, { x: 0.5, y: 0.5 });
+            const metadata = { ...(copy.metadata ?? {}) };
+            const oldGroupId = typeof metadata.groupId === "string" ? metadata.groupId : undefined;
+            const oldInstanceId = typeof metadata.blockInstanceId === "string" ? metadata.blockInstanceId : undefined;
+            if (oldGroupId) {
+              if (!groupMap.has(oldGroupId)) groupMap.set(oldGroupId, makeId("group"));
+              metadata.groupId = groupMap.get(oldGroupId)!;
+            }
+            if (oldInstanceId) {
+              if (!instanceMap.has(oldInstanceId)) instanceMap.set(oldInstanceId, makeId("instance"));
+              metadata.blockInstanceId = instanceMap.get(oldInstanceId)!;
+            }
+            const oldStartId = typeof metadata.connectionStartId === "string" ? metadata.connectionStartId : undefined;
+            const oldEndId = typeof metadata.connectionEndId === "string" ? metadata.connectionEndId : undefined;
+            if (oldStartId && idMap.has(oldStartId)) metadata.connectionStartId = idMap.get(oldStartId)!;
+            if (oldEndId && idMap.has(oldEndId)) metadata.connectionEndId = idMap.get(oldEndId)!;
+            return { ...copy, id: idMap.get(entity.id)!, name: `${entity.name} Kopie`, metadata, locked: false };
+          });
+          const duplicateBim = current.bim.flatMap(item => {
+            const entityId = idMap.get(item.entityId);
+            return entityId ? [{ ...item, entityId, custom: { ...item.custom } }] : [];
+          });
+          return {
+            ...current,
+            entities: refreshDynamicConnections([...current.entities, ...duplicates]),
+            bim: [...current.bim, ...duplicateBim],
+            selectedIds: duplicates.map(entity => entity.id)
+          };
         });
-        commit("Auswahl dupliziert", current => ({
-          ...current,
-          entities: [...current.entities, ...duplicates],
-          selectedIds: duplicates.map(entity => entity.id)
-        }));
       },
       undo: () => {
         setInternal(current => {
@@ -443,11 +517,217 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       },
       toggleGrid: () => updateUi(current => ({ ...current, gridVisible: !current.gridVisible })),
       toggleSnap: () => updateUi(current => ({ ...current, snapEnabled: !current.snapEnabled })),
+      toggleSnapMode: mode => updateUi(current => ({
+        ...current,
+        snapModes: current.snapModes.includes(mode)
+          ? current.snapModes.filter(item => item !== mode)
+          : [...current.snapModes, mode]
+      })),
+      toggleOrthogonalMode: () => updateUi(current => ({ ...current, orthogonalMode: !current.orthogonalMode })),
       toggleDimensions: () => updateUi(current => ({ ...current, showDimensions: !current.showDimensions })),
       setGridSize: gridSize => updateUi(current => ({ ...current, gridSize: Math.max(0.05, gridSize) })),
-      updateLayer: (id, patch) => commit("Layer geändert", current => ({
+      setNudgeStep: nudgeStep => updateUi(current => ({ ...current, nudgeStep: Math.max(0.01, nudgeStep) })),
+      groupSelected: () => {
+        if (project.selectedIds.length < 2) return;
+        const selected = new Set(project.selectedIds);
+        const groupId = makeId("group");
+        commit("Auswahl gruppiert", current => ({
+          ...current,
+          entities: current.entities.map(entity => selected.has(entity.id) && !entity.locked
+            ? { ...entity, metadata: { ...(entity.metadata ?? {}), groupId } }
+            : entity)
+        }));
+      },
+      ungroupSelected: () => {
+        if (project.selectedIds.length === 0) return;
+        const selected = new Set(project.selectedIds);
+        commit("Gruppierung aufgehoben", current => ({
+          ...current,
+          entities: current.entities.map(entity => {
+            if (!selected.has(entity.id) || entity.locked) return entity;
+            const metadata = { ...(entity.metadata ?? {}) };
+            delete metadata.groupId;
+            return { ...entity, metadata };
+          })
+        }));
+      },
+      transformSelected: (options, label = "Auswahl präzise transformiert") => {
+        if (project.selectedIds.length === 0) return;
+        const selected = new Set(project.selectedIds);
+        commit(label, current => {
+          const editable = current.entities.filter(entity => selected.has(entity.id) && !entity.locked && !current.layers.find(layer => layer.id === entity.layerId)?.locked);
+          if (editable.length === 0) return current;
+          const bounds = entitiesBounds(editable);
+          const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+          const currentWidth = Math.max(0.001, bounds.maxX - bounds.minX);
+          const currentDepth = Math.max(0.001, bounds.maxY - bounds.minY);
+          const scaleX = options.width === undefined ? 1 : Math.max(0.001, options.width) / currentWidth;
+          const scaleY = options.depth === undefined ? 1 : Math.max(0.001, options.depth) / currentDepth;
+          const translate = {
+            x: options.x === undefined ? 0 : options.x - center.x,
+            y: options.y === undefined ? 0 : options.y - center.y
+          };
+          const entities = current.entities.map(entity => selected.has(entity.id) && editable.some(item => item.id === entity.id)
+            ? transformEntityAround(entity, center, { translate, scaleX, scaleY, rotationDegrees: options.rotationDelta ?? 0 })
+            : entity);
+          return { ...current, entities: refreshDynamicConnections(entities) };
+        });
+      },
+      createBlockFromSelected: name => {
+        const cleanName = name.trim();
+        if (!cleanName || project.selectedIds.length === 0) return;
+        const selected = new Set(project.selectedIds);
+        commit(`Block erstellt: ${cleanName}`, current => {
+          const source = current.entities.filter(entity => selected.has(entity.id) && !entity.locked);
+          if (source.length === 0) return current;
+          const bounds = entitiesBounds(source);
+          const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+          const definitionId = makeId("block");
+          const instanceId = makeId("instance");
+          const groupId = makeId("group");
+          const sourceIds = new Set(source.map(entity => entity.id));
+          const templates = source.map(entity => {
+            const relative = translateEntity(entity, { x: -center.x, y: -center.y });
+            const metadata = { ...(relative.metadata ?? {}) };
+            delete metadata.groupId;
+            delete metadata.blockInstanceId;
+            delete metadata.blockDefinitionId;
+            const startId = typeof metadata.connectionStartId === "string" ? metadata.connectionStartId : undefined;
+            const endId = typeof metadata.connectionEndId === "string" ? metadata.connectionEndId : undefined;
+            if ((startId && !sourceIds.has(startId)) || (endId && !sourceIds.has(endId))) {
+              delete metadata.connectionStartId;
+              delete metadata.connectionEndId;
+              delete metadata.dynamicConnection;
+            }
+            return { ...relative, metadata };
+          });
+          const definition = {
+            id: definitionId,
+            name: cleanName,
+            createdAt: Date.now(),
+            entities: templates,
+            bim: current.bim.filter(item => selected.has(item.entityId)).map(item => ({ ...item, custom: { ...item.custom } }))
+          };
+          return {
+            ...current,
+            blockDefinitions: [...current.blockDefinitions, definition],
+            entities: current.entities.map(entity => selected.has(entity.id)
+              ? { ...entity, metadata: { ...(entity.metadata ?? {}), groupId, blockDefinitionId: definitionId, blockInstanceId: instanceId } }
+              : entity)
+          };
+        });
+      },
+      insertBlock: definitionId => {
+        commit("Block eingefügt", current => {
+          const definition = current.blockDefinitions.find(item => item.id === definitionId);
+          if (!definition) return current;
+          const instanceId = makeId("instance");
+          const groupId = makeId("group");
+          const existingInstances = current.entities.filter(entity => entity.metadata?.blockDefinitionId === definitionId).length;
+          const offset = { x: (existingInstances % 6) * 0.75, y: Math.floor(existingInstances / 6) * 0.75 };
+          const idMap = new Map(definition.entities.map(entity => [entity.id, makeId(entity.kind)]));
+          const inserted = definition.entities.map(entity => {
+            const metadata = { ...(entity.metadata ?? {}) };
+            const oldStartId = typeof metadata.connectionStartId === "string" ? metadata.connectionStartId : undefined;
+            const oldEndId = typeof metadata.connectionEndId === "string" ? metadata.connectionEndId : undefined;
+            if (oldStartId && idMap.has(oldStartId)) metadata.connectionStartId = idMap.get(oldStartId)!;
+            if (oldEndId && idMap.has(oldEndId)) metadata.connectionEndId = idMap.get(oldEndId)!;
+            metadata.groupId = groupId;
+            metadata.blockDefinitionId = definitionId;
+            metadata.blockInstanceId = instanceId;
+            return translateEntity({ ...entity, id: idMap.get(entity.id)!, name: `${entity.name} · ${definition.name}`, metadata, locked: false }, offset);
+          });
+          const insertedBim = definition.bim.flatMap(item => {
+            const entityId = idMap.get(item.entityId);
+            return entityId ? [{ ...item, entityId, custom: { ...item.custom } }] : [];
+          });
+          return {
+            ...current,
+            entities: refreshDynamicConnections([...current.entities, ...inserted]),
+            bim: [...current.bim, ...insertedBim],
+            selectedIds: inserted.map(entity => entity.id)
+          };
+        });
+      },
+      deleteBlockDefinition: definitionId => commit("Blockdefinition gelöscht", current => ({
         ...current,
-        layers: current.layers.map(layer => layer.id === id ? { ...layer, ...patch } : layer)
+        blockDefinitions: current.blockDefinitions.filter(item => item.id !== definitionId)
+      })),
+      addLayer: (name = "Neuer Layer") => commit("Layer erstellt", current => {
+        const id = makeId("layer");
+        const palette = ["#7b3650", "#456f7e", "#657a45", "#9a6b36", "#70588f", "#8a5050", "#3f776b"];
+        return {
+          ...current,
+          layers: [...current.layers, {
+            id,
+            name: `${name} ${current.layers.length + 1}`,
+            color: palette[current.layers.length % palette.length],
+            visible: true,
+            locked: false,
+            printable: true,
+            opacity: 1,
+            elevation: 0
+          }],
+          activeLayerId: id
+        };
+      }),
+      updateLayer: (id, patch) => commit("Layer geändert", current => {
+        const layers = current.layers.map(layer => layer.id === id ? { ...layer, ...patch } : layer);
+        const active = layers.find(layer => layer.id === current.activeLayerId);
+        const fallback = layers.find(layer => layer.visible && !layer.locked);
+        return {
+          ...current,
+          layers,
+          activeLayerId: active && active.visible && !active.locked ? active.id : fallback?.id ?? current.activeLayerId,
+          selectedIds: current.selectedIds.filter(entityId => {
+            const entity = current.entities.find(item => item.id === entityId);
+            const layer = entity ? layers.find(item => item.id === entity.layerId) : undefined;
+            return Boolean(entity && layer?.visible && !layer.locked);
+          })
+        };
+      }),
+      deleteLayer: id => commit("Leeren Layer gelöscht", current => {
+        if (current.layers.length <= 1 || current.entities.some(entity => entity.layerId === id)) return current;
+        const layers = current.layers.filter(layer => layer.id !== id);
+        return {
+          ...current,
+          layers,
+          activeLayerId: current.activeLayerId === id ? layers[0].id : current.activeLayerId
+        };
+      }),
+      moveLayer: (id, direction) => commit("Layer-Reihenfolge geändert", current => {
+        const index = current.layers.findIndex(layer => layer.id === id);
+        const target = index + direction;
+        if (index < 0 || target < 0 || target >= current.layers.length) return current;
+        const layers = [...current.layers];
+        [layers[index], layers[target]] = [layers[target], layers[index]];
+        return { ...current, layers };
+      }),
+      moveSelectedToLayer: layerId => {
+        if (!project.selectedIds.length || !project.layers.some(layer => layer.id === layerId && !layer.locked)) return;
+        const selected = new Set(project.selectedIds);
+        commit("Auswahl auf Layer verschoben", current => ({
+          ...current,
+          entities: current.entities.map(entity => selected.has(entity.id) && !entity.locked ? { ...entity, layerId } : entity)
+        }));
+      },
+      isolateLayer: id => commit("Layer isoliert", current => ({
+        ...current,
+        layers: current.layers.map(layer => ({ ...layer, visible: layer.id === id })),
+        activeLayerId: id,
+        selectedIds: current.selectedIds.filter(entityId => current.entities.some(entity => entity.id === entityId && entity.layerId === id))
+      })),
+      showAllLayers: () => commit("Alle Layer eingeblendet", current => ({
+        ...current,
+        layers: current.layers.map(layer => ({ ...layer, visible: true }))
+      })),
+      updateDimensionSettings: patch => updateUi(current => ({
+        ...current,
+        dimensionSettings: {
+          ...current.dimensionSettings,
+          ...patch,
+          textScale: patch.textScale === undefined ? current.dimensionSettings.textScale : Math.min(2, Math.max(0.65, patch.textScale))
+        }
       })),
       updateBim: (entityId, patch) => commit("BIM-Daten geändert", current => ({
         ...current,
@@ -488,7 +768,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       updatePlanReference: patch => commit("Planreferenz geändert", current => ({
         ...current,
         planReference: patch === null ? undefined : {
-          ...(current.planReference ?? { dataUrl: "", name: "Planreferenz", visible: true, opacity: 0.45, width: 16, depth: 11 }),
+          ...(current.planReference ?? { dataUrl: "", name: "Planreferenz", visible: true, opacity: 0.45, width: 16, depth: 11, sourceType: "image" }),
           ...patch
         }
       })),
@@ -497,7 +777,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "3.0-alpha.4",
+        version: "3.1-alpha.2",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),
@@ -519,6 +799,31 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
           redo: [],
           history: [{ id: makeId("history"), label: "Projekt zurückgesetzt", timestamp: Date.now() }, ...current.history].slice(0, 30)
         }));
+      },
+      clearProject: () => {
+        setInternal(current => {
+          const blank = cloneProject(initialProject);
+          blank.id = makeId("project");
+          blank.name = "Neues Gartenprojekt";
+          blank.entities = [];
+          blank.bim = [];
+          blank.planReference = undefined;
+          blank.selectedIds = [];
+          blank.activeTool = "select";
+          blank.viewMode = "2d";
+          blank.terrain = {
+            ...blank.terrain,
+            enabled: false,
+            baseElevation: 0,
+            points: createTerrainGrid(blank.terrain.width, blank.terrain.depth, blank.terrain.resolutionX, blank.terrain.resolutionZ)
+          };
+          return {
+            project: blank,
+            undo: [...current.undo, { label: "Alles gelöscht", snapshot: cloneProject(current.project) }].slice(-80),
+            redo: [],
+            history: [{ id: makeId("history"), label: "Alles gelöscht – neues Projekt", timestamp: Date.now() }, ...current.history].slice(0, 30)
+          };
+        });
       }
     };
   }, [commit, internal, updateUi]);
