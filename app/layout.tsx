@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "AL Green Design Studio 2.1",
-  description: "Professioneller CAD-Kern für Garten- und Landschaftsplanung"
+  title: "AL Green Design Studio 3.0 Alpha",
+  description: "CAD, BIM, Terrain, Pflanzenintelligenz, Rendering und AI Garden Designer"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

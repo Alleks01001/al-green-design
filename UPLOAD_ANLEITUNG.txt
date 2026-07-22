@@ -1,0 +1,22 @@
+AL GREEN DESIGN STUDIO 3.0 ALPHA – SOURCE SYNC HOTFIX 3
+
+URSACHE:
+Beim bisherigen GitHub-Upload wurden nur Dateien im Hauptverzeichnis ersetzt.
+Die Unterordner app, components, core, engines, stores und types blieben auf dem alten Stand.
+Darum zeigte package.json bereits Version 3.0, die Oberfläche aber weiterhin Studio 2.1/2.3.
+
+WICHTIGER UPLOAD:
+1. Diese ZIP vollständig entpacken.
+2. GitHub-Repository öffnen und im Hauptverzeichnis auf Add file > Upload files gehen.
+3. Die entpackten ORDNER app, components, core, engines, stores und types sowie package.json,
+   package-lock.json und tsconfig.json gemeinsam per DRAG & DROP in das Upload-Fenster ziehen.
+4. Nicht nur die einzelnen Dateien im Hauptverzeichnis auswählen.
+5. GitHub muss beim Upload Pfade wie components/layout/StudioShell.tsx und
+   core/platform/version.ts anzeigen.
+6. Commit erstellen und Vercel-Deployment abwarten.
+
+PRÜFUNG NACH DEM DEPLOYMENT:
+- Links oben: Professional CAD · Studio 3.0 Alpha
+- In der oberen Leiste: V3.0 Alpha · 3.0.0-alpha.3 · SYNC OK
+- Links vor Terrain Engine: System & Wiederherstellung
+- /version zeigt Paketversion 3.0.0-alpha.3

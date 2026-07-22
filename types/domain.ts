@@ -59,18 +59,32 @@ export type MaterialDefinition = {
   color: string; roughness: number; metalness: number; pricePerSquareMeter: number;
 };
 export type HistoryEntry = { id: Id; label: string; timestamp: number };
+export type RenderPreset = "daylight" | "golden-hour" | "overcast" | "night";
+export type RenderQuality = "preview" | "high" | "ultra";
+export type RenderSettings = {
+  preset: RenderPreset;
+  quality: RenderQuality;
+  hour: number;
+  azimuth: number;
+  exposure: number;
+  shadowStrength: number;
+  ambientStrength: number;
+  fogEnabled: boolean;
+  fogDensity: number;
+  gridVisible3d: boolean;
+};
 
 export type ProjectState = {
-  schemaVersion: "2.4";
+  schemaVersion: string;
   id: Id; name: string; entities: CadEntity[]; bim: BimProperties[]; layers: Layer[];
-  terrain: TerrainModel; plantingSettings: PlantingSettings;
+  terrain: TerrainModel; plantingSettings: PlantingSettings; renderSettings: RenderSettings;
   selectedIds: Id[]; activeLayerId: Id; activeTool: CadTool; viewMode: "2d" | "3d" | "split";
   gridSize: number; gridVisible: boolean; snapEnabled: boolean; snapModes: SnapMode[]; showDimensions: boolean;
   projectCurrency: "EUR"; vatPercent: number;
 };
 export type ProjectFile = {
   application: "AL Green Design Studio";
-  version: "2.4";
+  version: string;
   savedAt: string;
   project: ProjectState;
 };

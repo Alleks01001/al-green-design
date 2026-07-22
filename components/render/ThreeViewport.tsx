@@ -42,35 +42,46 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
 
 export function ThreeViewport() {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const { entities, layers, selectedIds, terrain, plantingSettings } = useProjectStore();
+  const { entities, layers, selectedIds, terrain, plantingSettings, renderSettings } = useProjectStore();
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#e9e4e2");
-    scene.fog = new THREE.Fog("#e9e4e2", 28, 70);
+    const environment = {
+      daylight: { sky: "#dfeaf2", ground: "#6e8d69", hemiSky: "#fff7ed", hemiGround: "#52614f", sun: "#fff1d2" },
+      "golden-hour": { sky: "#e9c4a4", ground: "#6e805e", hemiSky: "#ffd9ad", hemiGround: "#654a45", sun: "#ffbd72" },
+      overcast: { sky: "#d8dde0", ground: "#71836b", hemiSky: "#f2f4f5", hemiGround: "#59625b", sun: "#e7edf2" },
+      night: { sky: "#172131", ground: "#35453c", hemiSky: "#7185ad", hemiGround: "#202822", sun: "#9db8ff" }
+    }[renderSettings.preset];
+    scene.background = new THREE.Color(environment.sky);
+    scene.fog = renderSettings.fogEnabled ? new THREE.FogExp2(environment.sky, renderSettings.fogDensity) : null;
 
     const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / Math.max(1, mount.clientHeight), 0.1, 250);
     camera.position.set(16, 13, 17);
     camera.lookAt(0, 0.8, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
+    const qualityScale = renderSettings.quality === "ultra" ? 2.4 : renderSettings.quality === "high" ? 1.8 : 1.15;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, qualityScale));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = renderSettings.exposure;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
-    scene.add(new THREE.HemisphereLight("#fff8ef", "#5a3940", 1.7));
-    const sun = new THREE.DirectionalLight("#fff0d2", 3.2);
-    sun.position.set(14, 20, 10);
+    scene.add(new THREE.HemisphereLight(environment.hemiSky, environment.hemiGround, 1.55 * renderSettings.ambientStrength));
+    const solarAltitude = Math.max(0.08, Math.sin(((renderSettings.hour - 6) / 12) * Math.PI));
+    const sunIntensity = (renderSettings.preset === "night" ? 0.35 : renderSettings.preset === "overcast" ? 1.25 : 3.2) * renderSettings.shadowStrength;
+    const sun = new THREE.DirectionalLight(environment.sun, sunIntensity);
+    const sunAngle = THREE.MathUtils.degToRad(renderSettings.azimuth);
+    sun.position.set(Math.sin(sunAngle) * 22, 4 + solarAltitude * 24, Math.cos(sunAngle) * 22);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    const shadowMapSize = renderSettings.quality === "ultra" ? 4096 : renderSettings.quality === "high" ? 2048 : 1024;
+    sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     sun.shadow.camera.left = -22;
     sun.shadow.camera.right = 22;
     sun.shadow.camera.top = 22;
@@ -165,7 +176,7 @@ export function ThreeViewport() {
     if (!terrain.enabled) {
       const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(50, 40),
-        new THREE.MeshStandardMaterial({ color: "#739373", roughness: 1 })
+        new THREE.MeshStandardMaterial({ color: environment.ground, roughness: 0.94 })
       );
       ground.rotation.x = -Math.PI / 2;
       ground.position.y = -0.025;
@@ -173,11 +184,13 @@ export function ThreeViewport() {
       scene.add(ground);
     }
 
-    const grid = new THREE.GridHelper(40, 40, "#794556", "#9cb19a");
-    grid.position.y = 0.003;
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.28;
-    scene.add(grid);
+    if (renderSettings.gridVisible3d) {
+      const grid = new THREE.GridHelper(40, 40, "#794556", "#9cb19a");
+      grid.position.y = 0.003;
+      (grid.material as THREE.Material).transparent = true;
+      (grid.material as THREE.Material).opacity = 0.22;
+      scene.add(grid);
+    }
 
     let frame = 0;
     let pointerDown = false;
@@ -225,6 +238,15 @@ export function ThreeViewport() {
     renderer.domElement.addEventListener("pointercancel", pointerEnd);
     renderer.domElement.addEventListener("wheel", wheel, { passive: false });
 
+    function exportRender() {
+      renderer.render(scene, camera);
+      const anchor = document.createElement("a");
+      anchor.download = `AL_Green_Render_${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+      anchor.href = renderer.domElement.toDataURL("image/png");
+      anchor.click();
+    }
+    window.addEventListener("algreen:export-render", exportRender);
+
     const animate = () => {
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
@@ -245,6 +267,7 @@ export function ThreeViewport() {
       renderer.domElement.removeEventListener("pointerup", pointerEnd);
       renderer.domElement.removeEventListener("pointercancel", pointerEnd);
       renderer.domElement.removeEventListener("wheel", wheel);
+      window.removeEventListener("algreen:export-render", exportRender);
       cancelAnimationFrame(frame);
       scene.traverse(object => {
         if (object instanceof THREE.Mesh) {
@@ -256,12 +279,12 @@ export function ThreeViewport() {
       renderer.dispose();
       mount.replaceChildren();
     };
-  }, [entities, layers, selectedIds, terrain, plantingSettings]);
+  }, [entities, layers, selectedIds, terrain, plantingSettings, renderSettings]);
 
   return (
     <section className="viewportCard threeCard">
       <div className="viewportTitle"><strong>3D ENGINE</strong><span>Ziehen: Orbit · Mausrad: Zoom</span></div>
-      <div className="renderBadge">Terrain Mesh · Pflanzenwachstum · PBR</div>
+      <div className="renderBadge">{renderSettings.preset} · {renderSettings.quality} · ACES · PBR</div>
       <div ref={mountRef} className="threeViewport" />
     </section>
   );

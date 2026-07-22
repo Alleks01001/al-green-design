@@ -21,7 +21,8 @@ import type {
   ProjectState,
   Vec2,
   TerrainModel,
-  PlantingSettings
+  PlantingSettings,
+  RenderSettings
 } from "@/types/domain";
 
 type CommandRecord = {
@@ -65,18 +66,20 @@ type Store = ProjectState & {
   updateTerrain: (patch: Partial<TerrainModel>, label?: string) => void;
   updateTerrainPoint: (id: string, elevation: number) => void;
   updatePlantingSettings: (patch: Partial<PlantingSettings>) => void;
+  updateRenderSettings: (patch: Partial<RenderSettings>) => void;
   applyTerrainPreset: (preset: "flat" | "slope" | "mound" | "swale") => void;
   exportProjectFile: () => ProjectFile;
   importProjectFile: (file: ProjectFile) => void;
   resetProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-2.4";
+const STORAGE_KEY = "al-green-design-studio-3.0-alpha";
+const LEGACY_STORAGE_KEYS = ["al-green-design-studio-2.6", "al-green-design-studio-2.5", "al-green-design-studio-2.4"];
 
 const initialProject: ProjectState = {
-  schemaVersion: "2.4",
+  schemaVersion: "3.0-alpha",
   id: "project-main",
-  name: "AL Green Design Studio 2.4",
+  name: "AL Green Design Studio 3.0 Alpha",
   activeTool: "select",
   viewMode: "split",
   selectedIds: [],
@@ -89,6 +92,7 @@ const initialProject: ProjectState = {
   projectCurrency: "EUR",
   vatPercent: 20,
   plantingSettings: { siteLight: "sun", soil: "loam", moisture: "fresh", hardinessZone: 7, growthYears: 5 },
+  renderSettings: { preset: "daylight", quality: "high", hour: 14, azimuth: 135, exposure: 1.08, shadowStrength: 1, ambientStrength: 1, fogEnabled: true, fogDensity: 0.012, gridVisible3d: true },
   terrain: {
     enabled: true,
     width: 20,
@@ -203,7 +207,7 @@ function cloneProject(project: ProjectState): ProjectState {
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "2.4",
+    schemaVersion: "3.0-alpha",
     selectedIds: [],
     activeTool: "select",
     snapModes: project.snapModes?.length ? project.snapModes : ["grid", "endpoint", "midpoint", "center"],
@@ -216,6 +220,7 @@ function normalizeProject(project: ProjectState): ProjectState {
     projectCurrency: "EUR",
     vatPercent: Number.isFinite(project.vatPercent) ? project.vatPercent : 20,
     plantingSettings: project.plantingSettings ?? { siteLight: "sun", soil: "loam", moisture: "fresh", hardinessZone: 7, growthYears: 5 },
+    renderSettings: project.renderSettings ?? { preset: "daylight", quality: "high", hour: 14, azimuth: 135, exposure: 1.08, shadowStrength: 1, ambientStrength: 1, fogEnabled: true, fogDensity: 0.012, gridVisible3d: true },
     terrain: project.terrain ?? {
       enabled: true, width: 20, depth: 16, resolutionX: 9, resolutionZ: 7,
       baseElevation: 0, contourInterval: 0.25, points: createTerrainGrid(20, 16, 9, 7), cutFillReference: 0
@@ -250,7 +255,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const saved = window.localStorage.getItem(STORAGE_KEY) ?? LEGACY_STORAGE_KEYS.map(key => window.localStorage.getItem(key)).find(Boolean);
       if (!saved) return;
       const parsed = JSON.parse(saved) as ProjectFile;
       if (parsed.application === "AL Green Design Studio" && parsed.project) {
@@ -264,7 +269,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "2.4",
+      version: "3.0-alpha",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
@@ -418,12 +423,13 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         ...current, terrain: { ...current.terrain, points: current.terrain.points.map(point => point.id === id ? { ...point, elevation } : point) }
       })),
       updatePlantingSettings: patch => updateUi(current => ({ ...current, plantingSettings: { ...current.plantingSettings, ...patch } })),
+      updateRenderSettings: patch => updateUi(current => ({ ...current, renderSettings: { ...current.renderSettings, ...patch } })),
       applyTerrainPreset: preset => commit(`Geländevorlage: ${preset}`, current => ({
         ...current, terrain: applyTerrainPreset(current.terrain, preset)
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "2.4",
+        version: "3.0-alpha",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),

@@ -144,3 +144,58 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .bloomCalendar{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;margin-top:9px}.bloomCalendar span{display:grid;place-items:center;height:20px;border-radius:5px;background:#eee5e5;color:#9b7a82;font-size:7px}.bloomCalendar span.active{background:#7caa75;color:#fff;font-weight:800}
 .plantWarnings{margin-top:9px;padding:8px;border-radius:9px;background:#fff2df;border:1px solid #e8c890;color:#78531d}.plantWarnings strong{font-size:9px}.plantWarnings p{font-size:8px;margin:4px 0 0}
 .plantAssessments{display:grid;gap:5px;margin-top:9px}.plantAssessments button{display:grid;grid-template-columns:1fr auto;gap:2px 6px;text-align:left;border:1px solid #d5e1d2;border-radius:9px;background:#fff;padding:7px;color:#39513d}.plantAssessments span{font-size:9px;font-weight:700}.plantAssessments strong{font-size:9px}.plantAssessments small{grid-column:1/-1;color:#758276;font-size:7px}.plantAssessments .good{color:#2c7a42}.plantAssessments .medium{color:#9b681d}.plantAssessments .poor{color:#a33a3a}
+
+/* Studio 2.5 Photoreal Render Engine */
+.renderPanel{padding:13px;background:rgba(255,250,248,.97);border:1px solid #cdb7a5;border-radius:17px;box-shadow:var(--shadow)}
+.renderPresets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:9px}.renderPresets button,.renderToggles button{border:1px solid #d7c5ba;border-radius:9px;background:#fff;color:#652c20;padding:8px;font-size:9px}.renderPresets button.active,.renderToggles button.active{background:#6a2631;color:#fff;border-color:#6a2631}
+.renderField{display:block;margin-top:8px;font-size:8px;color:#76564e}.renderField span{display:flex;justify-content:space-between}.renderField select{width:100%;margin-top:3px;border:1px solid #d8c4bd;border-radius:8px;padding:7px;background:#fff}.renderField input{width:100%;accent-color:#7b2d3f}
+.renderToggles{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.renderExport{width:100%;margin-top:9px;border:0;border-radius:10px;padding:10px;color:#fff;background:linear-gradient(#9b4b2c,#672338);font-size:10px;font-weight:800}.renderMessage{display:block;margin-top:7px;color:#85655b;font-size:8px;text-align:center}
+
+/* Studio 2.6 AI Garden Designer */
+.gardenDesignerPanel{padding:13px;background:rgba(255,250,248,.98);border:1px solid #c3b2d5;border-radius:17px;box-shadow:var(--shadow)}
+.gardenDesignerPanel textarea{width:100%;min-height:72px;resize:vertical;border:1px solid #d3c4dd;border-radius:10px;padding:9px;background:#fff;color:#382d41;font-size:9px;line-height:1.45}
+.designerGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.designerGrid label{font-size:8px;color:#66556f}.designerGrid span{display:block;margin-bottom:3px}.designerGrid select{width:100%;border:1px solid #d8cbe0;border-radius:8px;padding:7px;background:#fff;color:#4c3d56}.designerCheck{display:flex!important;align-items:center;gap:6px;padding-top:17px}.designerCheck input{accent-color:#674479}
+.designerGenerate{width:100%;margin-top:8px;border:0;border-radius:10px;padding:10px;color:#fff;background:linear-gradient(135deg,#79528d,#4e305f);font-size:10px;font-weight:800}
+.conceptTabs{display:grid;grid-template-columns:1fr;gap:5px;margin-top:9px}.conceptTabs button{display:flex;justify-content:space-between;align-items:center;text-align:left;border:1px solid #dbcfdf;border-radius:9px;background:#fff;padding:7px 8px;color:#563e62;font-size:8px}.conceptTabs button.active{background:#eee5f2;border-color:#8b6a9d}.conceptTabs small{font-size:7px;color:#7b6088}
+.conceptSummary{margin-top:8px;padding:9px;border-radius:10px;background:#f4eef6;border:1px solid #dfd2e5}.conceptSummary strong{font-size:10px;color:#543260}.conceptSummary p{font-size:8px;color:#74617c;line-height:1.4;margin:4px 0}.conceptMetrics{display:flex;flex-wrap:wrap;gap:4px}.conceptMetrics span{padding:4px 6px;border-radius:6px;background:#fff;font-size:7px;color:#60496a}.conceptSummary ul{padding-left:15px;margin:7px 0 0}.conceptSummary li{font-size:7px;color:#65546c;margin:2px 0}
+.designerActions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}.designerActions button{border:1px solid #8c6d9a;border-radius:9px;background:#fff;color:#5b3c68;padding:8px;font-size:8px}.designerActions button:last-child{background:#654277;color:#fff}.designerMessage{font-size:8px;color:#765f7e;line-height:1.4;margin:7px 0 0}
+
+/* Studio 3.0 Alpha foundation */
+.foundationPanel { overflow: hidden; }
+.panelHeaderButton { width: 100%; border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: space-between; text-align: left; padding: 0; cursor: pointer; }
+.panelHeaderButton strong { display: block; }
+.foundationBody { display: grid; gap: 14px; margin-top: 12px; }
+.foundationStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.foundationStats span { border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 8px 5px; text-align: center; font-size: 11px; }
+.foundationStats strong { display: block; font-size: 16px; }
+.foundationSection { display: grid; gap: 8px; }
+.sectionTitle { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sectionTitle small { opacity: .65; }
+.sectionTitle button { padding: 5px 8px; }
+.moduleGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.moduleCard { display: grid; gap: 2px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 7px; font-size: 11px; }
+.moduleCard small { opacity: .65; }
+.moduleCard.status-active { border-color: rgba(115,190,126,.45); }
+.moduleCard.status-foundation { border-color: rgba(213,174,92,.45); }
+.moduleCard.status-planned { opacity: .62; }
+.snapshotList { display: grid; gap: 6px; }
+.snapshotRow { display: grid; grid-template-columns: 1fr auto; gap: 4px; }
+.snapshotRestore { display: grid; text-align: left; gap: 2px; }
+.snapshotRestore small { opacity: .65; }
+.iconButton { min-width: 32px; }
+.emptyState, .systemWarning { margin: 0; opacity: .7; font-size: 11px; }
+.systemWarning { color: #efbf70; }
+
+/* V3.0 Alpha version visibility hotfix */
+.versionIndicator {
+  align-self: center;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff8f4;
+  background: rgba(255, 255, 255, 0.09);
+}
