@@ -1,0 +1,9 @@
+AL Green Design Studio 3.0 Alpha.3 – vollständiges Projektpaket
+
+Dieses Paket enthält den vollständigen bisherigen Projektstand sowie den Source-Sync-Hotfix.
+Es ist kein Teil-Patch.
+
+Prüfmerkmale nach dem Deployment:
+- /version zeigt 3.0.0-alpha.3
+- Kopfzeile zeigt V3.0 Alpha · 3.0.0-alpha.3 · SYNC OK
+- links erscheint System & Wiederherstellung
