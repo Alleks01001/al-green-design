@@ -16,20 +16,44 @@ const TOOL_HELP: Record<string, string> = {
   move: "Objekt oder Auswahl ziehen",
   line: "Startpunkt und Endpunkt setzen",
   polyline: "Punkte setzen · mit Enter oder Fertig abschließen",
+  freehand: "Gedrückt halten und frei zeichnen",
   rectangle: "Zwei gegenüberliegende Ecken setzen",
+  rounded: "Zwei Ecken der abgerundeten Fläche setzen",
   circle: "Mittelpunkt und Radius setzen",
+  ellipse: "Zwei gegenüberliegende Ecken der Ellipse setzen",
+  polygon: "Eckpunkte setzen · mit Enter abschließen",
+  triangle: "Mittelpunkt und Größe des Dreiecks setzen",
+  pentagon: "Mittelpunkt und Größe des Fünfecks setzen",
+  hexagon: "Mittelpunkt und Größe des Sechsecks setzen",
+  star: "Mittelpunkt und Größe des Sterns setzen",
   wall: "Startpunkt und Endpunkt der Mauer setzen",
-  plant: "Pflanze mit einem Klick platzieren"
+  fence: "Startpunkt und Endpunkt des Zauns setzen",
+  hedge: "Startpunkt und Endpunkt der Hecke setzen",
+  path: "Startpunkt und Endpunkt des Weges setzen",
+  terrace: "Zwei Ecken der Terrasse setzen",
+  bed: "Zwei Ecken des Beets setzen",
+  water: "Zwei Ecken der Wasserfläche setzen",
+  pool: "Zwei Ecken des Pools setzen",
+  stairs: "Zwei Ecken des Treppenlaufs setzen",
+  plant: "Pflanze mit einem Klick platzieren",
+  dimension: "Zwei Messpunkte setzen"
 };
 
 type DragState =
   | { type: "pan"; startSvg: Vec2; currentSvg: Vec2; originPan: Vec2 }
   | { type: "move"; startWorld: Vec2; currentWorld: Vec2; ids: string[] }
   | { type: "marquee"; startWorld: Vec2; currentWorld: Vec2 }
+  | { type: "freehand"; points: Vec2[] }
   | null;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function dashArray(pattern: CadEntity["linePattern"], zoom: number) {
+  if (pattern === "dashed") return `${9 / zoom} ${6 / zoom}`;
+  if (pattern === "dotted") return `${2 / zoom} ${5 / zoom}`;
+  return undefined;
 }
 
 function colorForEntity(entity: CadEntity) {
@@ -40,6 +64,37 @@ function colorForEntity(entity: CadEntity) {
   if (entity.name.toLowerCase().includes("terrasse")) return "#b08c67";
   if (entity.kind === "path") return "#bca986";
   return "#8db28b";
+}
+
+function regularPolygonPoints(center: Vec2, radius: number, sides: number) {
+  return Array.from({ length: sides }, (_, index) => {
+    const angle = -Math.PI / 2 + index * Math.PI * 2 / sides;
+    return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+  });
+}
+
+function starPolygonPoints(center: Vec2, radius: number) {
+  return Array.from({ length: 10 }, (_, index) => {
+    const currentRadius = index % 2 === 0 ? radius : radius * .45;
+    const angle = -Math.PI / 2 + index * Math.PI / 5;
+    return { x: center.x + Math.cos(angle) * currentRadius, y: center.y + Math.sin(angle) * currentRadius };
+  });
+}
+
+function smoothPath(points: Vec2[], scale: number, closed = false) {
+  if (points.length < 2) return "";
+  const scaled = points.map(point => ({ x: point.x * scale, y: point.y * scale }));
+  let path = `M ${scaled[0].x} ${scaled[0].y}`;
+  for (let index = 1; index < scaled.length; index += 1) {
+    const previous = scaled[index - 1];
+    const current = scaled[index];
+    const mid = { x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2 };
+    if (index === 1) path += ` Q ${previous.x} ${previous.y} ${mid.x} ${mid.y}`;
+    else path += ` T ${mid.x} ${mid.y}`;
+  }
+  const last = scaled.at(-1)!;
+  path += ` T ${last.x} ${last.y}`;
+  return closed ? `${path} Z` : path;
 }
 
 function snapLabel(mode: SnapResult["mode"]) {
@@ -63,6 +118,7 @@ export function CadCanvas() {
     snapEnabled,
     snapModes,
     showDimensions,
+    planReference,
     setSelectedIds,
     toggleSelectedId,
     addEntity,
@@ -137,36 +193,30 @@ export function CadCanvas() {
 
   function completePolyline() {
     if (draftPoints.length < 2) return;
-    const id = makeId("polyline");
-    addEntity({
+    const polygon = activeTool === "polygon";
+    if (polygon && draftPoints.length < 3) return;
+    const id = makeId(polygon ? "polygon" : "polyline");
+    const shape = polygon ? "polygon" : "polyline";
+    const draftEntity: CadEntity = {
       id,
-      kind: "path",
-      shape: "polyline",
-      name: "Neue Polylinie",
+      kind: polygon ? "surface" : "path",
+      shape,
+      name: polygon ? "Neues Polygon" : "Neue Polylinie",
       points: draftPoints,
-      position: entityCenter({
-        id,
-        kind: "path",
-        shape: "polyline",
-        name: "",
-        points: draftPoints,
-        position: { x: 0, y: 0 },
-        width: 0.18,
-        depth: 0,
-        height: 0.05,
-        rotation: 0,
-        layerId: activeLayerId,
-        visible: true,
-        locked: false
-      }),
-      width: 0.18,
-      depth: polylineLength(draftPoints),
-      height: 0.05,
+      position: { x: 0, y: 0 },
+      width: polygon ? Math.max(...draftPoints.map(point => point.x)) - Math.min(...draftPoints.map(point => point.x)) : 0.18,
+      depth: polygon ? Math.max(...draftPoints.map(point => point.y)) - Math.min(...draftPoints.map(point => point.y)) : polylineLength(draftPoints),
+      height: polygon ? 0.08 : 0.05,
       rotation: 0,
       layerId: activeLayerId,
+      fillColor: polygon ? "#9f7658" : undefined,
+      strokeColor: "#5f1526",
+      strokeWidth: polygon ? 0.05 : 0.18,
+      linePattern: "solid",
       visible: true,
       locked: false
-    }, "Polylinie erstellt");
+    };
+    addEntity({ ...draftEntity, position: entityCenter(draftEntity) }, polygon ? "Polygon erstellt" : "Polylinie erstellt");
     setDraftPoints([]);
   }
 
@@ -186,13 +236,14 @@ export function CadCanvas() {
         height: 2.2,
         rotation: 0,
         layerId: layers.some(layer => layer.id === "layer-planting") ? "layer-planting" : activeLayerId,
+        fillColor: "#4e8757",
         visible: true,
         locked: false
       }, "Pflanze platziert");
       return;
     }
 
-    if (activeTool === "polyline") {
+    if (activeTool === "polyline" || activeTool === "polygon") {
       setDraftPoints(current => [...current, point]);
       return;
     }
@@ -203,62 +254,132 @@ export function CadCanvas() {
     }
 
     if (distance(first, point) < 0.02) return;
+    const midpoint = { x: (first.x + point.x) / 2, y: (first.y + point.y) / 2 };
+    const segmentLength = distance(first, point);
 
-    if (activeTool === "line") {
+    if (activeTool === "line" || activeTool === "dimension" || activeTool === "path") {
+      const isDimension = activeTool === "dimension";
+      const isPath = activeTool === "path";
       addEntity({
-        id: makeId("line"),
-        kind: "annotation",
+        id: makeId(isDimension ? "dimension" : isPath ? "path" : "line"),
+        kind: isPath ? "path" : "annotation",
         shape: "line",
-        name: "Neue Linie",
+        name: isDimension ? `Maß ${roundMetric(segmentLength)} m` : isPath ? "Neuer Weg" : "Neue Linie",
         points: [first, point],
-        position: { x: (first.x + point.x) / 2, y: (first.y + point.y) / 2 },
-        width: 0.04,
-        depth: distance(first, point),
-        height: 0.02,
+        position: midpoint,
+        width: isPath ? 1.2 : .04,
+        depth: segmentLength,
+        height: isPath ? .08 : .02,
         rotation: 0,
-        layerId: activeLayerId,
+        layerId: isDimension && layers.some(layer => layer.id === "layer-dimensions")
+          ? "layer-dimensions"
+          : isPath && layers.some(layer => layer.id === "layer-paths") ? "layer-paths" : activeLayerId,
+        materialId: isPath ? "mat-paving" : undefined,
+        strokeColor: isDimension ? "#7b1c31" : isPath ? "#9d9991" : "#5f1526",
+        strokeWidth: isPath ? 1.2 : .04,
+        linePattern: isDimension ? "dashed" : "solid",
+        arrowStart: isDimension,
+        arrowEnd: isDimension,
         visible: true,
-        locked: false
-      }, "Linie erstellt");
+        locked: false,
+        metadata: isDimension ? { dimension: true, measuredLength: segmentLength } : isPath ? { objectType: "path" } : {}
+      }, isDimension ? "Bemaßung erstellt" : isPath ? "Weg erstellt" : "Linie erstellt");
     }
 
-    if (activeTool === "wall") {
+    if (["wall", "fence", "hedge"].includes(activeTool)) {
+      const objectType = activeTool;
+      const isFence = activeTool === "fence";
+      const isHedge = activeTool === "hedge";
       addEntity({
-        id: makeId("wall"),
+        id: makeId(objectType),
         kind: "wall",
         shape: "line",
-        name: "Neue Mauer",
+        name: isFence ? "Neuer Zaun" : isHedge ? "Neue Hecke" : "Neue Mauer",
         points: [first, point],
-        position: { x: (first.x + point.x) / 2, y: (first.y + point.y) / 2 },
-        width: 0.25,
-        depth: distance(first, point),
-        height: 1,
+        position: midpoint,
+        width: isFence ? .1 : isHedge ? .55 : .25,
+        depth: segmentLength,
+        height: isFence ? 1.3 : isHedge ? 1.5 : 1,
         rotation: 0,
-        layerId: activeLayerId,
-        materialId: "mat-concrete",
+        layerId: isHedge && layers.some(layer => layer.id === "layer-planting")
+          ? "layer-planting"
+          : layers.some(layer => layer.id === "layer-building") ? "layer-building" : activeLayerId,
+        materialId: isFence ? "mat-thermowood" : isHedge ? "mat-lawn" : "mat-concrete",
+        fillColor: isHedge ? "#2f6c3f" : undefined,
+        strokeWidth: isFence ? .1 : isHedge ? .55 : .25,
         visible: true,
-        locked: false
-      }, "Mauer erstellt");
+        locked: false,
+        metadata: { objectType }
+      }, isFence ? "Zaun erstellt" : isHedge ? "Hecke erstellt" : "Mauer erstellt");
     }
 
-    if (activeTool === "rectangle") {
+    if (["rectangle", "rounded", "terrace", "bed", "water", "pool", "stairs", "ellipse"].includes(activeTool)) {
       const width = Math.abs(point.x - first.x);
       const depth = Math.abs(point.y - first.y);
+      const isWater = activeTool === "water";
+      const isPool = activeTool === "pool";
+      const isEllipse = activeTool === "ellipse";
+      const isTerrace = activeTool === "terrace";
+      const isBed = activeTool === "bed";
+      const isStairs = activeTool === "stairs";
+      const isRounded = activeTool === "rounded";
+      const kind: CadEntity["kind"] = isWater || isPool ? "water" : isStairs ? "building" : "surface";
+      const name = isWater ? "Neue Wasserfläche" : isPool ? "Neuer Pool" : isEllipse ? "Neue Ellipse" : isTerrace ? "Neue Terrasse" : isBed ? "Neues Beet" : isStairs ? "Neue Treppe" : isRounded ? "Abgerundete Fläche" : "Neue Fläche";
+      const layerId = (isWater || isPool) && layers.some(layer => layer.id === "layer-water")
+        ? "layer-water"
+        : isBed && layers.some(layer => layer.id === "layer-planting") ? "layer-planting"
+          : isTerrace && layers.some(layer => layer.id === "layer-paths") ? "layer-paths"
+            : isStairs && layers.some(layer => layer.id === "layer-building") ? "layer-building" : activeLayerId;
       addEntity({
-        id: makeId("surface"),
-        kind: "surface",
-        shape: "rectangle",
-        name: "Neue Fläche",
+        id: makeId(activeTool),
+        kind,
+        shape: isEllipse ? "ellipse" : "rectangle",
+        name,
         points: [],
-        position: { x: (first.x + point.x) / 2, y: (first.y + point.y) / 2 },
+        position: midpoint,
         width,
         depth,
-        height: 0.08,
+        height: isPool ? 1.4 : isStairs ? Math.max(.45, depth * .25) : isWater ? .18 : isTerrace ? .16 : isBed ? .35 : .08,
+        rotation: 0,
+        layerId,
+        materialId: isWater || isPool ? "mat-water" : isTerrace ? "mat-natural-stone" : isBed ? "mat-soil" : isStairs ? "mat-natural-stone" : undefined,
+        fillColor: isWater || isPool ? "#4ba7c7" : isBed ? "#6d503d" : isTerrace || isStairs ? "#a88c6a" : "#9f7658",
+        opacity: isWater || isPool ? .72 : .78,
+        strokeWidth: .05,
+        visible: true,
+        locked: false,
+        metadata: {
+          objectType: isPool ? "pool" : isWater ? "water-surface" : isTerrace ? "terrace" : isBed ? "planting-bed" : isStairs ? "stairs" : isRounded ? "rounded-surface" : isEllipse ? "ellipse" : "surface",
+          rounded: isRounded
+        }
+      }, `${name} erstellt`);
+    }
+
+    if (["triangle", "pentagon", "hexagon", "star"].includes(activeTool)) {
+      const sides = activeTool === "triangle" ? 3 : activeTool === "pentagon" ? 5 : 6;
+      const points = activeTool === "star" ? starPolygonPoints(first, segmentLength) : regularPolygonPoints(first, segmentLength, sides);
+      const shapeLabel = activeTool === "triangle" ? "Dreieck" : activeTool === "pentagon" ? "Fünfeck" : activeTool === "hexagon" ? "Sechseck" : "Stern";
+      addEntity({
+        id: makeId(activeTool),
+        kind: "surface",
+        shape: "polygon",
+        name: `Neues ${shapeLabel}`,
+        points,
+        position: first,
+        width: segmentLength * 2,
+        depth: segmentLength * 2,
+        height: .08,
         rotation: 0,
         layerId: activeLayerId,
+        fillColor: "#9f7658",
+        strokeColor: "#5f1526",
+        opacity: .72,
+        strokeWidth: .05,
+        linePattern: "solid",
         visible: true,
-        locked: false
-      }, "Rechteckfläche erstellt");
+        locked: false,
+        metadata: { shapeKind: activeTool }
+      }, `${shapeLabel} erstellt`);
     }
 
     if (activeTool === "circle") {
@@ -273,9 +394,12 @@ export function CadCanvas() {
         width: radius * 2,
         depth: radius * 2,
         radius,
-        height: 0.08,
+        height: .08,
         rotation: 0,
         layerId: activeLayerId,
+        fillColor: "#9f7658",
+        opacity: .68,
+        strokeWidth: .05,
         visible: true,
         locked: false
       }, "Kreisfläche erstellt");
@@ -302,7 +426,12 @@ export function CadCanvas() {
       return;
     }
 
-    if (["line", "polyline", "rectangle", "circle", "wall", "plant"].includes(activeTool)) {
+    if (activeTool === "freehand") {
+      setDrag({ type: "freehand", points: [rawWorld] });
+      return;
+    }
+
+    if (["line", "polyline", "rectangle", "rounded", "circle", "ellipse", "polygon", "triangle", "pentagon", "hexagon", "star", "wall", "fence", "hedge", "path", "terrace", "bed", "water", "pool", "stairs", "plant", "dimension"].includes(activeTool)) {
       createFromPoint(snapped.point);
     }
   }
@@ -311,9 +440,19 @@ export function CadCanvas() {
     event.stopPropagation();
     const svg = event.currentTarget.ownerSVGElement;
     svg?.setPointerCapture(event.pointerId);
-    const raw = svg ? svgToWorld(clientToSvg({ ...event, currentTarget: svg })) : entityCenter(entity);
+    const raw = svg ? svgToWorld(clientToSvg({ clientX: event.clientX, clientY: event.clientY, currentTarget: svg })) : entityCenter(entity);
     const layer = layerMap.get(entity.layerId);
     const isLocked = entity.locked || layer?.locked;
+
+    if (activeTool === "freehand") {
+      setDrag({ type: "freehand", points: [raw] });
+      return;
+    }
+    if (["line", "polyline", "rectangle", "rounded", "circle", "ellipse", "polygon", "triangle", "pentagon", "hexagon", "star", "wall", "fence", "hedge", "path", "terrace", "bed", "water", "pool", "stairs", "plant", "dimension"].includes(activeTool)) {
+      createFromPoint(getSnapped(raw).point);
+      return;
+    }
+
     if (isLocked) return;
 
     if (event.shiftKey || event.metaKey || event.ctrlKey) toggleSelectedId(entity.id);
@@ -343,10 +482,37 @@ export function CadCanvas() {
       setDrag({ ...drag, currentWorld: snapped.point });
     } else if (drag?.type === "marquee") {
       setDrag({ ...drag, currentWorld: rawWorld });
+    } else if (drag?.type === "freehand") {
+      const last = drag.points.at(-1);
+      if (!last || distance(last, rawWorld) > 0.06) setDrag({ ...drag, points: [...drag.points, rawWorld] });
     }
   }
 
   function handlePointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    if (drag?.type === "freehand" && drag.points.length >= 2) {
+      const id = makeId("freehand");
+      const draftEntity: CadEntity = {
+        id,
+        kind: "path",
+        shape: "polyline",
+        name: "Freihandskizze",
+        points: drag.points,
+        position: { x: 0, y: 0 },
+        width: 0.08,
+        depth: polylineLength(drag.points),
+        height: 0.02,
+        rotation: 0,
+        layerId: activeLayerId,
+        strokeColor: "#5f1526",
+        strokeWidth: 0.08,
+        linePattern: "solid",
+        visible: true,
+        locked: false,
+        metadata: { freehand: true }
+      };
+      addEntity({ ...draftEntity, position: entityCenter(draftEntity) }, "Freihandskizze erstellt");
+    }
+
     if (drag?.type === "move") {
       moveEntities(drag.ids, {
         x: drag.currentWorld.x - drag.startWorld.x,
@@ -399,7 +565,7 @@ export function CadCanvas() {
         setDraftPoints([]);
         setDrag(null);
         setSelectedIds([]);
-      } else if (event.key === "Enter" && activeTool === "polyline") {
+      } else if (event.key === "Enter" && (activeTool === "polyline" || activeTool === "polygon")) {
         completePolyline();
       }
     }
@@ -420,39 +586,77 @@ export function CadCanvas() {
     const selected = selectedIds.includes(entity.id);
     const layer = layerMap.get(entity.layerId);
     const locked = entity.locked || layer?.locked;
-    const stroke = selected ? "#ffb84d" : layer?.color ?? "#5f1526";
-    const strokeWidth = selected ? 4 / zoom : 2 / zoom;
-    const fill = colorForEntity(entity);
+    const baseStroke = entity.strokeColor ?? layer?.color ?? "#5f1526";
+    const stroke = selected ? "#ffb84d" : baseStroke;
+    const strokeWidth = selected ? 4 / zoom : Math.max(1.2 / zoom, (entity.strokeWidth ?? 0.05) * BASE_SCALE / zoom);
+    const fill = entity.fillColor ?? colorForEntity(entity);
+    const opacity = locked ? Math.min(entity.opacity ?? 1, .68) : entity.opacity ?? 1;
 
     if (entity.shape === "line" || entity.shape === "polyline") {
       const points = entity.points.map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ");
-      const wallWidth = entity.kind === "wall" ? Math.max(5, entity.width * BASE_SCALE) : Math.max(2, entity.width * BASE_SCALE);
+      const isCurve = entity.metadata?.curve === true && entity.points.length > 2;
+      const curvePath = isCurve ? smoothPath(entity.points, BASE_SCALE) : "";
+      const lineWidth = entity.kind === "wall" || entity.kind === "path"
+        ? Math.max(5, (entity.strokeWidth ?? entity.width) * BASE_SCALE)
+        : Math.max(2, (entity.strokeWidth ?? entity.width) * BASE_SCALE);
+      const shared = {
+        fill: "none",
+        strokeLinecap: "round" as const,
+        strokeLinejoin: "round" as const
+      };
       return (
         <g key={entity.id} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
-          <polyline
-            points={points}
-            fill="none"
-            stroke="transparent"
-            strokeWidth={(wallWidth + 12) / zoom}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <polyline
-            points={points}
-            fill="none"
-            stroke={entity.kind === "wall" ? fill : stroke}
-            strokeWidth={wallWidth / zoom}
-            strokeLinecap={entity.kind === "wall" ? "square" : "round"}
-            strokeLinejoin="round"
-            opacity={locked ? 0.68 : 1}
-          />
-          {selected && <polyline points={points} fill="none" stroke="#ffcf77" strokeWidth={2 / zoom} strokeDasharray={`${8 / zoom} ${6 / zoom}`} />}
+          {isCurve ? (
+            <path d={curvePath} {...shared} stroke="transparent" strokeWidth={(lineWidth + 12) / zoom} />
+          ) : (
+            <polyline points={points} {...shared} stroke="transparent" strokeWidth={(lineWidth + 12) / zoom} />
+          )}
+          {isCurve ? (
+            <path
+              d={curvePath}
+              {...shared}
+              stroke={selected ? "#ffb84d" : entity.kind === "wall" || entity.kind === "path" ? fill : baseStroke}
+              strokeWidth={lineWidth / zoom}
+              strokeDasharray={dashArray(entity.linePattern, zoom)}
+              markerStart={entity.arrowStart ? "url(#cadArrowStart)" : undefined}
+              markerEnd={entity.arrowEnd ? "url(#cadArrowEnd)" : undefined}
+              opacity={opacity}
+            />
+          ) : (
+            <polyline
+              points={points}
+              {...shared}
+              stroke={selected ? "#ffb84d" : entity.kind === "wall" || entity.kind === "path" ? fill : baseStroke}
+              strokeWidth={lineWidth / zoom}
+              strokeLinecap={entity.kind === "wall" ? "square" : "round"}
+              strokeDasharray={dashArray(entity.linePattern, zoom)}
+              markerStart={entity.arrowStart ? "url(#cadArrowStart)" : undefined}
+              markerEnd={entity.arrowEnd ? "url(#cadArrowEnd)" : undefined}
+              opacity={opacity}
+            />
+          )}
+          {selected && (isCurve
+            ? <path d={curvePath} {...shared} stroke="#ffcf77" strokeWidth={2 / zoom} strokeDasharray={`${8 / zoom} ${6 / zoom}`} />
+            : <polyline points={points} {...shared} stroke="#ffcf77" strokeWidth={2 / zoom} strokeDasharray={`${8 / zoom} ${6 / zoom}`} />
+          )}
           {showDimensions && entity.points.length >= 2 && (
             <DimensionLabel point={entityCenter(entity)} text={`${roundMetric(polylineLength(entity.points))} m`} zoom={zoom} />
           )}
           {selected && entity.points.map((point, index) => (
             <circle key={index} cx={point.x * BASE_SCALE} cy={point.y * BASE_SCALE} r={5 / zoom} fill="#fff5e8" stroke="#7b1c31" strokeWidth={2 / zoom} />
           ))}
+        </g>
+      );
+    }
+
+    if (entity.shape === "polygon") {
+      const points = entity.points.map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ");
+      return (
+        <g key={entity.id} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
+          <polygon points={points} fill={fill} fillOpacity={opacity * .72} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dashArray(entity.linePattern, zoom)} />
+          <text x={entity.position.x * BASE_SCALE} y={entity.position.y * BASE_SCALE + 4 / zoom} textAnchor="middle" fontSize={12 / zoom} fill="#2f0c16">{entity.name}</text>
+          {showDimensions && <DimensionLabel point={entity.position} text={`${roundMetric(entity.width)} × ${roundMetric(entity.depth)} m`} zoom={zoom} />}
+          {selected && entity.points.map((point, index) => <circle key={index} cx={point.x * BASE_SCALE} cy={point.y * BASE_SCALE} r={5 / zoom} fill="#fff5e8" stroke="#7b1c31" strokeWidth={2 / zoom} />)}
         </g>
       );
     }
@@ -475,15 +679,28 @@ export function CadCanvas() {
             cy={0}
             r={(entity.radius ?? entity.width / 2) * BASE_SCALE}
             fill={fill}
-            fillOpacity={entity.kind === "surface" ? 0.68 : 0.92}
+            fillOpacity={opacity * (entity.kind === "surface" ? .68 : .92)}
             stroke={stroke}
             strokeWidth={strokeWidth}
+            strokeDasharray={dashArray(entity.linePattern, zoom)}
+          />
+        ) : entity.shape === "ellipse" ? (
+          <ellipse
+            cx={0}
+            cy={0}
+            rx={width / 2}
+            ry={depth / 2}
+            fill={fill}
+            fillOpacity={opacity * (entity.kind === "water" ? .72 : .68)}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+            strokeDasharray={dashArray(entity.linePattern, zoom)}
           />
         ) : entity.kind === "plant" ? (
           <>
-            <circle cx={0} cy={0} r={width / 2} fill={fill} fillOpacity={0.78} stroke={stroke} strokeWidth={strokeWidth} />
-            <circle cx={0} cy={0} r={width * 0.28} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
-            <path d={`M ${-width * 0.34} 0 H ${width * 0.34} M 0 ${-width * 0.34} V ${width * 0.34}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
+            <circle cx={0} cy={0} r={width / 2} fill={fill} fillOpacity={opacity * .78} stroke={stroke} strokeWidth={strokeWidth} />
+            <circle cx={0} cy={0} r={width * .28} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
+            <path d={`M ${-width * .34} 0 H ${width * .34} M 0 ${-width * .34} V ${width * .34}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
           </>
         ) : (
           <rect
@@ -491,11 +708,12 @@ export function CadCanvas() {
             y={-depth / 2}
             width={width}
             height={depth}
-            rx={entity.kind === "surface" ? 4 / zoom : 1 / zoom}
+            rx={entity.metadata?.rounded === true ? Math.max(8 / zoom, Math.min(width, depth) * .14) : entity.kind === "surface" || entity.kind === "water" ? 4 / zoom : 1 / zoom}
             fill={fill}
-            fillOpacity={entity.kind === "surface" ? 0.68 : 0.92}
+            fillOpacity={opacity * (entity.kind === "surface" || entity.kind === "water" ? .68 : .92)}
             stroke={stroke}
             strokeWidth={strokeWidth}
+            strokeDasharray={dashArray(entity.linePattern, zoom)}
           />
         )}
         <text y={4 / zoom} textAnchor="middle" fontSize={12 / zoom} fill="#2f0c16" className="entityLabel">{entity.name}</text>
@@ -526,16 +744,17 @@ export function CadCanvas() {
   return (
     <section className="viewportCard cadViewport">
       <div className="viewportTitle">
-        <strong>2D CAD CORE 2.1</strong>
+        <strong>2D CAD PROFESSIONAL · DETAILTOOLS</strong>
         <span>{TOOL_HELP[activeTool]}</span>
       </div>
       <div className="cadHud cadHudRight">
         <span>Zoom {Math.round(zoom * 100)} %</span>
         <span>Layer {activeLayer?.name ?? "–"}</span>
       </div>
-      {activeTool === "polyline" && draftPoints.length >= 2 && (
+      {(activeTool === "polyline" || activeTool === "polygon") && draftPoints.length >= 2 && (
         <div className="draftActions">
-          <button type="button" onClick={completePolyline}>✓ Polylinie fertig</button>
+          <button type="button" disabled={activeTool === "polygon" && draftPoints.length < 3} onClick={completePolyline}>✓ {activeTool === "polygon" ? "Polygon" : "Polylinie"} fertig</button>
+          <button type="button" onClick={() => setDraftPoints(current => current.slice(0, -1))}>Punkt zurück</button>
           <button type="button" onClick={() => setDraftPoints([])}>Abbrechen</button>
         </div>
       )}
@@ -556,9 +775,23 @@ export function CadCanvas() {
             <rect width={gridSize * BASE_SCALE * 4} height={gridSize * BASE_SCALE * 4} fill="url(#minorGrid21)" />
             <path d={`M ${gridSize * BASE_SCALE * 4} 0 L 0 0 0 ${gridSize * BASE_SCALE * 4}`} fill="none" stroke="#cbb6bc" strokeWidth={1.2 / zoom} />
           </pattern>
+          <marker id="cadArrowStart" markerWidth="8" markerHeight="8" refX="1.5" refY="4" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 0 L 0 4 L 8 8 z" fill="context-stroke" /></marker>
+          <marker id="cadArrowEnd" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 8 4 L 0 8 z" fill="context-stroke" /></marker>
         </defs>
         <rect x={-VIEW_WIDTH / 2} y={-VIEW_HEIGHT / 2} width={VIEW_WIDTH} height={VIEW_HEIGHT} fill="#f5f1f1" />
         <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
+          {planReference?.visible && planReference.dataUrl && (
+            <image
+              href={planReference.dataUrl}
+              x={-planReference.width * BASE_SCALE / 2}
+              y={-planReference.depth * BASE_SCALE / 2}
+              width={planReference.width * BASE_SCALE}
+              height={planReference.depth * BASE_SCALE}
+              opacity={planReference.opacity}
+              preserveAspectRatio="none"
+              pointerEvents="none"
+            />
+          )}
           {gridVisible && <rect x={-3000} y={-3000} width={6000} height={6000} fill="url(#majorGrid21)" />}
           <line x1={-3000} y1={0} x2={3000} y2={0} stroke="#9c6673" strokeWidth={1.2 / zoom} />
           <line x1={0} y1={-3000} x2={0} y2={3000} stroke="#789071" strokeWidth={1.2 / zoom} />
@@ -566,22 +799,44 @@ export function CadCanvas() {
 
           {draftPoints.length > 0 && (
             <g className="draftGeometry">
-              {activeTool === "polyline" ? (
+              {(activeTool === "polyline" || activeTool === "polygon") ? (
                 <polyline
                   points={[...draftPoints, previewPoint].map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ")}
-                  fill="none"
+                  fill={activeTool === "polygon" ? "rgba(159,118,88,.16)" : "none"}
                   stroke="#d4823b"
                   strokeWidth={2.5 / zoom}
                   strokeDasharray={`${8 / zoom} ${5 / zoom}`}
                 />
-              ) : activeTool === "rectangle" && firstDraft ? (
+              ) : ["rectangle", "rounded", "terrace", "bed", "water", "pool", "stairs"].includes(activeTool) && firstDraft ? (
                 <rect
                   x={Math.min(firstDraft.x, previewPoint.x) * BASE_SCALE}
                   y={Math.min(firstDraft.y, previewPoint.y) * BASE_SCALE}
                   width={Math.abs(previewPoint.x - firstDraft.x) * BASE_SCALE}
                   height={Math.abs(previewPoint.y - firstDraft.y) * BASE_SCALE}
-                  fill="#d7aa72"
+                  rx={activeTool === "rounded" ? 16 / zoom : 2 / zoom}
+                  fill={["water", "pool"].includes(activeTool) ? "#4ba7c7" : activeTool === "bed" ? "#6d503d" : "#d7aa72"}
                   fillOpacity={0.22}
+                  stroke="#d4823b"
+                  strokeWidth={2 / zoom}
+                  strokeDasharray={`${8 / zoom} ${5 / zoom}`}
+                />
+              ) : activeTool === "ellipse" && firstDraft ? (
+                <ellipse
+                  cx={(firstDraft.x + previewPoint.x) * BASE_SCALE / 2}
+                  cy={(firstDraft.y + previewPoint.y) * BASE_SCALE / 2}
+                  rx={Math.abs(previewPoint.x - firstDraft.x) * BASE_SCALE / 2}
+                  ry={Math.abs(previewPoint.y - firstDraft.y) * BASE_SCALE / 2}
+                  fill="#d7aa72"
+                  fillOpacity={0.2}
+                  stroke="#d4823b"
+                  strokeWidth={2 / zoom}
+                  strokeDasharray={`${8 / zoom} ${5 / zoom}`}
+                />
+              ) : ["triangle", "pentagon", "hexagon", "star"].includes(activeTool) && firstDraft ? (
+                <polygon
+                  points={(activeTool === "star" ? starPolygonPoints(firstDraft, distance(firstDraft, previewPoint)) : regularPolygonPoints(firstDraft, distance(firstDraft, previewPoint), activeTool === "triangle" ? 3 : activeTool === "pentagon" ? 5 : 6)).map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ")}
+                  fill="#d7aa72"
+                  fillOpacity={0.2}
                   stroke="#d4823b"
                   strokeWidth={2 / zoom}
                   strokeDasharray={`${8 / zoom} ${5 / zoom}`}
@@ -603,13 +858,26 @@ export function CadCanvas() {
                   y1={firstDraft.y * BASE_SCALE}
                   x2={previewPoint.x * BASE_SCALE}
                   y2={previewPoint.y * BASE_SCALE}
-                  stroke={activeTool === "wall" ? "#786e68" : "#d4823b"}
-                  strokeWidth={activeTool === "wall" ? Math.max(5, 0.25 * BASE_SCALE) / zoom : 2.5 / zoom}
-                  strokeDasharray={activeTool === "wall" ? undefined : `${8 / zoom} ${5 / zoom}`}
+                  stroke={activeTool === "hedge" ? "#2f6c3f" : ["wall", "fence"].includes(activeTool) ? "#786e68" : "#d4823b"}
+                  strokeWidth={activeTool === "wall" ? Math.max(5, .25 * BASE_SCALE) / zoom : activeTool === "hedge" ? Math.max(6, .55 * BASE_SCALE) / zoom : activeTool === "fence" ? Math.max(4, .1 * BASE_SCALE) / zoom : 2.5 / zoom}
+                  strokeDasharray={activeTool === "dimension" ? `${8 / zoom} ${5 / zoom}` : undefined}
+                  markerStart={activeTool === "dimension" ? "url(#cadArrowStart)" : undefined}
+                  markerEnd={activeTool === "dimension" ? "url(#cadArrowEnd)" : undefined}
                 />
               ) : null}
               {draftPoints.map((point, index) => <circle key={index} cx={point.x * BASE_SCALE} cy={point.y * BASE_SCALE} r={4.5 / zoom} fill="#fff" stroke="#d4823b" strokeWidth={2 / zoom} />)}
             </g>
+          )}
+
+          {drag?.type === "freehand" && drag.points.length > 1 && (
+            <polyline
+              points={drag.points.map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ")}
+              fill="none"
+              stroke="#d4823b"
+              strokeWidth={2.5 / zoom}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           )}
 
           {marquee && <rect {...marquee} fill="#5b8fb9" fillOpacity={0.14} stroke="#356b93" strokeWidth={1.5 / zoom} strokeDasharray={`${7 / zoom} ${4 / zoom}`} />}

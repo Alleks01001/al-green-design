@@ -20,13 +20,16 @@ function candidatePoints(entity: CadEntity, modes: SnapMode[]) {
   const result: Array<{ point: Vec2; mode: SnapMode }> = [];
   const include = (mode: SnapMode) => modes.includes(mode);
 
-  if (entity.shape === "line" || entity.shape === "polyline") {
+  if (entity.shape === "line" || entity.shape === "polyline" || entity.shape === "polygon") {
     if (include("endpoint")) {
       for (const point of entity.points) result.push({ point, mode: "endpoint" });
     }
     if (include("midpoint")) {
       for (let index = 1; index < entity.points.length; index += 1) {
         result.push({ point: midpoint(entity.points[index - 1], entity.points[index]), mode: "midpoint" });
+      }
+      if (entity.shape === "polygon" && entity.points.length > 2) {
+        result.push({ point: midpoint(entity.points.at(-1)!, entity.points[0]), mode: "midpoint" });
       }
     }
     if (include("center") && entity.points.length > 0) {
@@ -35,9 +38,9 @@ function candidatePoints(entity: CadEntity, modes: SnapMode[]) {
     }
   } else {
     if (include("center")) result.push({ point: entity.position, mode: "center" });
+    const halfWidth = entity.shape === "circle" ? (entity.radius ?? entity.width / 2) : entity.width / 2;
+    const halfDepth = entity.shape === "circle" ? (entity.radius ?? entity.depth / 2) : entity.depth / 2;
     if (include("endpoint") && entity.shape === "rectangle") {
-      const halfWidth = entity.width / 2;
-      const halfDepth = entity.depth / 2;
       result.push(
         { point: { x: entity.position.x - halfWidth, y: entity.position.y - halfDepth }, mode: "endpoint" },
         { point: { x: entity.position.x + halfWidth, y: entity.position.y - halfDepth }, mode: "endpoint" },
@@ -45,9 +48,7 @@ function candidatePoints(entity: CadEntity, modes: SnapMode[]) {
         { point: { x: entity.position.x - halfWidth, y: entity.position.y + halfDepth }, mode: "endpoint" }
       );
     }
-    if (include("midpoint") && entity.shape === "rectangle") {
-      const halfWidth = entity.width / 2;
-      const halfDepth = entity.depth / 2;
+    if (include("midpoint") && ["rectangle", "circle", "ellipse"].includes(entity.shape)) {
       result.push(
         { point: { x: entity.position.x, y: entity.position.y - halfDepth }, mode: "midpoint" },
         { point: { x: entity.position.x + halfWidth, y: entity.position.y }, mode: "midpoint" },

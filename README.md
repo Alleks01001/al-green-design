@@ -1,25 +1,14 @@
-# AL Green Design Studio 2.2 – BIM Engine
+# AL Green Design Studio 3.0 Alpha.4
 
-Vollständige Weiterentwicklung von Studio 2.1.
+Professionelle Garten-, Landschafts- und Außenanlagenplanung mit CAD, BIM, Terrain, Pflanzenintelligenz, Rendering, KI-Designer, Planimport, Video → 3D und Scan/LiDAR.
 
-## Neu in 2.2
-- parametrische BIM-Datensätze je CAD-Objekt
-- Klassifikation und Projektphase
-- Mengen, Verschnitt, Material- und Arbeitskosten
-- CO₂-Bilanz pro Einheit und Projekt
-- Hersteller, Modell, Lieferant, Lebensdauer und Wartungszyklus
-- Netto-, USt.- und Bruttoberechnung
-- CSV-Export für Mengen, Kosten und CO₂
-- Migration älterer 2.1-Projektdateien auf Schema 2.2
+## Alpha.4
 
-## Start
-```bash
-npm ci
-npm run dev
-```
+Diese Version stellt die detaillierte Zeichenwerkzeugleiste und die Objektdatenbank wieder her. Die aktive Vercel-Anwendung liegt in `app/`, `components/`, `core/`, `data/`, `engines/`, `stores/` und `types/`.
 
-## Prüfung
-```bash
-npm run typecheck
-npm run build
-```
+- Version: `3.0.0-alpha.4`
+- Node.js: `24.x`
+- Start lokal: `npm install` und `npm run dev`
+- Produktionsprüfung: `/version`
+
+Weitere Einzelheiten stehen in `V3_ALPHA_4_DETAILWERKZEUGE_OBJEKTDATENBANK.md`.

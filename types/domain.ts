@@ -4,8 +4,12 @@ export type Vec3 = { x: number; y: number; z: number };
 
 export type EntityKind =
   | "surface" | "wall" | "path" | "plant" | "water" | "building" | "furniture" | "annotation";
-export type CadShape = "rectangle" | "line" | "polyline" | "circle" | "symbol";
-export type CadTool = "select" | "pan" | "move" | "line" | "polyline" | "rectangle" | "circle" | "wall" | "plant";
+export type CadShape = "rectangle" | "line" | "polyline" | "circle" | "ellipse" | "polygon" | "symbol";
+export type CadTool =
+  | "select" | "pan" | "move"
+  | "line" | "polyline" | "freehand" | "rectangle" | "rounded" | "circle" | "ellipse" | "polygon"
+  | "triangle" | "pentagon" | "hexagon" | "star"
+  | "wall" | "fence" | "hedge" | "path" | "terrace" | "bed" | "water" | "pool" | "stairs" | "plant" | "dimension";
 export type SnapMode = "grid" | "endpoint" | "midpoint" | "center";
 export type BimUnit = "m" | "m²" | "m³" | "Stk.";
 export type ProjectPhase = "Bestand" | "Abbruch" | "Neubau" | "Optional";
@@ -14,10 +18,15 @@ export type LightRequirement = "sun" | "partial-shade" | "shade";
 export type SoilType = "any" | "loam" | "sand" | "clay" | "acidic" | "calcareous";
 export type SiteMoisture = "dry" | "fresh" | "moist";
 
+export type LinePattern = "solid" | "dashed" | "dotted";
+
 export type CadEntity = {
   id: Id; kind: EntityKind; shape: CadShape; name: string;
   points: Vec2[]; position: Vec2; width: number; depth: number; height: number;
   radius?: number; rotation: number; layerId: Id; materialId?: Id;
+  fillColor?: string; strokeColor?: string; opacity?: number; strokeWidth?: number;
+  linePattern?: LinePattern; arrowStart?: boolean; arrowEnd?: boolean;
+  objectDefinitionId?: Id;
   visible: boolean; locked: boolean; metadata?: Record<string, string | number | boolean>;
 };
 
@@ -55,7 +64,7 @@ export type PlantingSettings = {
 };
 export type MaterialDefinition = {
   id: Id; name: string;
-  category: "stone" | "wood" | "concrete" | "metal" | "glass" | "paving" | "soil" | "water";
+  category: "stone" | "wood" | "concrete" | "metal" | "glass" | "fabric" | "paving" | "soil" | "water";
   color: string; roughness: number; metalness: number; pricePerSquareMeter: number;
 };
 export type HistoryEntry = { id: Id; label: string; timestamp: number };
@@ -74,10 +83,19 @@ export type RenderSettings = {
   gridVisible3d: boolean;
 };
 
+export type PlanReference = {
+  dataUrl: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  width: number;
+  depth: number;
+};
+
 export type ProjectState = {
   schemaVersion: string;
   id: Id; name: string; entities: CadEntity[]; bim: BimProperties[]; layers: Layer[];
-  terrain: TerrainModel; plantingSettings: PlantingSettings; renderSettings: RenderSettings;
+  terrain: TerrainModel; plantingSettings: PlantingSettings; renderSettings: RenderSettings; planReference?: PlanReference;
   selectedIds: Id[]; activeLayerId: Id; activeTool: CadTool; viewMode: "2d" | "3d" | "split";
   gridSize: number; gridVisible: boolean; snapEnabled: boolean; snapModes: SnapMode[]; showDimensions: boolean;
   projectCurrency: "EUR"; vatPercent: number;

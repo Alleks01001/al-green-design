@@ -16,7 +16,7 @@ export function roundMetric(value: number, decimals = 2) {
 }
 
 export function entityCenter(entity: CadEntity): Vec2 {
-  if ((entity.shape === "line" || entity.shape === "polyline") && entity.points.length > 0) {
+  if ((entity.shape === "line" || entity.shape === "polyline" || entity.shape === "polygon") && entity.points.length > 0) {
     const sum = entity.points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
     return { x: sum.x / entity.points.length, y: sum.y / entity.points.length };
   }
@@ -24,7 +24,7 @@ export function entityCenter(entity: CadEntity): Vec2 {
 }
 
 export function entityBounds(entity: CadEntity) {
-  if ((entity.shape === "line" || entity.shape === "polyline") && entity.points.length > 0) {
+  if ((entity.shape === "line" || entity.shape === "polyline" || entity.shape === "polygon") && entity.points.length > 0) {
     const xs = entity.points.map(point => point.x);
     const ys = entity.points.map(point => point.y);
     const half = entity.kind === "wall" ? entity.width / 2 : 0.08;
@@ -55,7 +55,7 @@ export function boundsIntersect(
 }
 
 export function translateEntity(entity: CadEntity, delta: Vec2): CadEntity {
-  if (entity.shape === "line" || entity.shape === "polyline") {
+  if (entity.shape === "line" || entity.shape === "polyline" || entity.shape === "polygon") {
     return {
       ...entity,
       position: { x: entity.position.x + delta.x, y: entity.position.y + delta.y },
@@ -80,6 +80,16 @@ export function entityArea(entity: CadEntity) {
   if (entity.shape === "circle") {
     const radius = entity.radius ?? entity.width / 2;
     return Math.PI * radius * radius;
+  }
+  if (entity.shape === "ellipse") return Math.PI * (entity.width / 2) * (entity.depth / 2);
+  if (entity.shape === "polygon" && entity.points.length >= 3) {
+    let twiceArea = 0;
+    for (let index = 0; index < entity.points.length; index += 1) {
+      const current = entity.points[index];
+      const next = entity.points[(index + 1) % entity.points.length];
+      twiceArea += current.x * next.y - next.x * current.y;
+    }
+    return Math.abs(twiceArea) / 2;
   }
   if (entity.shape === "rectangle") return entity.width * entity.depth;
   if (entity.kind === "wall" && entity.points.length >= 2) return polylineLength(entity.points) * entity.width;

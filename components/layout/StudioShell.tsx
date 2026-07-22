@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CadCanvas } from "@/components/cad/CadCanvas";
+import { DetailToolsPanel } from "@/components/cad/DetailToolsPanel";
 import { ThreeViewport } from "@/components/render/ThreeViewport";
 import { RenderSettingsPanel } from "@/components/render/RenderSettingsPanel";
 import { GardenAI } from "@/components/ai/GardenAI";
@@ -12,6 +13,7 @@ import { BimInspector } from "@/components/bim/BimInspector";
 import { TerrainPanel } from "@/components/terrain/TerrainPanel";
 import { PlantIntelligencePanel } from "@/components/plants/PlantIntelligencePanel";
 import { FoundationPanel } from "@/components/system/FoundationPanel";
+import { MediaImportPanel } from "@/components/import/MediaImportPanel";
 import { useProjectStore } from "@/stores/projectStore";
 import type { CadTool, ProjectFile } from "@/types/domain";
 import { STUDIO_BUILD_LABEL, STUDIO_PACKAGE_VERSION } from "@/core/platform/version";
@@ -24,8 +26,19 @@ const tools: Array<{ id: CadTool; label: string; icon: string }> = [
   { id: "polyline", label: "Polylinie", icon: "⌁" },
   { id: "rectangle", label: "Rechteck", icon: "▭" },
   { id: "circle", label: "Kreis", icon: "○" },
+  { id: "ellipse", label: "Ellipse", icon: "⬭" },
+  { id: "polygon", label: "Polygon", icon: "⬡" },
   { id: "wall", label: "Mauer", icon: "▥" },
-  { id: "plant", label: "Pflanze", icon: "✦" }
+  { id: "path", label: "Weg", icon: "⌁" },
+  { id: "terrace", label: "Terrasse", icon: "▤" },
+  { id: "bed", label: "Beet", icon: "▧" },
+  { id: "fence", label: "Zaun", icon: "╫" },
+  { id: "hedge", label: "Hecke", icon: "♒" },
+  { id: "water", label: "Wasser", icon: "≈" },
+  { id: "pool", label: "Pool", icon: "▭" },
+  { id: "stairs", label: "Treppe", icon: "▰" },
+  { id: "plant", label: "Pflanze", icon: "✦" },
+  { id: "dimension", label: "Bemaßung", icon: "↔" }
 ];
 
 export function StudioShell() {
@@ -110,7 +123,7 @@ export function StudioShell() {
                 {layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
               </select>
             </label>
-            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · SYNC OK</div>
+            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · DETAIL + DB</div>
             <div className="fileActions">
               <button type="button" onClick={() => fileInput.current?.click()}>Projekt öffnen</button>
               <button type="button" onClick={exportProject}>.algreen speichern</button>
@@ -131,8 +144,10 @@ export function StudioShell() {
       <section className="studioGrid">
         <div className="leftColumn">
           <FoundationPanel />
-          <TerrainPanel />
+          <MediaImportPanel />
+          <DetailToolsPanel />
           <LibraryPanel />
+          <TerrainPanel />
           <PlantIntelligencePanel />
           <RenderSettingsPanel />
           <GardenDesignerPanel />

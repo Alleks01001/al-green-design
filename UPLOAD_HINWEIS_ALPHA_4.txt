@@ -1,0 +1,14 @@
+AL Green Design Studio 3.0 Alpha.4 – GitHub Upload
+
+Dieses Paket ist das vollständige aktive Vercel-/Next.js-Projekt und bewusst auf weniger als 100 Dateien bereinigt.
+Es ist kein kleiner Patch. Alte Diagnose-, iOS- und Legacy-Dateien wurden nur aus dem Upload-Paket entfernt, weil sie von der aktiven Anwendung nicht verwendet werden.
+
+Upload:
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Commit changes.
+
+Commit: AL Green Studio 3.0 Alpha.4 – Detailwerkzeuge und Objektdatenbank
+Prüfung nach Vercel-Deployment: /version

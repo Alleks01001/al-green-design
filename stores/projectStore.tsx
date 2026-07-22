@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { makeId, translateEntity } from "@/core/cad/geometry";
+import { distance, entityCenter, makeId, translateEntity } from "@/core/cad/geometry";
 import { applyTerrainPreset, createTerrainGrid } from "@/engines/terrain/terrainEngine";
 import type {
   CadEntity,
@@ -22,7 +22,8 @@ import type {
   Vec2,
   TerrainModel,
   PlantingSettings,
-  RenderSettings
+  RenderSettings,
+  PlanReference
 } from "@/types/domain";
 
 type CommandRecord = {
@@ -48,6 +49,7 @@ type Store = ProjectState & {
   setActiveLayerId: (id: string) => void;
   setEntities: (entities: CadEntity[], label?: string) => void;
   addEntity: (entity: CadEntity, label?: string) => void;
+  addEntityWithBim: (entity: CadEntity, bim: BimProperties, label?: string) => void;
   addEntities: (entities: CadEntity[], label?: string) => void;
   updateEntity: (id: string, patch: Partial<CadEntity>, label?: string) => void;
   moveEntities: (ids: string[], delta: Vec2, label?: string) => void;
@@ -67,17 +69,24 @@ type Store = ProjectState & {
   updateTerrainPoint: (id: string, elevation: number) => void;
   updatePlantingSettings: (patch: Partial<PlantingSettings>) => void;
   updateRenderSettings: (patch: Partial<RenderSettings>) => void;
+  updatePlanReference: (patch: Partial<PlanReference> | null) => void;
   applyTerrainPreset: (preset: "flat" | "slope" | "mound" | "swale") => void;
   exportProjectFile: () => ProjectFile;
   importProjectFile: (file: ProjectFile) => void;
   resetProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-3.0-alpha";
-const LEGACY_STORAGE_KEYS = ["al-green-design-studio-2.6", "al-green-design-studio-2.5", "al-green-design-studio-2.4"];
+const STORAGE_KEY = "al-green-design-studio-3.0-alpha.4";
+const LEGACY_STORAGE_KEYS = [
+  "al-green-design-studio-3.0-alpha.3",
+  "al-green-design-studio-3.0-alpha",
+  "al-green-design-studio-2.6",
+  "al-green-design-studio-2.5",
+  "al-green-design-studio-2.4"
+];
 
 const initialProject: ProjectState = {
-  schemaVersion: "3.0-alpha",
+  schemaVersion: "3.0-alpha.4",
   id: "project-main",
   name: "AL Green Design Studio 3.0 Alpha",
   activeTool: "select",
@@ -93,6 +102,7 @@ const initialProject: ProjectState = {
   vatPercent: 20,
   plantingSettings: { siteLight: "sun", soil: "loam", moisture: "fresh", hardinessZone: 7, growthYears: 5 },
   renderSettings: { preset: "daylight", quality: "high", hour: 14, azimuth: 135, exposure: 1.08, shadowStrength: 1, ambientStrength: 1, fogEnabled: true, fogDensity: 0.012, gridVisible3d: true },
+  planReference: undefined,
   terrain: {
     enabled: true,
     width: 20,
@@ -110,6 +120,8 @@ const initialProject: ProjectState = {
     { id: "layer-paths", name: "Wege & Flächen", color: "#b69268", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
     { id: "layer-planting", name: "Pflanzen", color: "#3f7648", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
     { id: "layer-water", name: "Wasser", color: "#4c98bb", visible: true, locked: false, printable: true, opacity: 0.9, elevation: 0 },
+    { id: "layer-furniture", name: "Ausstattung & Möbel", color: "#8a6448", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
+    { id: "layer-lighting", name: "Beleuchtung", color: "#d89b2b", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
     { id: "layer-dimensions", name: "Bemaßung", color: "#6e2940", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 }
   ],
   entities: [
@@ -200,6 +212,26 @@ const initialProject: ProjectState = {
   ]
 };
 
+function refreshDynamicConnections(entities: CadEntity[]) {
+  const byId = new Map(entities.map(entity => [entity.id, entity]));
+  return entities.map(entity => {
+    const startId = typeof entity.metadata?.connectionStartId === "string" ? entity.metadata.connectionStartId : undefined;
+    const endId = typeof entity.metadata?.connectionEndId === "string" ? entity.metadata.connectionEndId : undefined;
+    if (!startId || !endId) return entity;
+    const startEntity = byId.get(startId);
+    const endEntity = byId.get(endId);
+    if (!startEntity || !endEntity) return entity;
+    const start = entityCenter(startEntity);
+    const end = entityCenter(endEntity);
+    return {
+      ...entity,
+      points: [start, end],
+      position: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+      depth: distance(start, end)
+    };
+  });
+}
+
 function cloneProject(project: ProjectState): ProjectState {
   return JSON.parse(JSON.stringify(project)) as ProjectState;
 }
@@ -207,7 +239,7 @@ function cloneProject(project: ProjectState): ProjectState {
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "3.0-alpha",
+    schemaVersion: "3.0-alpha.4",
     selectedIds: [],
     activeTool: "select",
     snapModes: project.snapModes?.length ? project.snapModes : ["grid", "endpoint", "midpoint", "center"],
@@ -215,12 +247,18 @@ function normalizeProject(project: ProjectState): ProjectState {
       ...entity,
       shape: entity.shape ?? (entity.kind === "plant" ? "symbol" : "rectangle"),
       points: entity.points ?? [],
+      fillColor: entity.fillColor,
+      strokeColor: entity.strokeColor,
+      opacity: entity.opacity ?? 1,
+      strokeWidth: entity.strokeWidth ?? entity.width,
+      linePattern: entity.linePattern ?? "solid",
       metadata: entity.metadata ?? {}
     })),
     projectCurrency: "EUR",
     vatPercent: Number.isFinite(project.vatPercent) ? project.vatPercent : 20,
     plantingSettings: project.plantingSettings ?? { siteLight: "sun", soil: "loam", moisture: "fresh", hardinessZone: 7, growthYears: 5 },
     renderSettings: project.renderSettings ?? { preset: "daylight", quality: "high", hour: 14, azimuth: 135, exposure: 1.08, shadowStrength: 1, ambientStrength: 1, fogEnabled: true, fogDensity: 0.012, gridVisible3d: true },
+    planReference: project.planReference,
     terrain: project.terrain ?? {
       enabled: true, width: 20, depth: 16, resolutionX: 9, resolutionZ: 7,
       baseElevation: 0, contourInterval: 0.25, points: createTerrainGrid(20, 16, 9, 7), cutFillReference: 0
@@ -235,11 +273,19 @@ function normalizeProject(project: ProjectState): ProjectState {
       maintenanceCycle: item.maintenanceCycle ?? "keine",
       custom: item.custom ?? {}
     })),
-    layers: project.layers.map(layer => ({
-      ...layer,
-      printable: layer.printable ?? true,
-      opacity: layer.opacity ?? 1
-    }))
+    layers: (() => {
+      const normalized = project.layers.map(layer => ({
+        ...layer,
+        printable: layer.printable ?? true,
+        opacity: layer.opacity ?? 1
+      }));
+      const required: Layer[] = [
+        { id: "layer-furniture", name: "Ausstattung & Möbel", color: "#8a6448", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
+        { id: "layer-lighting", name: "Beleuchtung", color: "#d89b2b", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 }
+      ];
+      for (const layer of required) if (!normalized.some(item => item.id === layer.id)) normalized.push(layer);
+      return normalized;
+    })()
   };
 }
 
@@ -269,7 +315,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "3.0-alpha",
+      version: "3.0-alpha.4",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
@@ -310,10 +356,16 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
           : [...current.selectedIds, id]
       })),
       setActiveLayerId: activeLayerId => updateUi(current => ({ ...current, activeLayerId })),
-      setEntities: (entities, label = "Objekte aktualisiert") => commit(label, current => ({ ...current, entities })),
+      setEntities: (entities, label = "Objekte aktualisiert") => commit(label, current => ({ ...current, entities: refreshDynamicConnections(entities) })),
       addEntity: (entity, label = "Objekt erstellt") => commit(label, current => ({
         ...current,
         entities: [...current.entities, entity],
+        selectedIds: [entity.id]
+      })),
+      addEntityWithBim: (entity, bim, label = "Bibliotheksobjekt erstellt") => commit(label, current => ({
+        ...current,
+        entities: [...current.entities, entity],
+        bim: [...current.bim.filter(item => item.entityId !== entity.id), bim],
         selectedIds: [entity.id]
       })),
       addEntities: (entities, label = "Objekte erstellt") => commit(label, current => ({
@@ -321,27 +373,36 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         entities: [...current.entities, ...entities],
         selectedIds: entities.map(entity => entity.id)
       })),
-      updateEntity: (id, patch, label = "Eigenschaft geändert") => commit(label, current => ({
-        ...current,
-        entities: current.entities.map(entity => entity.id === id ? { ...entity, ...patch } : entity)
-      })),
+      updateEntity: (id, patch, label = "Eigenschaft geändert") => commit(label, current => {
+        const entities = current.entities.map(entity => entity.id === id ? { ...entity, ...patch } : entity);
+        return { ...current, entities: refreshDynamicConnections(entities) };
+      }),
       moveEntities: (ids, delta, label = "Objekte verschoben") => {
         if (Math.abs(delta.x) < 0.0001 && Math.abs(delta.y) < 0.0001) return;
         const idSet = new Set(ids);
-        commit(label, current => ({
-          ...current,
-          entities: current.entities.map(entity => idSet.has(entity.id) ? translateEntity(entity, delta) : entity)
-        }));
+        commit(label, current => {
+          const entities = current.entities.map(entity => idSet.has(entity.id) ? translateEntity(entity, delta) : entity);
+          return { ...current, entities: refreshDynamicConnections(entities) };
+        });
       },
       deleteSelected: () => {
         if (project.selectedIds.length === 0) return;
         const selected = new Set(project.selectedIds);
-        commit("Auswahl gelöscht", current => ({
-          ...current,
-          entities: current.entities.filter(entity => !selected.has(entity.id) || entity.locked),
-          bim: current.bim.filter(item => !selected.has(item.entityId)),
-          selectedIds: []
-        }));
+        commit("Auswahl gelöscht", current => {
+          const kept = current.entities.filter(entity => !selected.has(entity.id) || entity.locked);
+          const keptIds = new Set(kept.map(entity => entity.id));
+          const entities = kept.filter(entity => {
+            const startId = typeof entity.metadata?.connectionStartId === "string" ? entity.metadata.connectionStartId : undefined;
+            const endId = typeof entity.metadata?.connectionEndId === "string" ? entity.metadata.connectionEndId : undefined;
+            return (!startId || keptIds.has(startId)) && (!endId || keptIds.has(endId));
+          });
+          return {
+            ...current,
+            entities: refreshDynamicConnections(entities),
+            bim: current.bim.filter(item => !selected.has(item.entityId)),
+            selectedIds: []
+          };
+        });
       },
       duplicateSelected: () => {
         const selected = project.entities.filter(entity => project.selectedIds.includes(entity.id) && !entity.locked);
@@ -424,12 +485,19 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       })),
       updatePlantingSettings: patch => updateUi(current => ({ ...current, plantingSettings: { ...current.plantingSettings, ...patch } })),
       updateRenderSettings: patch => updateUi(current => ({ ...current, renderSettings: { ...current.renderSettings, ...patch } })),
+      updatePlanReference: patch => commit("Planreferenz geändert", current => ({
+        ...current,
+        planReference: patch === null ? undefined : {
+          ...(current.planReference ?? { dataUrl: "", name: "Planreferenz", visible: true, opacity: 0.45, width: 16, depth: 11 }),
+          ...patch
+        }
+      })),
       applyTerrainPreset: preset => commit(`Geländevorlage: ${preset}`, current => ({
         ...current, terrain: applyTerrainPreset(current.terrain, preset)
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "3.0-alpha",
+        version: "3.0-alpha.4",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),
