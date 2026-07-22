@@ -74,13 +74,10 @@ type Store = ProjectState & {
   exportProjectFile: () => ProjectFile;
   importProjectFile: (file: ProjectFile) => void;
   resetProject: () => void;
-  clearProject: () => void;
 };
 
-const STORAGE_KEY = "al-green-design-studio-3.0-alpha.6";
+const STORAGE_KEY = "al-green-design-studio-3.0-alpha.4";
 const LEGACY_STORAGE_KEYS = [
-  "al-green-design-studio-3.0-alpha.5",
-  "al-green-design-studio-3.0-alpha.4",
   "al-green-design-studio-3.0-alpha.3",
   "al-green-design-studio-3.0-alpha",
   "al-green-design-studio-2.6",
@@ -89,7 +86,7 @@ const LEGACY_STORAGE_KEYS = [
 ];
 
 const initialProject: ProjectState = {
-  schemaVersion: "3.0-alpha.6",
+  schemaVersion: "3.0-alpha.4",
   id: "project-main",
   name: "AL Green Design Studio 3.0 Alpha",
   activeTool: "select",
@@ -242,7 +239,7 @@ function cloneProject(project: ProjectState): ProjectState {
 function normalizeProject(project: ProjectState): ProjectState {
   return {
     ...project,
-    schemaVersion: "3.0-alpha.6",
+    schemaVersion: "3.0-alpha.4",
     selectedIds: [],
     activeTool: "select",
     snapModes: project.snapModes?.length ? project.snapModes : ["grid", "endpoint", "midpoint", "center"],
@@ -318,16 +315,11 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const file: ProjectFile = {
       application: "AL Green Design Studio",
-      version: "3.0-alpha.6",
+      version: "3.0-alpha.4",
       savedAt: new Date().toISOString(),
       project: internal.project
     };
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
-    } catch {
-      // Large plan references can exceed the browser storage quota. The editor must keep running;
-      // the full project can still be exported manually as an .algreen file.
-    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
   }, [internal.project]);
 
   const updateUi = useCallback((producer: (project: ProjectState) => ProjectState) => {
@@ -496,7 +488,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       updatePlanReference: patch => commit("Planreferenz geändert", current => ({
         ...current,
         planReference: patch === null ? undefined : {
-          ...(current.planReference ?? { dataUrl: "", name: "Planreferenz", visible: true, opacity: 0.45, width: 16, depth: 11, sourceType: "image" }),
+          ...(current.planReference ?? { dataUrl: "", name: "Planreferenz", visible: true, opacity: 0.45, width: 16, depth: 11 }),
           ...patch
         }
       })),
@@ -505,7 +497,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
       })),
       exportProjectFile: () => ({
         application: "AL Green Design Studio",
-        version: "3.0-alpha.6",
+        version: "3.0-alpha.4",
         savedAt: new Date().toISOString(),
         project: cloneProject(project)
       }),
@@ -527,31 +519,6 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
           redo: [],
           history: [{ id: makeId("history"), label: "Projekt zurückgesetzt", timestamp: Date.now() }, ...current.history].slice(0, 30)
         }));
-      },
-      clearProject: () => {
-        setInternal(current => {
-          const blank = cloneProject(initialProject);
-          blank.id = makeId("project");
-          blank.name = "Neues Gartenprojekt";
-          blank.entities = [];
-          blank.bim = [];
-          blank.planReference = undefined;
-          blank.selectedIds = [];
-          blank.activeTool = "select";
-          blank.viewMode = "2d";
-          blank.terrain = {
-            ...blank.terrain,
-            enabled: false,
-            baseElevation: 0,
-            points: createTerrainGrid(blank.terrain.width, blank.terrain.depth, blank.terrain.resolutionX, blank.terrain.resolutionZ)
-          };
-          return {
-            project: blank,
-            undo: [...current.undo, { label: "Alles gelöscht", snapshot: cloneProject(current.project) }].slice(-80),
-            redo: [],
-            history: [{ id: makeId("history"), label: "Alles gelöscht – neues Projekt", timestamp: Date.now() }, ...current.history].slice(0, 30)
-          };
-        });
       }
     };
   }, [commit, internal, updateUi]);

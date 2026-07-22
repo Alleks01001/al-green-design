@@ -17,7 +17,6 @@ import { MediaImportPanel } from "@/components/import/MediaImportPanel";
 import { useProjectStore } from "@/stores/projectStore";
 import type { CadTool, ProjectFile } from "@/types/domain";
 import { STUDIO_BUILD_LABEL, STUDIO_PACKAGE_VERSION } from "@/core/platform/version";
-import { exportCadPlanToPdf } from "@/lib/pdf/exportPlanPdf";
 
 const tools: Array<{ id: CadTool; label: string; icon: string }> = [
   { id: "select", label: "Auswahl", icon: "↖" },
@@ -63,12 +62,7 @@ export function StudioShell() {
     activeLayerId,
     setActiveLayerId,
     exportProjectFile,
-    importProjectFile,
-    clearProject,
-    selectedIds,
-    setSelectedIds,
-    id: projectId,
-    name: projectName
+    importProjectFile
   } = store;
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [fileMessage, setFileMessage] = useState("Automatisch lokal gespeichert");
@@ -83,31 +77,6 @@ export function StudioShell() {
     anchor.click();
     URL.revokeObjectURL(url);
     setFileMessage("Projektdatei exportiert");
-  }
-
-
-  async function exportPdfPlan() {
-    const previousView = viewMode;
-    const previousSelection = [...selectedIds];
-    try {
-      if (viewMode === "3d") setViewMode("2d");
-      if (selectedIds.length > 0) setSelectedIds([]);
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      await exportCadPlanToPdf(projectName);
-      setFileMessage("PDF-Plan exportiert");
-    } catch (error) {
-      setFileMessage(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen");
-    } finally {
-      if (previousSelection.length > 0) setSelectedIds(previousSelection);
-      if (previousView === "3d") setViewMode(previousView);
-    }
-  }
-
-  function startBlankProject() {
-    const confirmed = window.confirm("Wirklich alles löschen und mit einem leeren Projekt neu beginnen? Die Aktion kann unmittelbar über Rückgängig wiederhergestellt werden.");
-    if (!confirmed) return;
-    clearProject();
-    setFileMessage("Leeres Projekt erstellt – Rückgängig ist möglich");
   }
 
   async function importProject(event: ChangeEvent<HTMLInputElement>) {
@@ -154,12 +123,10 @@ export function StudioShell() {
                 {layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
               </select>
             </label>
-            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · PDF PLAN</div>
+            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · DOCKED UI</div>
             <div className="fileActions">
               <button type="button" onClick={() => fileInput.current?.click()}>Projekt öffnen</button>
               <button type="button" onClick={exportProject}>.algreen speichern</button>
-              <button type="button" onClick={exportPdfPlan}>PDF exportieren</button>
-              <button type="button" className="dangerAction" onClick={startBlankProject}>Alles löschen</button>
               <input ref={fileInput} type="file" accept=".algreen,.json,application/json" onChange={importProject} hidden />
               <small>{fileMessage}</small>
             </div>
@@ -187,8 +154,8 @@ export function StudioShell() {
           <GardenAI />
         </div>
         <div className={`workspace view-${viewMode}`}>
-          {(viewMode === "2d" || viewMode === "split") && <CadCanvas key={`cad-${projectId}`} />}
-          {(viewMode === "3d" || viewMode === "split") && <ThreeViewport key={`three-${projectId}`} />}
+          {(viewMode === "2d" || viewMode === "split") && <CadCanvas />}
+          {(viewMode === "3d" || viewMode === "split") && <ThreeViewport />}
         </div>
         <BimInspector />
       </section>

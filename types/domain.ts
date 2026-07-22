@@ -90,9 +90,6 @@ export type PlanReference = {
   opacity: number;
   width: number;
   depth: number;
-  sourceType?: "image" | "pdf";
-  sourcePage?: number;
-  sourcePageCount?: number;
 };
 
 export type ProjectState = {

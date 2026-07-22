@@ -13,16 +13,9 @@ Diese Version ergänzt die stabile, fixierte Studio-Oberfläche:
 - 2D/3D-Split passt sich dynamisch an
 - Detailwerkzeuge und Objektdatenbank aus Alpha.4 bleiben vollständig enthalten
 
-- Version: `3.0.0-alpha.6`
+- Version: `3.0.0-alpha.5`
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`
 - Produktionsprüfung: `/version`
 
-Weitere Einzelheiten stehen in `V3_ALPHA_5_DOCKED_WORKSPACE.md`.
-
-
-## Alpha.6
-
-- PDF-Plan als Zeichenreferenz importieren
-- 2D-Plan als PDF exportieren
-- alle Projektdaten gemeinsam löschen und leer neu beginnen
+Weitere Einzelheiten stehen im [Changelog](docs/CHANGELOG.md).
