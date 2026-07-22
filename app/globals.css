@@ -16,12 +16,12 @@
   --shadow:0 18px 42px rgba(20,0,6,.3);
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--wine-950);color:var(--text)}
+html,body{margin:0;width:100%;height:100%;min-height:100%;overflow:hidden;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--wine-950);color:var(--text)}
 button,input,textarea,select{font:inherit}
 button{cursor:pointer}
 button:disabled{cursor:not-allowed;opacity:.45}
-.studio{min-height:100vh;background:radial-gradient(circle at 50% -10%,#78182d 0,#430815 35%,#200309 76%)}
-.topbar{min-height:116px;display:flex;align-items:stretch;gap:16px;padding:12px 16px;color:#fff;border-bottom:1px solid #7d3043;background:linear-gradient(180deg,rgba(65,8,22,.98),rgba(31,2,9,.98));box-shadow:0 16px 34px rgba(0,0,0,.36);position:relative;z-index:20}
+.studio{width:100%;height:100dvh;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:radial-gradient(circle at 50% -10%,#78182d 0,#430815 35%,#200309 76%)}
+.topbar{min-height:116px;display:flex;align-items:stretch;gap:16px;padding:12px 16px;color:#fff;border-bottom:1px solid #7d3043;background:linear-gradient(180deg,rgba(65,8,22,.98),rgba(31,2,9,.98));box-shadow:0 16px 34px rgba(0,0,0,.36);position:sticky;top:0;z-index:50;flex:0 0 auto}
 .brandLogo{display:flex;align-items:center;gap:11px;min-width:238px;padding-right:12px;border-right:1px solid rgba(221,159,127,.24)}
 .brandLeaf{width:52px;height:52px;display:grid;place-items:center;flex:0 0 52px;border-radius:17px;background:linear-gradient(145deg,#f1c29c,#8b2d45);box-shadow:inset 0 2px 2px #ffe7d4,0 8px 18px #120106;font-size:30px}
 .brandLogo strong,.brandLogo span{display:block}
@@ -42,8 +42,8 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .fileActions small{display:block;max-width:170px;color:#cba38a;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .viewSwitch{flex-direction:column;justify-content:center;align-items:stretch;min-width:88px}
 .viewSwitch button{white-space:nowrap}
-.studioGrid{display:grid;grid-template-columns:285px minmax(0,1fr) 315px;gap:12px;padding:12px;min-height:calc(100vh - 116px)}
-.leftColumn{display:flex;flex-direction:column;gap:12px;min-width:0}
+.studioGrid{display:grid;grid-template-columns:285px minmax(0,1fr) 315px;gap:12px;padding:12px;min-width:0;min-height:0;height:100%;overflow:hidden;align-items:stretch}
+.leftColumn{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:3px}
 .inspector,.libraryPanel,.aiPanel{background:rgba(255,250,248,.97);border:1px solid #d9c1c6;border-radius:17px;box-shadow:var(--shadow)}
 .libraryPanel{padding:13px;overflow:auto;max-height:510px}
 .panelHeading,.sectionHeading{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -68,10 +68,10 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .aiExamples{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .aiExamples button{border:1px solid #d6c1c6;border-radius:999px;background:#fff;color:#6c2335;padding:4px 7px;font-size:8px}
 .aiPanel p{font-size:10px;line-height:1.45;color:#6c4c54;margin:9px 1px 0}
-.workspace{display:grid;gap:10px;min-width:0}
-.workspace.view-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-.workspace.view-2d,.workspace.view-3d{grid-template-columns:1fr}
-.viewportCard{position:relative;min-width:0;min-height:720px;border-radius:18px;overflow:hidden;background:#edf2f4;border:1px solid #d6c5c9;box-shadow:0 18px 38px rgba(0,0,0,.28)}
+.workspace{display:grid;gap:10px;min-width:0;min-height:0;height:100%;overflow:hidden}
+.workspace.view-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.workspace.view-2d,.workspace.view-3d{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr)}
+.viewportCard{position:relative;min-width:0;min-height:0;height:100%;border-radius:18px;overflow:hidden;background:#edf2f4;border:1px solid #d6c5c9;box-shadow:0 18px 38px rgba(0,0,0,.28)}
 .viewportTitle{position:absolute;z-index:7;left:13px;top:13px;padding:8px 11px;border-radius:12px;background:rgba(48,6,17,.9);color:#fff;backdrop-filter:blur(7px);pointer-events:none;box-shadow:0 6px 16px rgba(0,0,0,.2)}
 .viewportTitle strong,.viewportTitle span{display:block}
 .viewportTitle strong{font-size:11px;letter-spacing:.06em}
@@ -79,7 +79,7 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .cadHud{position:absolute;z-index:7;top:13px;padding:7px 9px;border-radius:10px;background:rgba(255,250,248,.88);border:1px solid rgba(120,76,88,.23);color:#5d2130;pointer-events:none;backdrop-filter:blur(5px);font-size:8px}
 .cadHud span{display:block}
 .cadHudRight{right:13px;text-align:right}
-.cadCanvas,.threeViewport{display:block;width:100%;height:100%;min-height:720px}
+.cadCanvas,.threeViewport{display:block;width:100%;height:100%;min-height:0}
 .cadCanvas{touch-action:none;user-select:none}
 .cadCanvas.tool-pan{cursor:grab}.cadCanvas.tool-pan:active{cursor:grabbing}
 .cadCanvas.tool-move{cursor:move}
@@ -92,7 +92,7 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .threeCard{background:#e7e3e1}
 .threeViewport canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.threeViewport canvas:active{cursor:grabbing}
 .renderBadge{position:absolute;z-index:6;right:13px;top:13px;padding:7px 9px;border-radius:10px;background:rgba(255,250,248,.84);color:#682234;font-size:8px;border:1px solid rgba(104,34,52,.18);pointer-events:none}
-.inspector{padding:0;overflow:auto;max-height:calc(100vh - 140px)}
+.inspector{padding:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;max-height:none}
 .inspectorSection{padding:14px;border-bottom:1px solid #eadcdf}
 .inspectorSection:last-child{border-bottom:0}
 .inspector h2{font-size:14px}
@@ -118,9 +118,16 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.metricGrid div{padding:9px;border-radius:10px;background:#f6ecec;border:1px solid #e4d2d6}.metricGrid span,.metricGrid strong{display:block}.metricGrid span{font-size:8px;color:#86616b}.metricGrid strong{font-size:12px;color:#5c1426;margin-top:3px}
 .historyItem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px dashed #e2d2d6;font-size:9px}.historyItem time{color:#9b7580}.historyItem:last-child{border-bottom:0}
 .muted{color:#87646c;font-size:10px;line-height:1.45}
-@media(max-width:1450px){.studioGrid{grid-template-columns:255px minmax(0,1fr) 285px}.topActions button span:last-child{display:none}.topActions button{min-width:34px;justify-content:center}.brandLogo{min-width:220px}.workspace.view-split{grid-template-columns:1fr}.viewportCard,.cadCanvas,.threeViewport{min-height:620px}}
-@media(max-width:1120px){.topbar{flex-wrap:wrap}.brandLogo{border-right:0}.viewSwitch{flex-direction:row;min-width:0}.studioGrid{grid-template-columns:240px minmax(0,1fr)}.inspector{grid-column:1/-1;max-height:none}.workspace.view-split{grid-template-columns:1fr}}
-@media(max-width:760px){.topbar{display:block;padding:10px}.brandLogo{min-width:0;padding-bottom:9px;border-bottom:1px solid rgba(221,159,127,.22)}.topbarMain{margin-top:8px}.topActions,.cadControlRow{flex-wrap:nowrap;overflow-x:auto;padding-bottom:5px}.topActions button span:last-child{display:inline}.topActions button{min-width:max-content}.fileActions{margin-left:0;flex-wrap:nowrap}.fileActions small{display:none}.viewSwitch{margin-top:7px}.studioGrid{grid-template-columns:1fr;padding:8px}.leftColumn{order:2}.workspace{order:1}.inspector{order:3}.workspace.view-split{grid-template-columns:1fr}.viewportCard,.cadCanvas,.threeViewport{min-height:560px}.libraryPanel{max-height:none}.cadStatusbar{gap:7px;overflow:hidden}.cadStatusbar span:nth-child(n+5){display:none}}
+@media(max-width:1450px){.studioGrid{grid-template-columns:250px minmax(0,1fr) 280px}.topActions button span:last-child{display:none}.topActions button{min-width:34px;justify-content:center}.brandLogo{min-width:210px}.workspace.view-split{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr)}}
+@media(max-width:1120px){.topbar{flex-wrap:wrap}.brandLogo{min-width:185px}.viewSwitch{flex-direction:row;min-width:0}.studioGrid{grid-template-columns:220px minmax(0,1fr) 250px}.topActions,.cadControlRow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:4px}}
+@media(max-width:760px){html,body{height:auto;overflow:auto}.studio{height:auto;min-height:100vh;display:block;overflow:visible}.topbar{position:sticky;top:0;display:block;padding:10px;max-height:48vh;overflow-y:auto}.brandLogo{min-width:0;padding-bottom:9px;border-right:0;border-bottom:1px solid rgba(221,159,127,.22)}.topbarMain{margin-top:8px}.topActions,.cadControlRow{flex-wrap:nowrap;overflow-x:auto;padding-bottom:5px}.topActions button span:last-child{display:inline}.topActions button{min-width:max-content}.fileActions{margin-left:0;flex-wrap:nowrap}.fileActions small{display:none}.viewSwitch{margin-top:7px}.studioGrid{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible;padding:8px}.leftColumn{order:2;height:auto;overflow:visible;padding-right:0}.workspace{order:1;height:auto;min-height:560px;overflow:visible}.inspector{order:3;height:auto;overflow:visible}.workspace.view-split{grid-template-columns:1fr;grid-template-rows:560px 560px}.viewportCard,.cadCanvas,.threeViewport{height:560px;min-height:560px}.libraryPanel{max-height:none}.cadStatusbar{gap:7px;overflow:hidden}.cadStatusbar span:nth-child(n+5){display:none}}
+
+/* Studio 3.0 Alpha.5 Docked Workspace */
+.leftColumn,.inspector{scrollbar-width:thin;scrollbar-color:#965066 rgba(255,255,255,.18)}
+.leftColumn::-webkit-scrollbar,.inspector::-webkit-scrollbar{width:9px}
+.leftColumn::-webkit-scrollbar-track,.inspector::-webkit-scrollbar-track{background:rgba(255,255,255,.14);border-radius:999px}
+.leftColumn::-webkit-scrollbar-thumb,.inspector::-webkit-scrollbar-thumb{background:#965066;border:2px solid transparent;background-clip:padding-box;border-radius:999px}
+.workspace,.viewportCard{overscroll-behavior:contain}
 
 /* Studio 2.2 BIM Engine */
 .bimDataSection { border-color: rgba(93, 180, 126, .35); }

@@ -1,14 +1,21 @@
-# AL Green Design Studio 3.0 Alpha.4
+# AL Green Design Studio 3.0 Alpha.5
 
 Professionelle Garten-, Landschafts- und Außenanlagenplanung mit CAD, BIM, Terrain, Pflanzenintelligenz, Rendering, KI-Designer, Planimport, Video → 3D und Scan/LiDAR.
 
-## Alpha.4
+## Alpha.5
 
-Diese Version stellt die detaillierte Zeichenwerkzeugleiste und die Objektdatenbank wieder her. Die aktive Vercel-Anwendung liegt in `app/`, `components/`, `core/`, `data/`, `engines/`, `stores/` und `types/`.
+Diese Version ergänzt die stabile, fixierte Studio-Oberfläche:
 
-- Version: `3.0.0-alpha.4`
+- obere Werkzeugleiste bleibt sichtbar
+- linke Werkzeug- und Bibliotheksspalte scrollt unabhängig
+- rechter BIM-Inspector scrollt unabhängig
+- die Zeichenplattform nutzt immer den verbleibenden Bildschirmbereich
+- 2D/3D-Split passt sich dynamisch an
+- Detailwerkzeuge und Objektdatenbank aus Alpha.4 bleiben vollständig enthalten
+
+- Version: `3.0.0-alpha.5`
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`
 - Produktionsprüfung: `/version`
 
-Weitere Einzelheiten stehen in `V3_ALPHA_4_DETAILWERKZEUGE_OBJEKTDATENBANK.md`.
+Weitere Einzelheiten stehen in `V3_ALPHA_5_DOCKED_WORKSPACE.md`.

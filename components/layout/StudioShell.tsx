@@ -123,7 +123,7 @@ export function StudioShell() {
                 {layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
               </select>
             </label>
-            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · DETAIL + DB</div>
+            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · DOCKED UI</div>
             <div className="fileActions">
               <button type="button" onClick={() => fileInput.current?.click()}>Projekt öffnen</button>
               <button type="button" onClick={exportProject}>.algreen speichern</button>

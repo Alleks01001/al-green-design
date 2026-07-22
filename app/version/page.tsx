@@ -21,8 +21,10 @@ export default function VersionPage() {
         <li>Bearbeitung: Ausrichten, Verteilen, Größen angleichen, Drehen, Stil kopieren, 90°-Linien, Kurven, dynamische Verbindungen, Sperren und Zeichenreihenfolge</li>
         <li>Objektdatenbank: {OBJECT_CATALOG.length} Objekte, {PLANT_CATALOG.length} Pflanzen und {MATERIAL_CATALOG.length} Materialien</li>
         <li>Plan-/Bildimport, Video → 3D und Scan/LiDAR</li>
+        <li>Fixierte obere Werkzeugleiste sowie unabhängig scrollbare linke und rechte Seitenbereiche</li>
+        <li>Zeichenplattform bleibt immer vollständig im verfügbaren Arbeitsbereich sichtbar</li>
       </ul>
-      <p>Wenn diese Seite angezeigt wird, läuft die V3.0-Alpha.4-Codebasis im Vercel-Deployment.</p>
+      <p>Wenn diese Seite angezeigt wird, läuft die V3.0-Alpha.5-Codebasis im Vercel-Deployment.</p>
       <p><a href="/">Zum Studio</a></p>
     </main>
   );
