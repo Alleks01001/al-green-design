@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { boundsIntersect, distance, entityBounds, entityCenter, makeId, polylineLength, roundMetric, translateEntity } from "@/core/cad/geometry";
-import { formatDimensionValue, resolveDimensionGeometry } from "@/core/cad/dimensions";
 import { snapPoint, type SnapResult } from "@/core/cad/snap";
-import { MATERIAL_CATALOG } from "@/data/materials/catalog";
 import { useProjectStore } from "@/stores/projectStore";
-import type { CadEntity, DimensionMode, DimensionUnit, Vec2 } from "@/types/domain";
+import type { CadEntity, Vec2 } from "@/types/domain";
 
 const VIEW_WIDTH = 1000;
 const VIEW_HEIGHT = 700;
@@ -59,11 +57,8 @@ function dashArray(pattern: CadEntity["linePattern"], zoom: number) {
 }
 
 function colorForEntity(entity: CadEntity) {
-  const material = MATERIAL_CATALOG.find(item => item.id === entity.materialId);
-  if (material) return material.color;
   if (entity.kind === "building") return "#c9beb5";
   if (entity.kind === "plant") return "#4e8757";
-  if (entity.fillColor) return entity.fillColor;
   if (entity.kind === "wall") return "#786e68";
   if (entity.kind === "water") return "#5ca5c6";
   if (entity.name.toLowerCase().includes("terrasse")) return "#b08c67";
@@ -107,7 +102,6 @@ function snapLabel(mode: SnapResult["mode"]) {
   if (mode === "midpoint") return "MITTE";
   if (mode === "center") return "ZENTRUM";
   if (mode === "grid") return "RASTER";
-  if (mode === "intersection") return "SCHNITT";
   return "";
 }
 
@@ -123,9 +117,6 @@ export function CadCanvas() {
     gridVisible,
     snapEnabled,
     snapModes,
-    orthogonalMode,
-    nudgeStep,
-    dimensionSettings,
     showDimensions,
     planReference,
     setSelectedIds,
@@ -133,9 +124,6 @@ export function CadCanvas() {
     addEntity,
     moveEntities,
     deleteSelected,
-    duplicateSelected,
-    groupSelected,
-    ungroupSelected,
     undo,
     redo,
     canUndo,
@@ -151,13 +139,8 @@ export function CadCanvas() {
 
   const layerMap = useMemo(() => new Map(layers.map(layer => [layer.id, layer])), [layers]);
   const visibleEntities = useMemo(
-    () => {
-      const layerOrder = new Map(layers.map((layer, index) => [layer.id, index]));
-      return entities
-        .filter(entity => entity.visible && layerMap.get(entity.layerId)?.visible !== false)
-        .sort((a, b) => (layerOrder.get(a.layerId) ?? 0) - (layerOrder.get(b.layerId) ?? 0));
-    },
-    [entities, layerMap, layers]
+    () => entities.filter(entity => entity.visible && layerMap.get(entity.layerId)?.visible !== false),
+    [entities, layerMap]
   );
 
   const moveDelta = drag?.type === "move"
@@ -201,28 +184,6 @@ export function CadCanvas() {
       entities: visibleEntities,
       excludeIds
     });
-  }
-
-  function constrainToAngle(point: Vec2, origin: Vec2) {
-    const length = distance(origin, point);
-    if (length < 0.0001) return point;
-    const step = Math.PI / 4;
-    const angle = Math.round(Math.atan2(point.y - origin.y, point.x - origin.x) / step) * step;
-    return { x: origin.x + Math.cos(angle) * length, y: origin.y + Math.sin(angle) * length };
-  }
-
-  function getDrawingSnap(raw: Vec2, excludeIds: string[] = []) {
-    const snapped = getSnapped(raw, excludeIds);
-    const origin = draftPoints.at(-1);
-    const supportsOrtho = ["line", "polyline", "polygon", "wall", "fence", "hedge", "path", "dimension"].includes(activeTool);
-    if (!orthogonalMode || !origin || !supportsOrtho || (snapped.mode !== null && snapped.mode !== "grid")) return snapped;
-    return { ...snapped, point: constrainToAngle(snapped.point, origin), mode: null };
-  }
-
-  function idsForEntity(entity: CadEntity, isolate = false) {
-    const groupId = typeof entity.metadata?.groupId === "string" ? entity.metadata.groupId : undefined;
-    if (!groupId || isolate) return [entity.id];
-    return visibleEntities.filter(item => item.metadata?.groupId === groupId).map(item => item.id);
   }
 
   function pointerWorld(event: ReactPointerEvent<SVGSVGElement>, useSnap = true) {
@@ -310,7 +271,7 @@ export function CadCanvas() {
         depth: segmentLength,
         height: isPath ? .08 : .02,
         rotation: 0,
-        layerId: isDimension && layers.some(layer => layer.id === "layer-dimensions" && layer.visible && !layer.locked)
+        layerId: isDimension && layers.some(layer => layer.id === "layer-dimensions")
           ? "layer-dimensions"
           : isPath && layers.some(layer => layer.id === "layer-paths") ? "layer-paths" : activeLayerId,
         materialId: isPath ? "mat-paving" : undefined,
@@ -321,14 +282,7 @@ export function CadCanvas() {
         arrowEnd: isDimension,
         visible: true,
         locked: false,
-        metadata: isDimension ? {
-          dimension: true,
-          measuredLength: segmentLength,
-          dimensionMode: dimensionSettings.mode,
-          dimensionUnit: dimensionSettings.unit,
-          dimensionDecimals: dimensionSettings.decimals,
-          dimensionTextScale: dimensionSettings.textScale
-        } : isPath ? { objectType: "path" } : {}
+        metadata: isDimension ? { dimension: true, measuredLength: segmentLength } : isPath ? { objectType: "path" } : {}
       }, isDimension ? "Bemaßung erstellt" : isPath ? "Weg erstellt" : "Linie erstellt");
     }
 
@@ -458,7 +412,7 @@ export function CadCanvas() {
     event.currentTarget.setPointerCapture(event.pointerId);
     const svgPoint = clientToSvg(event);
     const rawWorld = svgToWorld(svgPoint);
-    const snapped = getDrawingSnap(rawWorld);
+    const snapped = getSnapped(rawWorld);
     setCursorWorld(snapped.point);
     setCurrentSnap(snapped);
 
@@ -495,28 +449,17 @@ export function CadCanvas() {
       return;
     }
     if (["line", "polyline", "rectangle", "rounded", "circle", "ellipse", "polygon", "triangle", "pentagon", "hexagon", "star", "wall", "fence", "hedge", "path", "terrace", "bed", "water", "pool", "stairs", "plant", "dimension"].includes(activeTool)) {
-      createFromPoint(getDrawingSnap(raw).point);
+      createFromPoint(getSnapped(raw).point);
       return;
     }
 
     if (isLocked) return;
 
-    const clickedIds = idsForEntity(entity, event.altKey);
-    const modifier = event.shiftKey || event.metaKey || event.ctrlKey;
-    let nextSelection = selectedIds;
-    if (modifier) {
-      const allSelected = clickedIds.every(id => selectedIds.includes(id));
-      nextSelection = allSelected
-        ? selectedIds.filter(id => !clickedIds.includes(id))
-        : Array.from(new Set([...selectedIds, ...clickedIds]));
-      setSelectedIds(nextSelection);
-    } else if (!clickedIds.every(id => selectedIds.includes(id))) {
-      nextSelection = clickedIds;
-      setSelectedIds(clickedIds);
-    }
+    if (event.shiftKey || event.metaKey || event.ctrlKey) toggleSelectedId(entity.id);
+    else if (!selectedIds.includes(entity.id)) setSelectedIds([entity.id]);
 
     if (activeTool === "move") {
-      const ids = nextSelection.length > 0 && nextSelection.some(id => clickedIds.includes(id)) ? nextSelection : clickedIds;
+      const ids = selectedIds.includes(entity.id) ? selectedIds : [entity.id];
       const start = getSnapped(raw, ids).point;
       setDrag({ type: "move", startWorld: start, currentWorld: start, ids });
     }
@@ -525,9 +468,7 @@ export function CadCanvas() {
   function handlePointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     const svgPoint = clientToSvg(event);
     const rawWorld = svgToWorld(svgPoint);
-    const snapped = drag?.type === "move"
-      ? getSnapped(rawWorld, drag.ids)
-      : getDrawingSnap(rawWorld);
+    const snapped = getSnapped(rawWorld, drag?.type === "move" ? drag.ids : []);
     setCursorWorld(snapped.point);
     setCurrentSnap(snapped);
 
@@ -617,24 +558,6 @@ export function CadCanvas() {
       } else if (modifier && event.key.toLowerCase() === "y") {
         event.preventDefault();
         redo();
-      } else if (modifier && event.key.toLowerCase() === "a") {
-        event.preventDefault();
-        setSelectedIds(visibleEntities.filter(entity => !entity.locked && !layerMap.get(entity.layerId)?.locked).map(entity => entity.id));
-      } else if (modifier && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        duplicateSelected();
-      } else if (modifier && event.key.toLowerCase() === "g") {
-        event.preventDefault();
-        event.shiftKey ? ungroupSelected() : groupSelected();
-      } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) && selectedIds.length > 0) {
-        event.preventDefault();
-        const factor = event.shiftKey ? 10 : event.altKey ? 0.1 : 1;
-        const step = nudgeStep * factor;
-        const delta = event.key === "ArrowLeft" ? { x: -step, y: 0 }
-          : event.key === "ArrowRight" ? { x: step, y: 0 }
-            : event.key === "ArrowUp" ? { x: 0, y: -step }
-              : { x: 0, y: step };
-        moveEntities(selectedIds, delta, "Auswahl per Tastatur verschoben");
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         deleteSelected();
@@ -658,45 +581,16 @@ export function CadCanvas() {
   const previewPoint = currentSnap.point;
   const firstDraft = draftPoints[0];
   const activeLayer = layerMap.get(activeLayerId);
-  const dimensionPreviewMidpoint = firstDraft
-    ? { x: (firstDraft.x + previewPoint.x) / 2, y: (firstDraft.y + previewPoint.y) / 2 }
-    : previewPoint;
-  const dimensionPreviewStart = firstDraft && dimensionSettings.mode === "horizontal"
-    ? { x: firstDraft.x, y: dimensionPreviewMidpoint.y }
-    : firstDraft && dimensionSettings.mode === "vertical" ? { x: dimensionPreviewMidpoint.x, y: firstDraft.y } : firstDraft;
-  const dimensionPreviewEnd = firstDraft && dimensionSettings.mode === "horizontal"
-    ? { x: previewPoint.x, y: dimensionPreviewMidpoint.y }
-    : firstDraft && dimensionSettings.mode === "vertical" ? { x: dimensionPreviewMidpoint.x, y: previewPoint.y } : previewPoint;
 
   function renderEntity(entity: CadEntity) {
     const selected = selectedIds.includes(entity.id);
     const layer = layerMap.get(entity.layerId);
     const locked = entity.locked || layer?.locked;
-    const printable = layer?.printable !== false;
     const baseStroke = entity.strokeColor ?? layer?.color ?? "#5f1526";
     const stroke = selected ? "#ffb84d" : baseStroke;
     const strokeWidth = selected ? 4 / zoom : Math.max(1.2 / zoom, (entity.strokeWidth ?? 0.05) * BASE_SCALE / zoom);
-    const fill = colorForEntity(entity);
-    const layerOpacity = layer?.opacity ?? 1;
-    const baseOpacity = (entity.opacity ?? 1) * layerOpacity;
-    const opacity = locked ? Math.min(baseOpacity, .68) : baseOpacity;
-
-    if (entity.metadata?.dimension === true) {
-      if (!showDimensions) return null;
-      return (
-        <CadDimension
-          key={entity.id}
-          entity={entity}
-          zoom={zoom}
-          selected={selected}
-          locked={Boolean(locked)}
-          printable={printable}
-          opacity={opacity}
-          fallbackColor={baseStroke}
-          onPointerDown={event => handleEntityPointerDown(event, entity)}
-        />
-      );
-    }
+    const fill = entity.fillColor ?? colorForEntity(entity);
+    const opacity = locked ? Math.min(entity.opacity ?? 1, .68) : entity.opacity ?? 1;
 
     if (entity.shape === "line" || entity.shape === "polyline") {
       const points = entity.points.map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ");
@@ -711,7 +605,7 @@ export function CadCanvas() {
         strokeLinejoin: "round" as const
       };
       return (
-        <g key={entity.id} data-layer-id={entity.layerId} data-layer-printable={printable ? "true" : "false"} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
+        <g key={entity.id} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
           {isCurve ? (
             <path d={curvePath} {...shared} stroke="transparent" strokeWidth={(lineWidth + 12) / zoom} />
           ) : (
@@ -758,7 +652,7 @@ export function CadCanvas() {
     if (entity.shape === "polygon") {
       const points = entity.points.map(point => `${point.x * BASE_SCALE},${point.y * BASE_SCALE}`).join(" ");
       return (
-        <g key={entity.id} data-layer-id={entity.layerId} data-layer-printable={printable ? "true" : "false"} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
+        <g key={entity.id} onPointerDown={event => handleEntityPointerDown(event, entity)} className={locked ? "cadEntity locked" : "cadEntity"}>
           <polygon points={points} fill={fill} fillOpacity={opacity * .72} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dashArray(entity.linePattern, zoom)} />
           <text x={entity.position.x * BASE_SCALE} y={entity.position.y * BASE_SCALE + 4 / zoom} textAnchor="middle" fontSize={12 / zoom} fill="#2f0c16">{entity.name}</text>
           {showDimensions && <DimensionLabel point={entity.position} text={`${roundMetric(entity.width)} × ${roundMetric(entity.depth)} m`} zoom={zoom} />}
@@ -771,14 +665,10 @@ export function CadCanvas() {
     const y = entity.position.y * BASE_SCALE;
     const width = entity.width * BASE_SCALE;
     const depth = entity.depth * BASE_SCALE;
-    const plantCategory = String(entity.metadata?.databaseCategory ?? "").toLowerCase();
-    const plantFlower = entity.fillColor ?? "#d8b2c1";
 
     return (
       <g
         key={entity.id}
-        data-layer-id={entity.layerId}
-        data-layer-printable={printable ? "true" : "false"}
         transform={`translate(${x} ${y}) rotate(${entity.rotation})`}
         onPointerDown={event => handleEntityPointerDown(event, entity)}
         className={locked ? "cadEntity locked" : "cadEntity"}
@@ -807,37 +697,11 @@ export function CadCanvas() {
             strokeDasharray={dashArray(entity.linePattern, zoom)}
           />
         ) : entity.kind === "plant" ? (
-          plantCategory.includes("gras") ? (
-            <>
-              <circle cx={0} cy={0} r={width / 2} fill="#78905d" fillOpacity={opacity * .55} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
-              {Array.from({ length: 10 }, (_, index) => {
-                const angle = index / 10 * Math.PI * 2;
-                return <line key={index} x1={0} y1={0} x2={Math.cos(angle) * width * .42} y2={Math.sin(angle) * width * .42} stroke="#e7f0d7" strokeWidth={1.4 / zoom} />;
-              })}
-            </>
-          ) : plantCategory.includes("staude") ? (
-            <>
-              <circle cx={0} cy={0} r={width / 2} fill="#4e8757" fillOpacity={opacity * .34} stroke={stroke} strokeWidth={strokeWidth} />
-              {Array.from({ length: 6 }, (_, index) => {
-                const angle = index / 6 * Math.PI * 2;
-                return <circle key={index} cx={Math.cos(angle) * width * .18} cy={Math.sin(angle) * width * .18} r={width * .15} fill={plantFlower} fillOpacity={opacity * .9} stroke="#fff3ee" strokeWidth={.8 / zoom} />;
-              })}
-              <circle cx={0} cy={0} r={width * .1} fill="#e3b84d" />
-            </>
-          ) : plantCategory.includes("strauch") || plantCategory.includes("heck") ? (
-            <>
-              <circle cx={0} cy={0} r={width / 2} fill="#477848" fillOpacity={opacity * .38} stroke={stroke} strokeWidth={strokeWidth} />
-              {[[-.18, -.08], [.18, -.08], [0, .18], [0, 0]].map(([offsetX, offsetY], index) => (
-                <circle key={index} cx={width * offsetX} cy={width * offsetY} r={width * .24} fill="#568755" fillOpacity={opacity * .82} stroke="#e7f1df" strokeWidth={.8 / zoom} />
-              ))}
-            </>
-          ) : (
-            <>
-              <circle cx={0} cy={0} r={width / 2} fill="#477848" fillOpacity={opacity * .78} stroke={stroke} strokeWidth={strokeWidth} />
-              <circle cx={0} cy={0} r={width * .3} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
-              <path d={`M ${-width * .35} 0 H ${width * .35} M 0 ${-width * .35} V ${width * .35}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
-            </>
-          )
+          <>
+            <circle cx={0} cy={0} r={width / 2} fill={fill} fillOpacity={opacity * .78} stroke={stroke} strokeWidth={strokeWidth} />
+            <circle cx={0} cy={0} r={width * .28} fill="none" stroke="#eaf5df" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom} ${3 / zoom}`} />
+            <path d={`M ${-width * .34} 0 H ${width * .34} M 0 ${-width * .34} V ${width * .34}`} stroke="#eaf5df" strokeWidth={1.2 / zoom} />
+          </>
         ) : (
           <rect
             x={-width / 2}
@@ -895,7 +759,6 @@ export function CadCanvas() {
         </div>
       )}
       <svg
-        data-algreen-cad-canvas="true"
         className={`cadCanvas tool-${activeTool}`}
         viewBox={`${-VIEW_WIDTH / 2} ${-VIEW_HEIGHT / 2} ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
         onPointerDown={handleBackgroundPointerDown}
@@ -991,10 +854,10 @@ export function CadCanvas() {
                 />
               ) : firstDraft ? (
                 <line
-                  x1={(activeTool === "dimension" ? dimensionPreviewStart?.x ?? firstDraft.x : firstDraft.x) * BASE_SCALE}
-                  y1={(activeTool === "dimension" ? dimensionPreviewStart?.y ?? firstDraft.y : firstDraft.y) * BASE_SCALE}
-                  x2={(activeTool === "dimension" ? dimensionPreviewEnd.x : previewPoint.x) * BASE_SCALE}
-                  y2={(activeTool === "dimension" ? dimensionPreviewEnd.y : previewPoint.y) * BASE_SCALE}
+                  x1={firstDraft.x * BASE_SCALE}
+                  y1={firstDraft.y * BASE_SCALE}
+                  x2={previewPoint.x * BASE_SCALE}
+                  y2={previewPoint.y * BASE_SCALE}
                   stroke={activeTool === "hedge" ? "#2f6c3f" : ["wall", "fence"].includes(activeTool) ? "#786e68" : "#d4823b"}
                   strokeWidth={activeTool === "wall" ? Math.max(5, .25 * BASE_SCALE) / zoom : activeTool === "hedge" ? Math.max(6, .55 * BASE_SCALE) / zoom : activeTool === "fence" ? Math.max(4, .1 * BASE_SCALE) / zoom : 2.5 / zoom}
                   strokeDasharray={activeTool === "dimension" ? `${8 / zoom} ${5 / zoom}` : undefined}
@@ -1025,7 +888,6 @@ export function CadCanvas() {
               {currentSnap.mode === "midpoint" && <path d={`M 0 ${-7 / zoom} L ${7 / zoom} ${6 / zoom} L ${-7 / zoom} ${6 / zoom} Z`} fill="none" stroke="#ff8b2e" strokeWidth={2 / zoom} />}
               {currentSnap.mode === "center" && <circle r={6 / zoom} fill="none" stroke="#ff8b2e" strokeWidth={2 / zoom} />}
               {currentSnap.mode === "grid" && <path d={`M ${-5 / zoom} 0 H ${5 / zoom} M 0 ${-5 / zoom} V ${5 / zoom}`} stroke="#ff8b2e" strokeWidth={2 / zoom} />}
-              {currentSnap.mode === "intersection" && <path d={`M ${-6 / zoom} ${-6 / zoom} L ${6 / zoom} ${6 / zoom} M ${6 / zoom} ${-6 / zoom} L ${-6 / zoom} ${6 / zoom}`} stroke="#ff8b2e" strokeWidth={2 / zoom} />}
               <text x={9 / zoom} y={-9 / zoom} fontSize={9 / zoom} fill="#8c4318">{snapLabel(currentSnap.mode)}</text>
             </g>
           )}
@@ -1036,7 +898,6 @@ export function CadCanvas() {
         <span>Y {cursorWorld.y.toFixed(2)} m</span>
         <span>{snapEnabled ? `SNAP ${currentSnap.mode?.toUpperCase() ?? "BEREIT"}` : "SNAP AUS"}</span>
         <span>{gridVisible ? `RASTER ${gridSize} m` : "RASTER AUS"}</span>
-        <span className={orthogonalMode ? "statusOn" : ""}>{orthogonalMode ? "ORTHO 45°" : "ORTHO AUS"}</span>
         <span>{selectedIds.length} gewählt</span>
         <span className={canUndo ? "statusOn" : ""}>UNDO</span>
         <span className={canRedo ? "statusOn" : ""}>REDO</span>
@@ -1053,94 +914,6 @@ function DimensionLabel({ point, text, zoom, local = false }: { point: Vec2; tex
     <g transform={`translate(${x} ${y})`} pointerEvents="none">
       <rect x={-width / 2} y={-10 / zoom} width={width} height={18 / zoom} rx={5 / zoom} fill="rgba(255,250,246,.92)" stroke="#9a6672" strokeWidth={0.8 / zoom} />
       <text textAnchor="middle" y={3 / zoom} fontSize={10 / zoom} fill="#5f2231">{text}</text>
-    </g>
-  );
-}
-
-function dimensionMode(entity: CadEntity): DimensionMode {
-  const value = entity.metadata?.dimensionMode;
-  return value === "horizontal" || value === "vertical" ? value : "aligned";
-}
-
-function dimensionUnit(entity: CadEntity): DimensionUnit {
-  const value = entity.metadata?.dimensionUnit;
-  return value === "cm" || value === "mm" ? value : "m";
-}
-
-function CadDimension({
-  entity,
-  zoom,
-  selected,
-  locked,
-  printable,
-  opacity,
-  fallbackColor,
-  onPointerDown
-}: {
-  entity: CadEntity;
-  zoom: number;
-  selected: boolean;
-  locked: boolean;
-  printable: boolean;
-  opacity: number;
-  fallbackColor: string;
-  onPointerDown: (event: ReactPointerEvent<SVGGElement>) => void;
-}) {
-  const sourceStart = entity.points[0] ?? entity.position;
-  const sourceEnd = entity.points[1] ?? entity.position;
-  const mode = dimensionMode(entity);
-  const geometry = resolveDimensionGeometry(sourceStart, sourceEnd, mode);
-  const { lineStart, lineEnd, labelPoint } = geometry;
-  const scale = Math.min(2, Math.max(.65, Number(entity.metadata?.dimensionTextScale ?? 1)));
-  const color = selected ? "#ffb84d" : fallbackColor;
-  const label = formatDimensionValue(geometry.measuredMeters, dimensionUnit(entity), Number(entity.metadata?.dimensionDecimals ?? 2));
-  const labelWidth = Math.max(52, label.length * 6.6) * scale / zoom;
-  const labelHeight = 20 * scale / zoom;
-  const x1 = lineStart.x * BASE_SCALE;
-  const y1 = lineStart.y * BASE_SCALE;
-  const x2 = lineEnd.x * BASE_SCALE;
-  const y2 = lineEnd.y * BASE_SCALE;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const vectorLength = Math.max(1, Math.hypot(dx, dy));
-  const normal = { x: -dy / vectorLength, y: dx / vectorLength };
-  const tick = 7 / zoom;
-  const extensionDash = `${3 / zoom} ${3 / zoom}`;
-
-  return (
-    <g
-      data-layer-id={entity.layerId}
-      data-layer-printable={printable ? "true" : "false"}
-      onPointerDown={onPointerDown}
-      className={locked ? "cadEntity cadDimension locked" : "cadEntity cadDimension"}
-      opacity={opacity}
-    >
-      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16 / zoom} />
-      {mode !== "aligned" && (
-        <>
-          <line x1={sourceStart.x * BASE_SCALE} y1={sourceStart.y * BASE_SCALE} x2={x1} y2={y1} stroke={color} strokeWidth={1.1 / zoom} strokeDasharray={extensionDash} />
-          <line x1={sourceEnd.x * BASE_SCALE} y1={sourceEnd.y * BASE_SCALE} x2={x2} y2={y2} stroke={color} strokeWidth={1.1 / zoom} strokeDasharray={extensionDash} />
-        </>
-      )}
-      <line
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={color}
-        strokeWidth={(selected ? 2.2 : 1.6) / zoom}
-        markerStart="url(#cadArrowStart)"
-        markerEnd="url(#cadArrowEnd)"
-      />
-      <line x1={x1 - normal.x * tick} y1={y1 - normal.y * tick} x2={x1 + normal.x * tick} y2={y1 + normal.y * tick} stroke={color} strokeWidth={1.4 / zoom} />
-      <line x1={x2 - normal.x * tick} y1={y2 - normal.y * tick} x2={x2 + normal.x * tick} y2={y2 + normal.y * tick} stroke={color} strokeWidth={1.4 / zoom} />
-      <g transform={`translate(${labelPoint.x * BASE_SCALE} ${labelPoint.y * BASE_SCALE})`} pointerEvents="none">
-        <rect x={-labelWidth / 2} y={-labelHeight / 2} width={labelWidth} height={labelHeight} rx={4 / zoom} fill="rgba(255,250,246,.96)" stroke={color} strokeWidth={.8 / zoom} />
-        <text textAnchor="middle" y={3.5 * scale / zoom} fontSize={10.5 * scale / zoom} fontWeight="700" fill="#5f2231">{label}</text>
-      </g>
-      {entity.metadata?.associativeDimension === true && (
-        <text x={labelPoint.x * BASE_SCALE + labelWidth / 2 + 4 / zoom} y={labelPoint.y * BASE_SCALE - labelHeight / 2} fontSize={8 / zoom} fill="#76545c">A</text>
-      )}
     </g>
   );
 }

@@ -4,9 +4,6 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CadCanvas } from "@/components/cad/CadCanvas";
 import { DetailToolsPanel } from "@/components/cad/DetailToolsPanel";
-import { ProfessionalCadPanel } from "@/components/cad/ProfessionalCadPanel";
-import { LayerDimensionPanel } from "@/components/cad/LayerDimensionPanel";
-import { AdvancedModifyPanel } from "@/components/cad/AdvancedModifyPanel";
 import { ThreeViewport } from "@/components/render/ThreeViewport";
 import { RenderSettingsPanel } from "@/components/render/RenderSettingsPanel";
 import { GardenAI } from "@/components/ai/GardenAI";
@@ -20,7 +17,6 @@ import { MediaImportPanel } from "@/components/import/MediaImportPanel";
 import { useProjectStore } from "@/stores/projectStore";
 import type { CadTool, ProjectFile } from "@/types/domain";
 import { STUDIO_BUILD_LABEL, STUDIO_PACKAGE_VERSION } from "@/core/platform/version";
-import { exportCadPlanToPdf } from "@/lib/pdf/exportPlanPdf";
 
 const tools: Array<{ id: CadTool; label: string; icon: string }> = [
   { id: "select", label: "Auswahl", icon: "↖" },
@@ -54,11 +50,9 @@ export function StudioShell() {
     setViewMode,
     gridVisible,
     snapEnabled,
-    orthogonalMode,
     showDimensions,
     toggleGrid,
     toggleSnap,
-    toggleOrthogonalMode,
     toggleDimensions,
     undo,
     redo,
@@ -68,12 +62,7 @@ export function StudioShell() {
     activeLayerId,
     setActiveLayerId,
     exportProjectFile,
-    importProjectFile,
-    clearProject,
-    selectedIds,
-    setSelectedIds,
-    id: projectId,
-    name: projectName
+    importProjectFile
   } = store;
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [fileMessage, setFileMessage] = useState("Automatisch lokal gespeichert");
@@ -88,31 +77,6 @@ export function StudioShell() {
     anchor.click();
     URL.revokeObjectURL(url);
     setFileMessage("Projektdatei exportiert");
-  }
-
-
-  async function exportPdfPlan() {
-    const previousView = viewMode;
-    const previousSelection = [...selectedIds];
-    try {
-      if (viewMode === "3d") setViewMode("2d");
-      if (selectedIds.length > 0) setSelectedIds([]);
-      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      await exportCadPlanToPdf(projectName);
-      setFileMessage("PDF-Plan exportiert");
-    } catch (error) {
-      setFileMessage(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen");
-    } finally {
-      if (previousSelection.length > 0) setSelectedIds(previousSelection);
-      if (previousView === "3d") setViewMode(previousView);
-    }
-  }
-
-  function startBlankProject() {
-    const confirmed = window.confirm("Wirklich alles löschen und mit einem leeren Projekt neu beginnen? Die Aktion kann unmittelbar über Rückgängig wiederhergestellt werden.");
-    if (!confirmed) return;
-    clearProject();
-    setFileMessage("Leeres Projekt erstellt – Rückgängig ist möglich");
   }
 
   async function importProject(event: ChangeEvent<HTMLInputElement>) {
@@ -152,20 +116,17 @@ export function StudioShell() {
             <button type="button" disabled={!canRedo} onClick={redo} title="Strg/Cmd + Umschalt + Z">↷ Wiederholen</button>
             <button type="button" className={gridVisible ? "toggleOn" : ""} onClick={toggleGrid}>Raster</button>
             <button type="button" className={snapEnabled ? "toggleOn" : ""} onClick={toggleSnap}>Objektfang</button>
-            <button type="button" className={orthogonalMode ? "toggleOn" : ""} onClick={toggleOrthogonalMode}>ORTHO</button>
             <button type="button" className={showDimensions ? "toggleOn" : ""} onClick={toggleDimensions}>Maße</button>
             <label className="layerSelect">
               <span>Aktiver Layer</span>
               <select value={activeLayerId} onChange={event => setActiveLayerId(event.target.value)}>
-                {layers.filter(layer => layer.id === activeLayerId || (!layer.locked && layer.visible)).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
+                {layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
               </select>
             </label>
-            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.1 Professional CAD · {STUDIO_PACKAGE_VERSION}</div>
+            <div className="versionIndicator" title={STUDIO_BUILD_LABEL}>V3.0 Alpha · {STUDIO_PACKAGE_VERSION} · DOCKED UI</div>
             <div className="fileActions">
               <button type="button" onClick={() => fileInput.current?.click()}>Projekt öffnen</button>
               <button type="button" onClick={exportProject}>.algreen speichern</button>
-              <button type="button" onClick={exportPdfPlan}>PDF exportieren</button>
-              <button type="button" className="dangerAction" onClick={startBlankProject}>Alles löschen</button>
               <input ref={fileInput} type="file" accept=".algreen,.json,application/json" onChange={importProject} hidden />
               <small>{fileMessage}</small>
             </div>
@@ -184,9 +145,6 @@ export function StudioShell() {
         <div className="leftColumn">
           <FoundationPanel />
           <MediaImportPanel />
-          <ProfessionalCadPanel />
-          <LayerDimensionPanel />
-          <AdvancedModifyPanel />
           <DetailToolsPanel />
           <LibraryPanel />
           <TerrainPanel />
@@ -196,8 +154,8 @@ export function StudioShell() {
           <GardenAI />
         </div>
         <div className={`workspace view-${viewMode}`}>
-          {(viewMode === "2d" || viewMode === "split") && <CadCanvas key={`cad-${projectId}`} />}
-          {(viewMode === "3d" || viewMode === "split") && <ThreeViewport key={`three-${projectId}`} />}
+          {(viewMode === "2d" || viewMode === "split") && <CadCanvas />}
+          {(viewMode === "3d" || viewMode === "split") && <ThreeViewport />}
         </div>
         <BimInspector />
       </section>

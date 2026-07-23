@@ -6,15 +6,11 @@ import { MATERIAL_CATALOG } from "@/data/materials/catalog";
 import { useProjectStore } from "@/stores/projectStore";
 import { elevationAt } from "@/engines/terrain/terrainEngine";
 import { definitionForEntity, growthFactor } from "@/engines/plants/plantIntelligence";
-import type { CadEntity, PlantDefinition, Vec2 } from "@/types/domain";
-
-function materialDefinition(entity: CadEntity) {
-  return MATERIAL_CATALOG.find(item => item.id === entity.materialId);
-}
+import type { CadEntity, Vec2 } from "@/types/domain";
 
 function materialColor(entity: CadEntity) {
   if (entity.fillColor) return entity.fillColor;
-  const definition = materialDefinition(entity);
+  const definition = MATERIAL_CATALOG.find(item => item.id === entity.materialId);
   if (definition) return definition.color;
   if (entity.kind === "building") return "#d8d1ca";
   if (entity.kind === "wall") return "#91877c";
@@ -24,35 +20,14 @@ function materialColor(entity: CadEntity) {
   return "#78a47b";
 }
 
-function createEntityMaterial(
-  entity: CadEntity,
-  color = materialColor(entity),
-  overrides: Partial<THREE.MeshStandardMaterialParameters> = {}
-) {
-  const definition = materialDefinition(entity);
-  const glassLike = definition?.category === "glass";
-  const waterLike = definition?.category === "water" || entity.kind === "water";
-  const opacity = overrides.opacity ?? (waterLike ? entity.opacity ?? .76 : glassLike ? .48 : entity.opacity ?? 1);
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness: definition?.roughness ?? (waterLike ? .18 : .86),
-    metalness: definition?.metalness ?? .02,
-    transparent: glassLike || waterLike || opacity < 1,
-    opacity,
-    ...overrides
-  });
-}
-
 function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec2) {
   const dx = end.x - start.x;
   const dz = end.y - start.y;
   const length = Math.hypot(dx, dz);
   if (length < 0.001) return;
   const objectType = String(entity.metadata?.objectType ?? "");
-  const databaseCategory = String(entity.metadata?.databaseCategory ?? "");
   const isHedge = objectType === "hedge";
-  const isFence = databaseCategory === "Zäune & Sichtschutz" || objectType === "fence" || objectType === "screen" || objectType === "railing" || objectType === "glass-wall";
-  const isScreen = /sichtschutz|windschutz/i.test(entity.name) || objectType === "screen" || objectType === "glass-wall";
+  const isFence = objectType === "fence" || objectType === "screen" || objectType === "railing" || objectType === "glass-wall";
   const isWall = entity.kind === "wall";
   const height = Math.max(entity.height, isWall ? 0.1 : 0.04);
   const width = Math.max(entity.strokeWidth ?? entity.width, isWall ? 0.05 : 0.08);
@@ -62,7 +37,7 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
 
   if (isHedge) {
     const segments = Math.max(2, Math.ceil(length / 0.65));
-    const material = createEntityMaterial(entity, materialColor(entity), { roughness: .98, metalness: 0 });
+    const material = new THREE.MeshStandardMaterial({ color: materialColor(entity), roughness: 0.98 });
     for (let index = 0; index <= segments; index += 1) {
       const t = index / segments;
       const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(.28, width * .72), 1), material);
@@ -76,7 +51,7 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
   }
 
   if (isFence) {
-    const material = createEntityMaterial(entity);
+    const material = new THREE.MeshStandardMaterial({ color: materialColor(entity), roughness: .72, metalness: objectType === "glass-wall" ? 0 : .18, transparent: objectType === "glass-wall", opacity: objectType === "glass-wall" ? .48 : 1 });
     const postCount = Math.max(2, Math.ceil(length / 1.8));
     for (let index = 0; index <= postCount; index += 1) {
       const t = index / postCount;
@@ -85,26 +60,23 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
       post.castShadow = true;
       group.add(post);
     }
-    if (isScreen) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(length, height * .82, Math.max(.025, width)), material);
-      panel.position.set(centerX, height * .53, centerZ);
-      panel.rotation.y = angle;
-      panel.castShadow = materialDefinition(entity)?.category !== "glass";
-      panel.receiveShadow = true;
-      group.add(panel);
-    } else {
-      for (const y of [height * .28, height * .72]) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(length, .08, Math.max(.06, width)), material);
-        rail.position.set(centerX, y, centerZ);
-        rail.rotation.y = angle;
-        rail.castShadow = true;
-        group.add(rail);
-      }
+    for (const y of [height * .28, height * .72]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(length, .08, Math.max(.06, width)), material);
+      rail.position.set(centerX, y, centerZ);
+      rail.rotation.y = angle;
+      rail.castShadow = true;
+      group.add(rail);
     }
     return;
   }
 
-  const material = createEntityMaterial(entity, materialColor(entity), materialDefinition(entity) ? {} : { roughness: isWall ? .88 : .95 });
+  const material = new THREE.MeshStandardMaterial({
+    color: materialColor(entity),
+    roughness: isWall ? 0.88 : 0.95,
+    metalness: 0.02,
+    transparent: (entity.opacity ?? 1) < 1,
+    opacity: entity.opacity ?? 1
+  });
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(length, height, width), material);
   mesh.position.set(centerX, height / 2, centerZ);
   mesh.rotation.y = angle;
@@ -117,7 +89,7 @@ function addCatalogObject(group: THREE.Group, entity: CadEntity, y: number, sele
   const objectType = String(entity.metadata?.objectType ?? "");
   if (!objectType) return false;
   const color = selected ? "#d9a05e" : materialColor(entity);
-  const material = createEntityMaterial(entity, color);
+  const material = new THREE.MeshStandardMaterial({ color, roughness: .78, metalness: entity.materialId?.includes("metal") || entity.materialId === "mat-corten" ? .5 : .03 });
   const dark = new THREE.MeshStandardMaterial({ color: "#3d312b", roughness: .82 });
   const lightMaterial = new THREE.MeshStandardMaterial({ color: "#ffd77a", emissive: "#ffbd54", emissiveIntensity: 1.8, roughness: .25 });
   const root = new THREE.Group();
@@ -209,106 +181,9 @@ function addCatalogObject(group: THREE.Group, entity: CadEntity, y: number, sele
   return true;
 }
 
-function addPlantModel(group: THREE.Group, entity: CadEntity, terrainY: number, years: number, selected: boolean) {
-  const definition = definitionForEntity(entity);
-  const factor = growthFactor(definition, years);
-  const renderWidth = Math.max(.25, entity.width * factor);
-  const renderHeight = Math.max(.24, entity.height * factor);
-  const category: PlantDefinition["category"] = definition?.category ?? (entity.height > 2.5 ? "tree" : "shrub");
-  const leafColor = selected ? "#68a25d" : definition?.evergreen ? "#315f43" : category === "grass" ? "#78905d" : "#477848";
-  const leafMaterial = new THREE.MeshStandardMaterial({ color: leafColor, roughness: .98, metalness: 0 });
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: "#684333", roughness: .96, metalness: 0 });
-  const flowerMaterial = new THREE.MeshStandardMaterial({ color: entity.fillColor ?? definition?.flowerColor ?? "#d8b3c3", roughness: .84, metalness: 0 });
-  group.position.set(entity.position.x, terrainY, entity.position.y);
-  group.rotation.y = THREE.MathUtils.degToRad(entity.rotation);
-
-  const addMesh = (mesh: THREE.Mesh) => {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    return mesh;
-  };
-
-  if (category === "tree") {
-    const trunkHeight = Math.max(.4, renderHeight * .48);
-    const trunk = addMesh(new THREE.Mesh(
-      new THREE.CylinderGeometry(Math.max(.045, renderWidth * .055), Math.max(.07, renderWidth * .085), trunkHeight, 10),
-      trunkMaterial
-    ));
-    trunk.position.y = trunkHeight / 2;
-    if (definition?.evergreen) {
-      const crown = addMesh(new THREE.Mesh(new THREE.ConeGeometry(renderWidth * .48, Math.max(.45, renderHeight * .68), 20), leafMaterial));
-      crown.position.y = trunkHeight + renderHeight * .28;
-    } else {
-      const crownRadius = Math.max(.18, renderWidth * .34);
-      const clusters = [
-        { x: 0, y: trunkHeight + renderHeight * .25, z: 0, scale: 1.15 },
-        { x: -renderWidth * .2, y: trunkHeight + renderHeight * .16, z: renderWidth * .08, scale: .82 },
-        { x: renderWidth * .2, y: trunkHeight + renderHeight * .18, z: -renderWidth * .09, scale: .86 }
-      ];
-      for (const cluster of clusters) {
-        const crown = addMesh(new THREE.Mesh(new THREE.IcosahedronGeometry(crownRadius * cluster.scale, 2), leafMaterial));
-        crown.position.set(cluster.x, cluster.y, cluster.z);
-        crown.scale.y = Math.max(.82, renderHeight / Math.max(renderWidth, .1) * .32);
-      }
-    }
-    if ((definition?.bloomMonths.length ?? 0) > 0) {
-      for (let index = 0; index < 7; index += 1) {
-        const angle = index / 7 * Math.PI * 2;
-        const blossom = addMesh(new THREE.Mesh(new THREE.SphereGeometry(Math.max(.025, renderWidth * .035), 10, 8), flowerMaterial));
-        blossom.position.set(Math.cos(angle) * renderWidth * .3, trunkHeight + renderHeight * (.18 + (index % 3) * .06), Math.sin(angle) * renderWidth * .3);
-      }
-    }
-    return;
-  }
-
-  if (category === "shrub" || category === "hedge") {
-    const clusterCount = category === "hedge" ? 5 : 4;
-    for (let index = 0; index < clusterCount; index += 1) {
-      const angle = index / clusterCount * Math.PI * 2;
-      const radius = index === 0 ? 0 : renderWidth * .2;
-      const crown = addMesh(new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(.14, renderWidth * (index === 0 ? .34 : .26)), 2), leafMaterial));
-      crown.position.set(Math.cos(angle) * radius, renderHeight * (index === 0 ? .48 : .38), Math.sin(angle) * radius);
-      crown.scale.y = Math.max(.7, renderHeight / Math.max(renderWidth, .1) * .62);
-    }
-    for (let index = 0; index < 5; index += 1) {
-      const angle = index / 5 * Math.PI * 2 + .35;
-      const blossom = addMesh(new THREE.Mesh(new THREE.SphereGeometry(Math.max(.025, renderWidth * .045), 10, 8), flowerMaterial));
-      blossom.position.set(Math.cos(angle) * renderWidth * .26, renderHeight * .65, Math.sin(angle) * renderWidth * .26);
-    }
-    return;
-  }
-
-  if (category === "grass") {
-    const bladeCount = 13;
-    for (let index = 0; index < bladeCount; index += 1) {
-      const angle = index / bladeCount * Math.PI * 2;
-      const bladeHeight = renderHeight * (.68 + (index % 4) * .08);
-      const blade = addMesh(new THREE.Mesh(new THREE.ConeGeometry(Math.max(.015, renderWidth * .018), bladeHeight, 5), leafMaterial));
-      blade.position.set(Math.cos(angle) * renderWidth * (index % 3) * .055, bladeHeight / 2, Math.sin(angle) * renderWidth * (index % 3) * .055);
-      blade.rotation.z = Math.cos(angle) * .14;
-      blade.rotation.x = Math.sin(angle) * .14;
-    }
-    return;
-  }
-
-  const stemCount = 9;
-  for (let index = 0; index < stemCount; index += 1) {
-    const angle = index / stemCount * Math.PI * 2;
-    const radius = index === 0 ? 0 : renderWidth * .25;
-    const stemHeight = renderHeight * (.62 + (index % 3) * .12);
-    const stem = addMesh(new THREE.Mesh(new THREE.CylinderGeometry(.012, .018, stemHeight, 6), leafMaterial));
-    stem.position.set(Math.cos(angle) * radius, stemHeight / 2, Math.sin(angle) * radius);
-    const flower = addMesh(new THREE.Mesh(new THREE.SphereGeometry(Math.max(.035, renderWidth * .065), 12, 9), flowerMaterial));
-    flower.position.set(stem.position.x, stemHeight, stem.position.z);
-  }
-}
-
 export function ThreeViewport() {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const cameraStateRef = useRef({ azimuth: Math.atan2(16, 17), elevation: .63, radius: 26 });
-  const { entities, layers, selectedIds, setSelectedIds, terrain, plantingSettings, renderSettings } = useProjectStore();
-  const selectedNames = entities.filter(entity => selectedIds.includes(entity.id)).map(entity => entity.name);
+  const { entities, layers, selectedIds, terrain, plantingSettings, renderSettings } = useProjectStore();
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -325,9 +200,7 @@ export function ThreeViewport() {
     scene.fog = renderSettings.fogEnabled ? new THREE.FogExp2(environment.sky, renderSettings.fogDensity) : null;
 
     const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / Math.max(1, mount.clientHeight), 0.1, 250);
-    const initialCamera = cameraStateRef.current;
-    const initialHorizontal = Math.cos(initialCamera.elevation) * initialCamera.radius;
-    camera.position.set(Math.sin(initialCamera.azimuth) * initialHorizontal, Math.sin(initialCamera.elevation) * initialCamera.radius, Math.cos(initialCamera.azimuth) * initialHorizontal);
+    camera.position.set(16, 13, 17);
     camera.lookAt(0, 0.8, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
@@ -387,40 +260,51 @@ export function ThreeViewport() {
     for (const entity of entities.filter(item => item.visible && layerMap.get(item.layerId)?.visible !== false)) {
       if (entity.kind === "annotation") continue;
       const selected = selectedIds.includes(entity.id);
-      const entityGroup = new THREE.Group();
-      entityGroup.name = `entity:${entity.id}`;
-      entityGroup.userData.entityId = entity.id;
-      group.add(entityGroup);
-      const finishEntity = () => {
-        if (!selected || entityGroup.children.length === 0) return;
-        const outline = new THREE.BoxHelper(entityGroup, "#ffb84d");
-        outline.userData.pickable = false;
-        group.add(outline);
-      };
 
       if (entity.kind === "plant") {
+        const factor = growthFactor(definitionForEntity(entity), plantingSettings.growthYears);
+        const renderWidth = Math.max(0.25, entity.width * factor);
+        const renderHeight = Math.max(0.35, entity.height * factor);
+        const trunkHeight = Math.max(0.35, renderHeight * 0.45);
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(Math.max(0.05, renderWidth * 0.07), Math.max(0.08, renderWidth * 0.1), trunkHeight, 10),
+          new THREE.MeshStandardMaterial({ color: "#684333", roughness: 0.95 })
+        );
         const terrainY = elevationAt(terrain, entity.position.x, entity.position.y);
-        addPlantModel(entityGroup, entity, terrainY, plantingSettings.growthYears, selected);
-        finishEntity();
+        trunk.position.set(entity.position.x, terrainY + trunkHeight / 2, entity.position.y);
+        trunk.castShadow = true;
+        group.add(trunk);
+
+        const crown = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(Math.max(0.2, renderWidth * 0.48), 2),
+          new THREE.MeshStandardMaterial({ color: selected ? "#6fa65d" : "#397044", roughness: 0.97 })
+        );
+        crown.scale.y = Math.max(0.85, renderHeight / Math.max(renderWidth, 0.1) * 0.45);
+        crown.position.set(entity.position.x, terrainY + trunkHeight + Math.max(0.2, renderHeight * 0.18), entity.position.y);
+        crown.castShadow = true;
+        crown.receiveShadow = true;
+        group.add(crown);
         continue;
       }
 
       if (entity.shape === "line" || entity.shape === "polyline") {
         for (let index = 1; index < entity.points.length; index += 1) {
-          addSegment(entityGroup, entity, entity.points[index - 1], entity.points[index]);
+          addSegment(group, entity, entity.points[index - 1], entity.points[index]);
         }
-        finishEntity();
         continue;
       }
 
       const terrainY = elevationAt(terrain, entity.position.x, entity.position.y);
-      if (addCatalogObject(entityGroup, entity, terrainY, selected)) {
-        finishEntity();
-        continue;
-      }
+      if (addCatalogObject(group, entity, terrainY, selected)) continue;
 
       const color = selected ? "#d9a05e" : materialColor(entity);
-      const material = createEntityMaterial(entity, color);
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        roughness: entity.kind === "water" ? 0.25 : 0.84,
+        metalness: 0.02,
+        transparent: entity.kind === "water" || (entity.opacity ?? 1) < 1,
+        opacity: entity.kind === "water" ? (entity.opacity ?? 0.78) : (entity.opacity ?? 1)
+      });
       const height = Math.max(entity.height, 0.06);
       const geometry = entity.shape === "circle" || entity.shape === "ellipse"
         ? new THREE.CylinderGeometry(entity.shape === "circle" ? (entity.radius ?? entity.width / 2) : entity.width / 2, entity.shape === "circle" ? (entity.radius ?? entity.width / 2) : entity.width / 2, height, 48)
@@ -431,8 +315,7 @@ export function ThreeViewport() {
       mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotation);
       mesh.castShadow = entity.kind === "building" || height > 0.5;
       mesh.receiveShadow = true;
-      entityGroup.add(mesh);
-      finishEntity();
+      group.add(mesh);
     }
 
     if (!terrain.enabled) {
@@ -456,25 +339,19 @@ export function ThreeViewport() {
 
     let frame = 0;
     let pointerDown = false;
-    let pointerMoved = false;
-    let pointerOrigin = { x: 0, y: 0 };
     let lastPointer = { x: 0, y: 0 };
-    let azimuth = initialCamera.azimuth;
-    let elevation = initialCamera.elevation;
-    let radius = initialCamera.radius;
+    let azimuth = Math.atan2(camera.position.x, camera.position.z);
+    let elevation = 0.63;
+    let radius = 26;
 
     function updateCamera() {
       const horizontal = Math.cos(elevation) * radius;
       camera.position.set(Math.sin(azimuth) * horizontal, Math.sin(elevation) * radius, Math.cos(azimuth) * horizontal);
       camera.lookAt(0, 0.8, 0);
-      cameraStateRef.current = { azimuth, elevation, radius };
     }
 
     function pointerStart(event: PointerEvent) {
-      if (event.button !== 0) return;
       pointerDown = true;
-      pointerMoved = false;
-      pointerOrigin = { x: event.clientX, y: event.clientY };
       lastPointer = { x: event.clientX, y: event.clientY };
       renderer.domElement.setPointerCapture(event.pointerId);
     }
@@ -483,54 +360,14 @@ export function ThreeViewport() {
       if (!pointerDown) return;
       const dx = event.clientX - lastPointer.x;
       const dy = event.clientY - lastPointer.y;
-      if (Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 4) pointerMoved = true;
       lastPointer = { x: event.clientX, y: event.clientY };
-      if (!pointerMoved) return;
       azimuth -= dx * 0.006;
       elevation = Math.max(0.18, Math.min(1.35, elevation + dy * 0.005));
       updateCamera();
     }
 
     function pointerEnd(event: PointerEvent) {
-      if (!pointerDown) return;
       pointerDown = false;
-      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
-      if (pointerMoved) return;
-      const bounds = renderer.domElement.getBoundingClientRect();
-      const pointer = new THREE.Vector2(
-        ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
-        -((event.clientY - bounds.top) / Math.max(1, bounds.height)) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(pointer, camera);
-      const intersections = raycaster.intersectObjects(group.children, true);
-      let hitId = "";
-      for (const intersection of intersections) {
-        let current: THREE.Object3D | null = intersection.object;
-        if (current.userData.pickable === false) continue;
-        while (current && current !== group) {
-          if (typeof current.userData.entityId === "string") {
-            hitId = current.userData.entityId;
-            break;
-          }
-          current = current.parent;
-        }
-        if (hitId) break;
-      }
-      if (!hitId) {
-        if (!event.shiftKey) setSelectedIds([]);
-        return;
-      }
-      if (event.shiftKey) {
-        setSelectedIds(selectedIds.includes(hitId) ? selectedIds.filter(id => id !== hitId) : [...selectedIds, hitId]);
-      } else {
-        setSelectedIds([hitId]);
-      }
-    }
-
-    function pointerCancel(event: PointerEvent) {
-      pointerDown = false;
-      pointerMoved = false;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
     }
 
@@ -543,7 +380,7 @@ export function ThreeViewport() {
     renderer.domElement.addEventListener("pointerdown", pointerStart);
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerEnd);
-    renderer.domElement.addEventListener("pointercancel", pointerCancel);
+    renderer.domElement.addEventListener("pointercancel", pointerEnd);
     renderer.domElement.addEventListener("wheel", wheel, { passive: false });
 
     function exportRender() {
@@ -573,12 +410,12 @@ export function ThreeViewport() {
       renderer.domElement.removeEventListener("pointerdown", pointerStart);
       renderer.domElement.removeEventListener("pointermove", pointerMove);
       renderer.domElement.removeEventListener("pointerup", pointerEnd);
-      renderer.domElement.removeEventListener("pointercancel", pointerCancel);
+      renderer.domElement.removeEventListener("pointercancel", pointerEnd);
       renderer.domElement.removeEventListener("wheel", wheel);
       window.removeEventListener("algreen:export-render", exportRender);
       cancelAnimationFrame(frame);
       scene.traverse(object => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) {
+        if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
           if (Array.isArray(object.material)) object.material.forEach(materialItem => materialItem.dispose());
           else object.material.dispose();
@@ -587,15 +424,12 @@ export function ThreeViewport() {
       renderer.dispose();
       mount.replaceChildren();
     };
-  }, [entities, layers, selectedIds, setSelectedIds, terrain, plantingSettings, renderSettings]);
+  }, [entities, layers, selectedIds, terrain, plantingSettings, renderSettings]);
 
   return (
     <section className="viewportCard threeCard">
-      <div className="viewportTitle"><strong>3D ENGINE · INTERAKTIV</strong><span>Klick: Auswahl · Umschalt: mehrere · Ziehen: Orbit · Mausrad: Zoom</span></div>
+      <div className="viewportTitle"><strong>3D ENGINE</strong><span>Ziehen: Orbit · Mausrad: Zoom</span></div>
       <div className="renderBadge">{renderSettings.preset} · {renderSettings.quality} · ACES · PBR</div>
-      <div className={`threeSelectionHud${selectedNames.length ? " active" : ""}`}>
-        {selectedNames.length ? <><strong>{selectedNames.length} gewählt</strong><span>{selectedNames.slice(0, 2).join(" · ")}{selectedNames.length > 2 ? " …" : ""}</span></> : <span>Objekt im 3D-Modell anklicken</span>}
-      </div>
       <div ref={mountRef} className="threeViewport" />
     </section>
   );
