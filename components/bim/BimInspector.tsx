@@ -36,7 +36,7 @@ export function BimInspector() {
     <section className="inspectorSection">
       <div className="sectionHeading"><div><span className="eyebrow">CAD / BIM 2.2</span><h2>Eigenschaften</h2></div><span className="selectionCount">{selectedIds.length} gewählt</span></div>
       {selected ? <EntityProperties key={`${selected.id}-${selected.position.x}-${selected.position.y}-${selected.width}-${selected.depth}-${selected.height}-${selected.rotation}-${selected.layerId}-${selected.elevationOffset ?? 0}`}
-        entity={selected} layers={layers} onUpdate={(patch, label) => updateEntity(selected.id, patch, label)} onMove={delta => moveEntities([selected.id], delta, "Position geändert")} />
+        entity={selected} allEntities={entities} layers={layers} onUpdate={(patch, label) => updateEntity(selected.id, patch, label)} onMove={delta => moveEntities([selected.id], delta, "Position geändert")} />
         : selectedIds.length > 1 ? <div className="multiSelectionCard"><strong>{selectedIds.length} Objekte ausgewählt</strong><p>Gemeinsam bewegen, duplizieren oder löschen.</p></div>
         : <p className="muted">Objekt im 2D-Plan auswählen.</p>}
       <div className="inspectorButtons"><button disabled={!selectedIds.length} onClick={duplicateSelected}>Duplizieren</button><button className="dangerButton" disabled={!selectedIds.length} onClick={deleteSelected}>Löschen</button></div>
@@ -92,24 +92,37 @@ function BimEditor({ item, onUpdate }: { item: BimProperties; onUpdate: (patch: 
   </div>;
 }
 
-function EntityProperties({entity,layers,onUpdate,onMove}:{entity:CadEntity;layers:ReturnType<typeof useProjectStore>["layers"];onUpdate:(patch:Partial<CadEntity>,label?:string)=>void;onMove:(delta:{x:number;y:number})=>void}) {
+function EntityProperties({entity,allEntities,layers,onUpdate,onMove}:{entity:CadEntity;allEntities:CadEntity[];layers:ReturnType<typeof useProjectStore>["layers"];onUpdate:(patch:Partial<CadEntity>,label?:string)=>void;onMove:(delta:{x:number;y:number})=>void}) {
   const center=entityCenter(entity);
   const length=entity.shape==="line"||entity.shape==="polyline"?polylineLength(entity.points):0;
   const layer=layers.find(item=>item.id===entity.layerId);
+  const hostedOpening=entity.metadata?.architectureOpening===true&&typeof entity.metadata?.hostWallId==="string";
+  const hostWallId=hostedOpening?String(entity.metadata?.hostWallId):"";
+  const hostWallName=allEntities.find(item=>item.id===hostWallId)?.name??hostWallId;
   const constructionElevation=(layer?.elevation??0)+(entity.elevationOffset??0);
   const n=(v:string,f:number)=>{const x=Number(v.replace(",","."));return Number.isFinite(x)?x:f};
   return <div className="propertyList">
     <label>Name<input defaultValue={entity.name} onBlur={e=>e.target.value!==entity.name&&onUpdate({name:e.target.value},"Name geändert")}/></label>
     <label>Typ<input value={`${entity.kind} · ${entity.shape}`} readOnly/></label>
     <label>Ebene<select value={entity.layerId} onChange={e=>onUpdate({layerId:e.target.value},"Ebenenzuordnung geändert")}>{layers.map(l=><option key={l.id} value={l.id}>{l.name} · {l.elevation>=0?"+":"−"}{Math.abs(l.elevation).toFixed(2)} m</option>)}</select></label>
+    {hostedOpening&&<label>Gekoppelte Wand<input value={hostWallName} readOnly/></label>}
     <div className="propertyPair">
       <label>X<input type="number" step="0.05" defaultValue={roundMetric(center.x)} onBlur={e=>onMove({x:n(e.target.value,center.x)-center.x,y:0})}/></label>
       <label>Y<input type="number" step="0.05" defaultValue={roundMetric(center.y)} onBlur={e=>onMove({x:0,y:n(e.target.value,center.y)-center.y})}/></label>
     </div>
-    <div className="propertyPair">
-      <label>Z-Versatz<input type="number" min="-50" max="200" step=".05" defaultValue={entity.elevationOffset??0} onBlur={e=>onUpdate({elevationOffset:n(e.target.value,entity.elevationOffset??0)},"Objekthöhe geändert")}/></label>
-      <label>Konstruktionshöhe<input value={`${constructionElevation>=0?"+":"−"}${Math.abs(constructionElevation).toFixed(2)} m`} readOnly/></label>
-    </div>
+    {hostedOpening
+      ? <><div className="propertyPair">
+          <label>Wandposition %<input type="number" min="1" max="99" step="1" defaultValue={Math.round(Number(entity.metadata?.hostOffsetRatio??.5)*100)} onBlur={e=>onUpdate({metadata:{...(entity.metadata??{}),hostOffsetRatio:Math.min(.99,Math.max(.01,n(e.target.value,50)/100))}},"Öffnung verschoben")}/></label>
+          <label>Brüstungshöhe<input type="number" min="0" max="20" step=".05" defaultValue={Number(entity.metadata?.sillHeight??0)} onBlur={e=>onUpdate({metadata:{...(entity.metadata??{}),sillHeight:Math.max(0,n(e.target.value,Number(entity.metadata?.sillHeight??0)))}},"Brüstungshöhe geändert")}/></label>
+        </div>
+        {entity.metadata?.objectType==="door"&&<div className="propertyPair">
+          <label>Anschlag<select value={String(entity.metadata?.hingeSide??"left")} onChange={e=>onUpdate({metadata:{...(entity.metadata??{}),hingeSide:e.target.value}},"Türanschlag geändert")}><option value="left">links</option><option value="right">rechts</option></select></label>
+          <label>Öffnungswinkel<input type="number" min="0" max="120" step="5" defaultValue={Number(entity.metadata?.openAngle??90)} onBlur={e=>onUpdate({metadata:{...(entity.metadata??{}),openAngle:Math.min(120,Math.max(0,n(e.target.value,90)))}},"Öffnungswinkel geändert")}/></label>
+        </div>}</>
+      : <div className="propertyPair">
+          <label>Z-Versatz<input type="number" min="-50" max="200" step=".05" defaultValue={entity.elevationOffset??0} onBlur={e=>onUpdate({elevationOffset:n(e.target.value,entity.elevationOffset??0)},"Objekthöhe geändert")}/></label>
+          <label>Konstruktionshöhe<input value={`${constructionElevation>=0?"+":"−"}${Math.abs(constructionElevation).toFixed(2)} m`} readOnly/></label>
+        </div>}
     {entity.shape==="line"||entity.shape==="polyline"
       ? <><label>Länge<input value={`${roundMetric(length)} m`} readOnly/></label><label>Dicke<input type="number" min="0.01" step="0.01" defaultValue={entity.width} onBlur={e=>onUpdate({width:Math.max(.01,n(e.target.value,entity.width))},"Breite geändert")}/></label></>
       : <div className="propertyPair"><label>Breite<input type="number" min=".05" step=".05" defaultValue={entity.width} onBlur={e=>onUpdate({width:Math.max(.05,n(e.target.value,entity.width))},"Breite geändert")}/></label><label>Tiefe<input type="number" min=".05" step=".05" defaultValue={entity.depth} onBlur={e=>onUpdate({depth:Math.max(.05,n(e.target.value,entity.depth))},"Tiefe geändert")}/></label></div>}
@@ -117,7 +130,7 @@ function EntityProperties({entity,layers,onUpdate,onMove}:{entity:CadEntity;laye
       <label>Bauteilhöhe<input type="number" min="0" step=".05" defaultValue={entity.height} onBlur={e=>onUpdate({height:Math.max(0,n(e.target.value,entity.height))},"Höhe geändert")}/></label>
       <label>Drehung<input type="number" step="1" defaultValue={entity.rotation} onBlur={e=>onUpdate({rotation:n(e.target.value,entity.rotation)},"Drehung geändert")}/></label>
     </div>
-    <div className="readOnlyMetrics"><span>Fläche <strong>{roundMetric(entityArea(entity))} m²</strong></span><span>Volumen <strong>{roundMetric(entityVolume(entity))} m³</strong></span></div>
+    <div className="readOnlyMetrics"><span>{hostedOpening?"Unterkante":"Fläche"} <strong>{hostedOpening?`${constructionElevation.toFixed(2)} m`:`${roundMetric(entityArea(entity))} m²`}</strong></span><span>{hostedOpening?"Oberkante":"Volumen"} <strong>{hostedOpening?`${(constructionElevation+entity.height).toFixed(2)} m`:`${roundMetric(entityVolume(entity))} m³`}</strong></span></div>
     <label className="checkField"><input type="checkbox" checked={entity.locked} onChange={e=>onUpdate({locked:e.target.checked},e.target.checked?"Objekt gesperrt":"Objekt entsperrt")}/><span>Objekt sperren</span></label>
   </div>;
 }

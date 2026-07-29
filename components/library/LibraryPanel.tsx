@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { makeId } from "@/core/cad/geometry";
+import { createHostedOpeningEntity, isHostedOpening } from "@/core/cad/openings";
 import { CONSTRUCTION_CATALOG, CONSTRUCTION_CATEGORIES, type ConstructionCategory } from "@/data/constructions/catalog";
 import { PLANT_CATALOG } from "@/data/plants/catalog";
 import { MATERIAL_CATALOG } from "@/data/materials/catalog";
@@ -87,7 +88,7 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
     return (
       <aside className="libraryLauncherPanel" id="objektdatenbank">
         <div className="panelHeading">
-          <div><span className="eyebrow">V3.1 Alpha 7</span><h3>Professional Library</h3></div>
+          <div><span className="eyebrow">V3.1 Alpha 8</span><h3>Professional Library</h3></div>
           <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
         </div>
         <p>Die Datenbank öffnet als eigene große Arbeitsseite. Kein eingebettetes Kartenraster und kein horizontaler Scrollbalken.</p>
@@ -116,12 +117,22 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
   function addObject(definitionId: string) {
     const definition = OBJECT_CATALOG.find(item => item.id === definitionId);
     if (!definition) return;
+    const selectedEntity = entities.find(entity => selectedIds.includes(entity.id));
+    const hostWall = selectedEntity?.kind === "wall"
+      ? selectedEntity
+      : selectedEntity && isHostedOpening(selectedEntity)
+        ? entities.find(entity => entity.id === selectedEntity.metadata?.hostWallId)
+        : undefined;
+    if (definition.hostRequired && (!hostWall || (hostWall.shape !== "line" && hostWall.shape !== "polyline"))) {
+      setLastAction(`${definition.name}: Zuerst im Studio eine Wand auswählen.`);
+      return;
+    }
     const position = nextPosition(definition.category);
     const id = makeId(definition.objectType);
     const points = definition.shape === "line"
       ? [{ x: position.x - definition.width / 2, y: position.y }, { x: position.x + definition.width / 2, y: position.y }]
       : [];
-    const entity: CadEntity = {
+    const standardEntity: CadEntity = {
       id,
       kind: definition.kind,
       shape: definition.shape,
@@ -149,8 +160,21 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
         databaseVersion: "3.1-alpha.4"
       }
     };
+    const entity = definition.hostRequired && hostWall
+      ? createHostedOpeningEntity(definition, hostWall, .5)
+      : standardEntity;
+    if (!entity) {
+      setLastAction(`${definition.name}: Die gewählte Wand ist zu kurz.`);
+      return;
+    }
+    if (definition.hostRequired && hostWall) {
+      const requiredWallHeight = (definition.sillHeight ?? 0) + definition.height + .15;
+      if (hostWall.height < requiredWallHeight) {
+        updateEntity(hostWall.id, { height: requiredWallHeight }, `Wandhöhe für ${definition.name} angepasst`);
+      }
+    }
     addEntityWithBim(entity, {
-      entityId: id,
+      entityId: entity.id,
       category: definition.category,
       classification: definition.classification,
       phase: "Neubau",
@@ -161,9 +185,14 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
       laborUnitPrice: 0,
       carbonKgPerUnit: definition.carbonKgPerUnit,
       maintenanceCycle: definition.maintenanceCycle,
-      custom: { objectDefinitionId: definition.id, objectType: definition.objectType, priceBasis: "editierbarer Planungsrichtwert netto" }
-    }, `${definition.name} aus Objektdatenbank platziert`);
-    setLastAction(`${definition.name} wurde zum Projekt hinzugefügt.`);
+      custom: {
+        objectDefinitionId: definition.id,
+        objectType: definition.objectType,
+        priceBasis: "editierbarer Planungsrichtwert netto",
+        ...(definition.hostRequired && hostWall ? { hostWallId: hostWall.id, hostWallName: hostWall.name, sillHeight: definition.sillHeight ?? 0 } : {})
+      }
+    }, definition.hostRequired && hostWall ? `${definition.name} in ${hostWall.name} eingesetzt` : `${definition.name} aus Objektdatenbank platziert`);
+    setLastAction(definition.hostRequired && hostWall ? `${definition.name} wurde in ${hostWall.name} eingesetzt.` : `${definition.name} wurde zum Projekt hinzugefügt.`);
   }
 
   function addConstruction(definitionId: string) {
@@ -297,7 +326,7 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
   return (
     <aside className="libraryPanel objectDatabasePanel libraryWorkspace" id="objektdatenbank" aria-label="Professional Library">
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 7 · Vollseiten-Datenbank</span><h3>Professional Library</h3></div>
+        <div><span className="eyebrow">V3.1 Alpha 8 · Vollseiten-Datenbank</span><h3>Professional Library</h3></div>
         <div className="libraryHeadingActions">
           <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
           <Link className="libraryBackLink" href="/">← Zurück zum Studio</Link>
@@ -332,7 +361,7 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
                 <strong>{item.name}</strong>
                 <small>{item.category} · {item.width} × {item.depth} × {item.height} m</small>
                 <em>{item.unitPrice.toLocaleString("de-DE")} € · {item.classification}</em>
-                <span className="libraryCardAction">＋ Zum Projekt hinzufügen</span>
+                <span className="libraryCardAction">{item.hostRequired ? "＋ In gewählte Wand einsetzen" : "＋ Zum Projekt hinzufügen"}</span>
               </button>
             ))}
           </div>

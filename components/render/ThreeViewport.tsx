@@ -6,6 +6,7 @@ import { MATERIAL_CATALOG } from "@/data/materials/catalog";
 import { useProjectStore } from "@/stores/projectStore";
 import { elevationAt } from "@/engines/terrain/terrainEngine";
 import { definitionForEntity, growthFactor } from "@/engines/plants/plantIntelligence";
+import { hostedOpeningsForSegment } from "@/core/cad/openings";
 import type { CadEntity, PlantDefinition, Vec2 } from "@/types/domain";
 
 function materialDefinition(entity: CadEntity) {
@@ -43,7 +44,7 @@ function createEntityMaterial(
   });
 }
 
-function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec2) {
+function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec2, openings: CadEntity[] = []) {
   const dx = end.x - start.x;
   const dz = end.y - start.y;
   const length = Math.hypot(dx, dz);
@@ -59,6 +60,33 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
   const angle = -Math.atan2(dz, dx);
   const centerX = (start.x + end.x) / 2;
   const centerZ = (start.y + end.y) / 2;
+  const cuts = openings.map(opening => {
+    const center = Math.min(length, Math.max(0, Number(opening.metadata?.hostOffsetRatio ?? .5) * length));
+    return {
+      opening,
+      from: Math.max(0, center - opening.width / 2),
+      to: Math.min(length, center + opening.width / 2)
+    };
+  }).filter(cut => cut.to - cut.from > .02).sort((a, b) => a.from - b.from);
+  const mergedCuts = cuts.reduce<Array<{ from: number; to: number }>>((merged, cut) => {
+    const previous = merged[merged.length - 1];
+    if (previous && cut.from <= previous.to) previous.to = Math.max(previous.to, cut.to);
+    else merged.push({ from: cut.from, to: cut.to });
+    return merged;
+  }, []);
+  const solidRanges: Array<{ from: number; to: number }> = [];
+  let cursor = 0;
+  for (const cut of mergedCuts) {
+    if (cut.from > cursor + .01) solidRanges.push({ from: cursor, to: cut.from });
+    cursor = Math.max(cursor, cut.to);
+  }
+  if (cursor < length - .01) solidRanges.push({ from: cursor, to: length });
+  const pointAtDistance = (value: number): Vec2 => ({ x: start.x + dx * value / length, y: start.y + dz * value / length });
+
+  if (cuts.length > 0 && (isHedge || isFence)) {
+    for (const range of solidRanges) addSegment(group, entity, pointAtDistance(range.from), pointAtDistance(range.to));
+    return;
+  }
 
   if (isHedge) {
     const segments = Math.max(2, Math.ceil(length / 0.65));
@@ -105,6 +133,29 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
   }
 
   const material = createEntityMaterial(entity, materialColor(entity), materialDefinition(entity) ? {} : { roughness: isWall ? .88 : .95 });
+  if (cuts.length > 0 && isWall) {
+    const addWallPiece = (from: number, to: number, bottom: number, top: number) => {
+      const pieceLength = to - from;
+      const pieceHeight = top - bottom;
+      if (pieceLength < .015 || pieceHeight < .015) return;
+      const centerDistance = (from + to) / 2;
+      const center = pointAtDistance(centerDistance);
+      const piece = new THREE.Mesh(new THREE.BoxGeometry(pieceLength, pieceHeight, width), material);
+      piece.position.set(center.x, bottom + pieceHeight / 2, center.y);
+      piece.rotation.y = angle;
+      piece.castShadow = true;
+      piece.receiveShadow = true;
+      group.add(piece);
+    };
+    for (const range of solidRanges) addWallPiece(range.from, range.to, 0, height);
+    for (const cut of cuts) {
+      const sill = Math.min(height, Math.max(0, Number(cut.opening.metadata?.sillHeight ?? 0)));
+      const openingTop = Math.min(height, sill + Math.max(.04, cut.opening.height));
+      addWallPiece(cut.from, cut.to, 0, sill);
+      addWallPiece(cut.from, cut.to, openingTop, height);
+    }
+    return;
+  }
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(length, height, width), material);
   mesh.position.set(centerX, height / 2, centerZ);
   mesh.rotation.y = angle;
@@ -116,13 +167,14 @@ function addSegment(group: THREE.Group, entity: CadEntity, start: Vec2, end: Vec
 function addCatalogObject(group: THREE.Group, entity: CadEntity, y: number, selected: boolean) {
   const objectType = String(entity.metadata?.objectType ?? "");
   if (!objectType) return false;
+  const architectureOpening = entity.metadata?.architectureOpening === true;
   const color = selected ? "#d9a05e" : materialColor(entity);
   const material = createEntityMaterial(entity, color);
   const dark = new THREE.MeshStandardMaterial({ color: "#3d312b", roughness: .82 });
   const lightMaterial = new THREE.MeshStandardMaterial({ color: "#ffd77a", emissive: "#ffbd54", emissiveIntensity: 1.8, roughness: .25 });
   const root = new THREE.Group();
   root.position.set(entity.position.x, y, entity.position.y);
-  root.rotation.y = THREE.MathUtils.degToRad(entity.rotation);
+  root.rotation.y = THREE.MathUtils.degToRad(architectureOpening ? -entity.rotation : entity.rotation);
 
   const box = (w: number, h: number, d: number, x = 0, py = h / 2, z = 0, use = material) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(Math.max(.03, w), Math.max(.03, h), Math.max(.03, d)), use);
@@ -140,6 +192,34 @@ function addCatalogObject(group: THREE.Group, entity: CadEntity, y: number, sele
     root.add(mesh);
     return mesh;
   };
+
+  if (architectureOpening) {
+    const frameWidth = Math.min(.09, Math.max(.045, entity.width * .055));
+    const frameDepth = Math.max(.05, entity.depth * .82);
+    const glass = new THREE.MeshStandardMaterial({ color: "#89b8c8", roughness: .14, metalness: .02, transparent: true, opacity: .42 });
+    const frame = selected ? createEntityMaterial(entity, "#d9a05e") : dark;
+    box(frameWidth, entity.height, frameDepth, -entity.width / 2 + frameWidth / 2, entity.height / 2, 0, frame);
+    box(frameWidth, entity.height, frameDepth, entity.width / 2 - frameWidth / 2, entity.height / 2, 0, frame);
+    box(entity.width, frameWidth, frameDepth, 0, entity.height - frameWidth / 2, 0, frame);
+    if (objectType === "window") {
+      box(entity.width - frameWidth * 2.2, entity.height - frameWidth * 2.2, .028, 0, entity.height / 2, 0, glass);
+      box(frameWidth, entity.height - frameWidth * 2, .05, 0, entity.height / 2, 0, frame);
+    } else if (objectType === "sliding-door") {
+      box(entity.width * .52, entity.height - frameWidth * 2.2, .035, -entity.width * .22, entity.height / 2, -.025, glass);
+      box(entity.width * .52, entity.height - frameWidth * 2.2, .035, entity.width * .22, entity.height / 2, .025, glass);
+      box(frameWidth, entity.height - frameWidth * 2, .06, 0, entity.height / 2, 0, frame);
+    } else if (objectType === "door") {
+      box(entity.width - frameWidth * 2.3, entity.height - frameWidth * 1.5, .055, 0, (entity.height - frameWidth * 1.5) / 2, .035, material);
+      const handle = new THREE.Mesh(new THREE.SphereGeometry(.035, 12, 9), new THREE.MeshStandardMaterial({ color: "#b89b62", metalness: .8, roughness: .25 }));
+      handle.position.set(entity.metadata?.hingeSide === "right" ? -entity.width * .3 : entity.width * .3, entity.height * .48, .08);
+      root.add(handle);
+    } else if (objectType === "gate") {
+      for (let index = -4; index <= 4; index += 1) box(.035, entity.height * .92, .035, index * entity.width / 9, entity.height * .46, 0, material);
+      for (const py of [entity.height * .25, entity.height * .7]) box(entity.width - frameWidth * 2, .05, .05, 0, py, 0, material);
+    }
+    group.add(root);
+    return true;
+  }
 
   if (["bench", "sofa", "chair", "lounger"].includes(objectType)) {
     box(entity.width, Math.max(.12, entity.height * .16), entity.depth, 0, entity.height * .48);
@@ -410,7 +490,7 @@ export function ThreeViewport() {
       if (entity.shape === "line" || entity.shape === "polyline") {
         entityGroup.position.y = baseY;
         for (let index = 1; index < entity.points.length; index += 1) {
-          addSegment(entityGroup, entity, entity.points[index - 1], entity.points[index]);
+          addSegment(entityGroup, entity, entity.points[index - 1], entity.points[index], hostedOpeningsForSegment(entities, entity.id, index - 1));
         }
         finishEntity();
         continue;

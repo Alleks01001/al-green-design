@@ -80,7 +80,7 @@ export function LayerDimensionPanel() {
   return (
     <section className="layerDimensionPanel" id="layer-dimensions">
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 7</span><h3>Ebenen & Bemaßung</h3></div>
+        <div><span className="eyebrow">V3.1 Alpha 8</span><h3>Ebenen & Bemaßung</h3></div>
         <span>{store.layers.length}</span>
       </div>
 

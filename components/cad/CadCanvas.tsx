@@ -28,7 +28,7 @@ const TOOL_HELP: Record<string, string> = {
   pentagon: "Mittelpunkt und Größe des Fünfecks setzen",
   hexagon: "Mittelpunkt und Größe des Sechsecks setzen",
   star: "Mittelpunkt und Größe des Sterns setzen",
-  wall: "Startpunkt und Endpunkt der Mauer setzen",
+  wall: "Startpunkt und Endpunkt der Wand oder Mauer setzen",
   fence: "Startpunkt und Endpunkt des Zauns setzen",
   hedge: "Startpunkt und Endpunkt der Hecke setzen",
   path: "Startpunkt und Endpunkt des Weges setzen",
@@ -340,7 +340,7 @@ export function CadCanvas() {
         id: makeId(objectType),
         kind: "wall",
         shape: "line",
-        name: isFence ? "Neuer Zaun" : isHedge ? "Neue Hecke" : "Neue Mauer",
+        name: isFence ? "Neuer Zaun" : isHedge ? "Neue Hecke" : "Neue Wand/Mauer",
         points: [first, point],
         position: midpoint,
         width: isFence ? .1 : isHedge ? .55 : .25,
@@ -695,6 +695,63 @@ export function CadCanvas() {
           fallbackColor={baseStroke}
           onPointerDown={event => handleEntityPointerDown(event, entity)}
         />
+      );
+    }
+
+    if (entity.metadata?.architectureOpening === true) {
+      const x = entity.position.x * BASE_SCALE;
+      const y = entity.position.y * BASE_SCALE;
+      const width = entity.width * BASE_SCALE;
+      const depth = Math.max(.12, entity.depth) * BASE_SCALE;
+      const objectType = String(entity.metadata?.objectType ?? "opening");
+      const hingeRight = entity.metadata?.hingeSide === "right";
+      const openAngle = Math.min(120, Math.max(0, Number(entity.metadata?.openAngle ?? 90)));
+      const angleRadians = openAngle * Math.PI / 180;
+      const doorEndX = -width / 2 + Math.cos(angleRadians) * width;
+      const doorEndY = Math.sin(angleRadians) * width;
+      return (
+        <g
+          key={entity.id}
+          data-layer-id={entity.layerId}
+          data-layer-printable={printable ? "true" : "false"}
+          transform={`translate(${x} ${y}) rotate(${entity.rotation})`}
+          onPointerDown={event => handleEntityPointerDown(event, entity)}
+          className={locked ? "cadEntity locked architectureOpening2d" : "cadEntity architectureOpening2d"}
+          opacity={opacity}
+        >
+          <rect x={-width / 2} y={-depth / 2} width={width} height={depth} fill="#f5f1f1" stroke={selected ? "#ffb84d" : "#5e2a38"} strokeWidth={selected ? 4 / zoom : 1.6 / zoom} />
+          {objectType === "window" && (
+            <>
+              <line x1={-width / 2} y1={-depth * .22} x2={width / 2} y2={-depth * .22} stroke="#4e8092" strokeWidth={2 / zoom} />
+              <line x1={-width / 2} y1={depth * .22} x2={width / 2} y2={depth * .22} stroke="#4e8092" strokeWidth={2 / zoom} />
+              <line x1={0} y1={-depth / 2} x2={0} y2={depth / 2} stroke="#4e8092" strokeWidth={1.3 / zoom} />
+            </>
+          )}
+          {objectType === "sliding-door" && (
+            <>
+              <line x1={-width / 2} y1={-depth * .2} x2={width * .12} y2={-depth * .2} stroke="#4e8092" strokeWidth={3 / zoom} />
+              <line x1={-width * .12} y1={depth * .2} x2={width / 2} y2={depth * .2} stroke="#4e8092" strokeWidth={3 / zoom} />
+              <path d={`M ${-width * .06} ${-depth * .42} l ${width * .12} ${depth * .42} l ${-width * .12} ${depth * .42}`} fill="none" stroke="#4e8092" strokeWidth={1.2 / zoom} />
+            </>
+          )}
+          {objectType === "door" && (
+            <g transform={hingeRight ? "scale(-1 1)" : undefined}>
+              <line x1={-width / 2} y1={0} x2={doorEndX} y2={doorEndY} stroke="#6d3c2d" strokeWidth={3 / zoom} />
+              {openAngle > 0 && <path d={`M ${width / 2} 0 A ${width} ${width} 0 0 1 ${doorEndX} ${doorEndY}`} fill="none" stroke="#a47b68" strokeWidth={1.2 / zoom} strokeDasharray={`${5 / zoom} ${4 / zoom}`} />}
+            </g>
+          )}
+          {objectType === "gate" && (
+            <>
+              <line x1={-width / 2} y1={0} x2={0} y2={depth * 1.8} stroke="#53565b" strokeWidth={3 / zoom} />
+              <line x1={width / 2} y1={0} x2={0} y2={depth * 1.8} stroke="#53565b" strokeWidth={3 / zoom} />
+            </>
+          )}
+          {objectType === "opening" && <line x1={-width / 2} y1={0} x2={width / 2} y2={0} stroke="#9a5265" strokeWidth={2 / zoom} strokeDasharray={`${8 / zoom} ${5 / zoom}`} />}
+          <line x1={-width / 2} y1={-depth * .75} x2={-width / 2} y2={depth * .75} stroke={stroke} strokeWidth={2.2 / zoom} />
+          <line x1={width / 2} y1={-depth * .75} x2={width / 2} y2={depth * .75} stroke={stroke} strokeWidth={2.2 / zoom} />
+          <text y={-depth / 2 - 7 / zoom} textAnchor="middle" fontSize={10 / zoom} fill="#51202d" className="entityLabel">{entity.name}</text>
+          {showDimensions && <DimensionLabel point={{ x: 0, y: depth / 2 + 15 / zoom }} text={`${roundMetric(entity.width)} m`} zoom={zoom} local />}
+        </g>
       );
     }
 

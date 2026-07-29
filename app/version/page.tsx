@@ -53,6 +53,12 @@ export default function VersionPage() {
         <li>Objektbezogener Z-Versatz zusätzlich zur Ebenenhöhe; Bauteilhöhe bleibt unabhängig editierbar</li>
         <li>Höhenrichtige Platzierung von Pflanzen, Linien, Mauern, Flächen, Gebäuden und Bibliotheksobjekten in 3D</li>
         <li>Klickbare Front- und Seitenansicht mit Geländeprofil, Höhenraster, Ebenenlinien und synchroner Auswahl</li>
+        <li>Eigener Architektur-Bauteilkern für Türen, Fenster, Hebeschiebetüren, Tore und freie Durchgänge</li>
+        <li>Öffnungen werden an eine ausgewählte Wand gekoppelt und über ihre Wandposition präzise eingesetzt</li>
+        <li>Beim Verschieben oder Drehen einer Wand folgen alle gekoppelten Architekturbauteile automatisch</li>
+        <li>Echte 3D-Wandaussparungen mit verbleibenden Wandteilen neben, unter und oberhalb der Öffnung</li>
+        <li>Editierbare Brüstungshöhe, Türanschlag und Öffnungswinkel im Eigenschaften-Inspektor</li>
+        <li>Architekturbauteile sind zusätzlich in der Professional Library verfügbar</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>

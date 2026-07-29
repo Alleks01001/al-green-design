@@ -3,7 +3,7 @@ export type Vec2 = { x: number; y: number };
 export type Vec3 = { x: number; y: number; z: number };
 
 export type EntityKind =
-  | "surface" | "wall" | "path" | "plant" | "water" | "building" | "furniture" | "annotation";
+  | "surface" | "wall" | "path" | "plant" | "water" | "building" | "opening" | "furniture" | "annotation";
 export type CadShape = "rectangle" | "line" | "polyline" | "circle" | "ellipse" | "polygon" | "symbol";
 export type CadTool =
   | "select" | "pan" | "move"

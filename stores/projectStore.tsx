@@ -11,6 +11,7 @@ import {
 } from "react";
 import { distance, entitiesBounds, entityCenter, makeId, transformEntityAround, translateEntity } from "@/core/cad/geometry";
 import { mirrorEntity, offsetEntity, polarTransformEntity, trimOrExtendLine, type LineEditMode, type MirrorAxis } from "@/core/cad/modify";
+import { isHostedOpening, moveHostedOpening, syncHostedOpenings } from "@/core/cad/openings";
 import { applyTerrainPreset, createTerrainGrid } from "@/engines/terrain/terrainEngine";
 import type {
   CadEntity,
@@ -297,7 +298,7 @@ export function createNewProjectState(options: NewProjectOptions): ProjectState 
     laborUnitPrice: 0,
     carbonKgPerUnit: 0,
     maintenanceCycle: "keine",
-    custom: { widthM: width, depthM: depth, generatedBy: "Projektassistent Alpha 7" }
+    custom: { widthM: width, depthM: depth, generatedBy: "Projektassistent Alpha 8" }
   }] : [];
   project.blockDefinitions = [];
   project.planReference = undefined;
@@ -320,7 +321,7 @@ export function createNewProjectState(options: NewProjectOptions): ProjectState 
 
 function refreshDynamicConnections(entities: CadEntity[]) {
   const byId = new Map(entities.map(entity => [entity.id, entity]));
-  return entities.map(entity => {
+  const connected = entities.map(entity => {
     const startId = typeof entity.metadata?.connectionStartId === "string" ? entity.metadata.connectionStartId : undefined;
     const endId = typeof entity.metadata?.connectionEndId === "string" ? entity.metadata.connectionEndId : undefined;
     if (!startId || !endId) return entity;
@@ -336,6 +337,7 @@ function refreshDynamicConnections(entities: CadEntity[]) {
       depth: distance(start, end)
     };
   });
+  return syncHostedOpenings(connected);
 }
 
 function cloneProject(project: ProjectState): ProjectState {
@@ -577,7 +579,14 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         if (Math.abs(delta.x) < 0.0001 && Math.abs(delta.y) < 0.0001) return;
         const idSet = new Set(ids);
         commit(label, current => {
-          const entities = current.entities.map(entity => idSet.has(entity.id) ? translateEntity(entity, delta) : entity);
+          const entities = current.entities.map(entity => {
+            if (!idSet.has(entity.id)) return entity;
+            if (!isHostedOpening(entity)) return translateEntity(entity, delta);
+            const hostWallId = typeof entity.metadata?.hostWallId === "string" ? entity.metadata.hostWallId : undefined;
+            return hostWallId && idSet.has(hostWallId)
+              ? entity
+              : moveHostedOpening(entity, delta, current.entities);
+          });
           return { ...current, entities: refreshDynamicConnections(entities) };
         });
       },
@@ -585,7 +594,12 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         if (project.selectedIds.length === 0) return;
         const selected = new Set(project.selectedIds);
         commit("Auswahl gelöscht", current => {
-          const kept = current.entities.filter(entity => !selected.has(entity.id) || entity.locked);
+          const removedIds = new Set(current.entities.filter(entity => selected.has(entity.id) && !entity.locked).map(entity => entity.id));
+          for (const entity of current.entities) {
+            const hostWallId = typeof entity.metadata?.hostWallId === "string" ? entity.metadata.hostWallId : undefined;
+            if (hostWallId && removedIds.has(hostWallId) && !entity.locked) removedIds.add(entity.id);
+          }
+          const kept = current.entities.filter(entity => !removedIds.has(entity.id));
           const keptIds = new Set(kept.map(entity => entity.id));
           const entities = kept.filter(entity => {
             const startId = typeof entity.metadata?.connectionStartId === "string" ? entity.metadata.connectionStartId : undefined;
@@ -595,7 +609,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
           return {
             ...current,
             entities: refreshDynamicConnections(entities),
-            bim: current.bim.filter(item => !selected.has(item.entityId)),
+            bim: current.bim.filter(item => !removedIds.has(item.entityId)),
             selectedIds: []
           };
         });
@@ -624,6 +638,11 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
             const oldEndId = typeof metadata.connectionEndId === "string" ? metadata.connectionEndId : undefined;
             if (oldStartId && idMap.has(oldStartId)) metadata.connectionStartId = idMap.get(oldStartId)!;
             if (oldEndId && idMap.has(oldEndId)) metadata.connectionEndId = idMap.get(oldEndId)!;
+            const oldHostWallId = typeof metadata.hostWallId === "string" ? metadata.hostWallId : undefined;
+            if (oldHostWallId && idMap.has(oldHostWallId)) metadata.hostWallId = idMap.get(oldHostWallId)!;
+            if (metadata.architectureOpening === true && !idMap.has(oldHostWallId ?? "")) {
+              metadata.hostOffsetRatio = Math.min(.95, Number(metadata.hostOffsetRatio ?? .5) + .1);
+            }
             return { ...copy, id: idMap.get(entity.id)!, name: `${entity.name} Kopie`, metadata, locked: false };
           });
           const duplicateBim = current.bim.flatMap(item => {

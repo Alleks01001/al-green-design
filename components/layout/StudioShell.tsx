@@ -7,6 +7,7 @@ import { DetailToolsPanel } from "@/components/cad/DetailToolsPanel";
 import { ProfessionalCadPanel } from "@/components/cad/ProfessionalCadPanel";
 import { LayerDimensionPanel } from "@/components/cad/LayerDimensionPanel";
 import { AdvancedModifyPanel } from "@/components/cad/AdvancedModifyPanel";
+import { ArchitectureOpeningsPanel } from "@/components/architecture/ArchitectureOpeningsPanel";
 import { ThreeViewport } from "@/components/render/ThreeViewport";
 import { ElevationViewport } from "@/components/render/ElevationViewport";
 import { RenderSettingsPanel } from "@/components/render/RenderSettingsPanel";
@@ -33,7 +34,7 @@ const tools: Array<{ id: CadTool; label: string; icon: string }> = [
   { id: "circle", label: "Kreis", icon: "○" },
   { id: "ellipse", label: "Ellipse", icon: "⬭" },
   { id: "polygon", label: "Polygon", icon: "⬡" },
-  { id: "wall", label: "Mauer", icon: "▥" },
+  { id: "wall", label: "Wand/Mauer", icon: "▥" },
   { id: "path", label: "Weg", icon: "⌁" },
   { id: "terrace", label: "Terrasse", icon: "▤" },
   { id: "bed", label: "Beet", icon: "▧" },
@@ -161,7 +162,7 @@ export function StudioShell() {
         <div className="newProjectOverlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setNewProjectOpen(false); }}>
           <form className="newProjectDialog" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onSubmit={submitNewProject}>
             <div className="newProjectHeading">
-              <div><span>Projektassistent · Alpha 7</span><h2 id="new-project-title">Neues Projekt erstellen</h2></div>
+              <div><span>Projektassistent · Alpha 8</span><h2 id="new-project-title">Neues Projekt erstellen</h2></div>
               <button type="button" aria-label="Dialog schließen" onClick={() => setNewProjectOpen(false)}>×</button>
             </div>
             <p>Lege eine neue Zeichenfläche an. Das Grundstück wird maßstäblich erzeugt und kann sofort weitergezeichnet werden.</p>
@@ -241,6 +242,7 @@ export function StudioShell() {
           <FoundationPanel />
           <MediaImportPanel />
           <ProfessionalCadPanel />
+          <ArchitectureOpeningsPanel />
           <LayerDimensionPanel />
           <AdvancedModifyPanel />
           <DetailToolsPanel />

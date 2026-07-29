@@ -49,7 +49,7 @@ function generatedEntity(entity: Omit<CadEntity, "id" | "visible" | "locked">): 
     visible: true,
     locked: false,
     ...entity,
-    metadata: { ...(entity.metadata ?? {}), generatedBy: "Garden AI Alpha 7" }
+    metadata: { ...(entity.metadata ?? {}), generatedBy: "Garden AI Alpha 8" }
   };
 }
 
@@ -196,7 +196,7 @@ export function interpretGardenCommand(command: string, project: ProjectState): 
     const style: GardenStyle = /naturnah|wild|ökologisch|oekologisch/.test(text) ? "natural" : /familie|kinder/.test(text) ? "family" : /pflegeleicht/.test(text) ? "low-maintenance" : "modern";
     const priority: DesignPriority = /biodivers|insekten|bienen|ökologisch|oekologisch/.test(text) ? "biodiversity" : /spiel|kinder/.test(text) ? "play" : /gäste|gaeste|party|essen/.test(text) ? "entertaining" : "relaxation";
     const concept = createGardenConcepts(project, { prompt: command, style, priority, budget: /premium|hochwertig/.test(text) ? "premium" : /günstig|guenstig|sparsam/.test(text) ? "compact" : "balanced", sunny: !/schatten|schattig/.test(text) })[0];
-    created.push(...concept.entities.map(entity => ({ ...entity, metadata: { ...(entity.metadata ?? {}), generatedBy: "Garden AI Alpha 7" } })));
+    created.push(...concept.entities.map(entity => ({ ...entity, metadata: { ...(entity.metadata ?? {}), generatedBy: "Garden AI Alpha 8" } })));
   }
 
   const terrainPreset = /hügel|huegel|modelliert/.test(text) ? "mound" : /mulde|senke|regengarten/.test(text) ? "swale" : /eben|flach/.test(text) ? "flat" : undefined;

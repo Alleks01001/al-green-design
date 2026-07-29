@@ -7,7 +7,8 @@ export type ObjectCategory =
   | "Beleuchtung"
   | "Freizeit"
   | "Ausstattung"
-  | "Architektur";
+  | "Architektur"
+  | "Öffnungen";
 
 export type ObjectDefinition = {
   id: Id;
@@ -29,6 +30,8 @@ export type ObjectDefinition = {
   keywords: string[];
   objectType: string;
   color?: string;
+  hostRequired?: boolean;
+  sillHeight?: number;
 };
 
 function item(
@@ -47,7 +50,9 @@ function item(
   keywords: string[] = [],
   carbonKgPerUnit = 10,
   maintenanceCycle: ObjectDefinition["maintenanceCycle"] = "jährlich",
-  unit: BimUnit = "Stk."
+  unit: BimUnit = "Stk.",
+  hostRequired = false,
+  sillHeight = 0
 ): ObjectDefinition {
   return {
     id,
@@ -67,7 +72,9 @@ function item(
     carbonKgPerUnit,
     maintenanceCycle,
     keywords,
-    objectType
+    objectType,
+    hostRequired,
+    sillHeight
   };
 }
 
@@ -128,6 +135,14 @@ export const OBJECT_CATALOG: ObjectDefinition[] = [
   item("obj-robot-station", "Mähroboter-Station", "Ausstattung", "⌂", "furniture", "rectangle", [.85, .7, .45], "mat-anthracite-metal", "layer-furniture", "AGD-81.60", 280, "robot-station", ["mähroboter", "rasen", "technik"]),
   item("obj-rock", "Findling", "Ausstattung", "◆", "furniture", "polygon", [1.4, 1, .7], "mat-natural-stone", "layer-site", "AGD-82.10", 480, "rock", ["stein", "findling", "deko"], 12, "keine"),
 
+  item("obj-door-entry", "Haustür 1,10 m", "Öffnungen", "🚪", "opening", "rectangle", [1.1, .18, 2.15], "mat-thermowood", "layer-building", "AGD-25.10", 3400, "door", ["tür", "haustür", "eingang", "anschlag"], 95, "jährlich", "Stk.", true, 0),
+  item("obj-door-interior", "Tür 90 cm", "Öffnungen", "▯", "opening", "rectangle", [.9, .14, 2.01], "mat-thermowood", "layer-building", "AGD-25.11", 980, "door", ["tür", "innentür", "durchgang", "anschlag"], 42, "jährlich", "Stk.", true, 0),
+  item("obj-sliding-door", "Hebeschiebetür 2,80 m", "Öffnungen", "▥", "opening", "rectangle", [2.8, .2, 2.25], "mat-glass", "layer-building", "AGD-25.20", 7800, "sliding-door", ["schiebetür", "glas", "terrasse", "öffnung"], 220, "jährlich", "Stk.", true, 0),
+  item("obj-window-standard", "Fenster 1,20 × 1,35 m", "Öffnungen", "▣", "opening", "rectangle", [1.2, .18, 1.35], "mat-glass", "layer-building", "AGD-26.10", 1250, "window", ["fenster", "glas", "brüstung", "fassade"], 58, "jährlich", "Stk.", true, .9),
+  item("obj-window-full-height", "Fenster bodentief 1,20 m", "Öffnungen", "▥", "opening", "rectangle", [1.2, .18, 2.25], "mat-glass", "layer-building", "AGD-26.20", 1950, "window", ["fenster", "bodentief", "glas", "fassade"], 82, "jährlich", "Stk.", true, 0),
+  item("obj-garage-gate", "Garagentor 2,50 m", "Öffnungen", "▤", "opening", "rectangle", [2.5, .22, 2.25], "mat-anthracite-metal", "layer-building", "AGD-27.10", 4200, "gate", ["tor", "garage", "sektionaltor", "öffnung"], 180, "jährlich", "Stk.", true, 0),
+  item("obj-wall-opening", "Freier Durchgang 1,20 m", "Öffnungen", "⬚", "opening", "rectangle", [1.2, .18, 2.2], undefined, "layer-building", "AGD-27.20", 480, "opening", ["durchgang", "öffnung", "aussparung", "wand"], 12, "keine", "Stk.", true, 0),
+
   item("obj-wintergarden", "Wintergarten", "Architektur", "⌂", "building", "rectangle", [4, 3, 2.8], "mat-glass", "layer-building", "AGD-21.10", 28500, "wintergarden", ["wintergarten", "glas", "haus"], 920),
   item("obj-balcony", "Balkon", "Architektur", "▱", "building", "rectangle", [3.5, 1.8, .2], "mat-concrete", "layer-building", "AGD-21.20", 9200, "balcony", ["balkon", "haus", "terrasse"], 480),
   item("obj-railing", "Geländer 3 m", "Architektur", "╫", "wall", "line", [3, .1, 1.05], "mat-anthracite-metal", "layer-building", "AGD-21.30", 960, "railing", ["geländer", "absturz", "metall"], 58, "mehrjährig", "m"),
@@ -142,5 +157,8 @@ export const OBJECT_CATEGORIES: ObjectCategory[] = [
   "Beleuchtung",
   "Freizeit",
   "Ausstattung",
-  "Architektur"
+  "Architektur",
+  "Öffnungen"
 ];
+
+export const ARCHITECTURE_OPENING_CATALOG = OBJECT_CATALOG.filter(item => item.hostRequired);

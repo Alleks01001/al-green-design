@@ -157,6 +157,21 @@ export function ElevationViewport({ direction }: { direction: ElevationDirection
             const height = Math.max(3, mapY(base) - y);
             const selected = selectedIds.includes(entity.id);
             const color = objectColor(entity);
+            if (entity.metadata?.architectureOpening === true) {
+              const objectType = String(entity.metadata?.objectType ?? "opening");
+              const openingFill = objectType === "window" || objectType === "sliding-door"
+                ? "#a9d2df"
+                : objectType === "opening" ? "#f6f1ef" : objectType === "gate" ? "#687177" : "#9a7257";
+              return (
+                <g key={entity.id} className={`elevationOpening${selected ? " selected" : ""}`} onClick={event => selectEntity(event, entity.id)}>
+                  <rect x={x} y={y} width={width} height={height} fill={openingFill} />
+                  <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} />
+                  {(objectType === "window" || objectType === "sliding-door") && <line x1={x} y1={y + height / 2} x2={x + width} y2={y + height / 2} />}
+                  {objectType === "gate" && Array.from({ length: 5 }, (_, index) => <line key={index} x1={x + width * (index + 1) / 6} y1={y} x2={x + width * (index + 1) / 6} y2={y + height} />)}
+                  <text x={x + width / 2} y={Math.max(originY + 12, y - 7)} textAnchor="middle">{entity.name}</text>
+                </g>
+              );
+            }
             if (entity.kind === "plant") {
               const centerX = x + width / 2;
               const crownHeight = Math.max(height * .58, 8);

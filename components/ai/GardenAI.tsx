@@ -67,7 +67,7 @@ export function GardenAI() {
   return (
     <section className="aiPanel">
       <div className="panelHeading">
-        <div><span className="eyebrow">Intelligence · Alpha 7</span><h3>Garden-KI</h3></div>
+        <div><span className="eyebrow">Intelligence · Alpha 8</span><h3>Garden-KI</h3></div>
         <span className="aiStatus">{mode}</span>
       </div>
       <textarea value={command} onChange={event => setCommand(event.target.value)} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void execute(); }} aria-label="Garden-KI-Befehl" placeholder="Zum Beispiel: Moderner Garten mit Pool, Pergola, Weg und fünf Bäumen …" />

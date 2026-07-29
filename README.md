@@ -2,7 +2,7 @@
 
 Professionelle Garten-, Landschafts- und Außenanlagenplanung mit CAD, BIM, Terrain, Pflanzenintelligenz, Rendering, KI-Designer, Planimport, Video → 3D und Scan/LiDAR.
 
-## V3.1 Professional CAD Alpha 7
+## V3.1 Professional CAD Alpha 8
 
 Diese Version erweitert die stabile V3.0-Codebasis um:
 
@@ -49,10 +49,17 @@ Diese Version erweitert die stabile V3.0-Codebasis um:
 - frei editierbarer Z-Versatz je Objekt zusätzlich zur Ebenenhöhe
 - höhenrichtige 3D-Platzierung aller unterstützten Objektarten
 - klickbare Front- und Seitenansicht mit Geländeprofil, Höhenraster und Ebenenlinien
+- eigener Architektur-Bauteilkern für Türen, Fenster, Hebeschiebetüren, Tore und freie Durchgänge
+- Öffnungen werden über eine Wandposition in Prozent direkt in eine ausgewählte Wand eingesetzt
+- gekoppelte Bauteile folgen automatisch, wenn ihre Wand verschoben oder gedreht wird
+- echte 3D-Wandaussparungen statt lediglich aufgesetzter Symbole
+- Anschlag, Öffnungswinkel und Brüstungshöhe sind im Eigenschaften-Inspektor editierbar
+- sieben zusätzliche Architekturbauteile in der Professional Library
+- synchrone Darstellung und Auswahl in 2D, 3D, Front- und Seitenansicht
 - weiterhin PDF-Planimport, PDF-Planexport und leerer Projektneustart
 - fixierte obere Werkzeugleiste und unabhängig scrollbare Seitenbereiche
 
-- Version: `3.1.0-alpha.7`
+- Version: `3.1.0-alpha.8`
 - Projektschema: `3.1-alpha.4`
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`
