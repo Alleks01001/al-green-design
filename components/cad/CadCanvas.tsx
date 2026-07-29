@@ -886,6 +886,7 @@ export function CadCanvas() {
       <div className="cadHud cadHudRight">
         <span>Zoom {Math.round(zoom * 100)} %</span>
         <span>Layer {activeLayer?.name ?? "–"}</span>
+        <span>Höhe {(activeLayer?.elevation ?? 0) >= 0 ? "+" : "−"}{Math.abs(activeLayer?.elevation ?? 0).toFixed(2)} m</span>
       </div>
       {(activeTool === "polyline" || activeTool === "polygon") && draftPoints.length >= 2 && (
         <div className="draftActions">

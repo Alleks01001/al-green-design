@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { distance, entityCenter, makeId } from "@/core/cad/geometry";
 import { useProjectStore } from "@/stores/projectStore";
 import type { CadEntity, DimensionMode, DimensionUnit } from "@/types/domain";
@@ -19,6 +19,8 @@ const DIMENSION_UNITS: Array<{ id: DimensionUnit; label: string }> = [
 
 export function LayerDimensionPanel() {
   const store = useProjectStore();
+  const [levelName, setLevelName] = useState("Neue Ebene");
+  const [levelElevation, setLevelElevation] = useState(0);
   const selected = useMemo(
     () => store.entities.filter(entity => store.selectedIds.includes(entity.id)),
     [store.entities, store.selectedIds]
@@ -28,6 +30,12 @@ export function LayerDimensionPanel() {
     for (const entity of store.entities) counts.set(entity.layerId, (counts.get(entity.layerId) ?? 0) + 1);
     return counts;
   }, [store.entities]);
+
+  function createLevel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    store.addLayer(levelName, levelElevation);
+    setLevelName("Neue Ebene");
+  }
 
   function createAssociativeDimension() {
     if (selected.length !== 2) return;
@@ -72,7 +80,7 @@ export function LayerDimensionPanel() {
   return (
     <section className="layerDimensionPanel" id="layer-dimensions">
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 2</span><h3>Layer & Bemaßung</h3></div>
+        <div><span className="eyebrow">V3.1 Alpha 7</span><h3>Ebenen & Bemaßung</h3></div>
         <span>{store.layers.length}</span>
       </div>
 
@@ -111,15 +119,26 @@ export function LayerDimensionPanel() {
       <p className="panelHint">Assoziative Maße folgen automatisch, wenn eines der beiden verknüpften Objekte verschoben wird.</p>
 
       <div className="layerHeadingRow">
-        <h4>Layer-Manager</h4>
-        <div><button type="button" onClick={() => store.addLayer()}>+ Layer</button><button type="button" onClick={store.showAllLayers}>Alle zeigen</button></div>
+        <h4>Ebenen-Manager</h4>
+        <div><button type="button" onClick={store.showAllLayers}>Alle zeigen</button></div>
+      </div>
+      <form className="levelCreator" onSubmit={createLevel}>
+        <label>Name<input value={levelName} maxLength={40} onChange={event => setLevelName(event.target.value)} /></label>
+        <label>Höhe Z<div><input type="number" min="-50" max="200" step="0.05" value={levelElevation} onChange={event => setLevelElevation(Number(event.target.value))} /><span>m</span></div></label>
+        <button type="submit">＋ Ebene</button>
+      </form>
+      <div className="levelPresets" aria-label="Höhenvorlagen">
+        <button type="button" onClick={() => store.addLayer("Terrasse", .45)}>Terrasse +0,45</button>
+        <button type="button" onClick={() => store.addLayer("Erdgeschoss", .30)}>EG +0,30</button>
+        <button type="button" onClick={() => store.addLayer("1. Obergeschoss", 3.20)}>1. OG +3,20</button>
+        <button type="button" onClick={() => store.addLayer("Pool", -1.20)}>Pool −1,20</button>
       </div>
 
       {selected.length > 0 && (
         <label className="selectionLayerMove">Auswahl ({selected.length}) auf Layer verschieben
           <select value="" onChange={event => event.target.value && store.moveSelectedToLayer(event.target.value)}>
             <option value="" disabled>Layer wählen …</option>
-            {store.layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
+            {store.layers.filter(layer => !layer.locked).map(layer => <option key={layer.id} value={layer.id}>{layer.name} · {layer.elevation >= 0 ? "+" : "−"}{Math.abs(layer.elevation).toFixed(2)} m</option>)}
           </select>
         </label>
       )}
@@ -129,7 +148,7 @@ export function LayerDimensionPanel() {
           const count = entityCountByLayer.get(layer.id) ?? 0;
           const active = store.activeLayerId === layer.id;
           return (
-            <article key={`${layer.id}:${layer.name}`} className={active ? "active" : ""}>
+            <article key={`${layer.id}:${layer.name}:${layer.elevation}`} className={active ? "active" : ""}>
               <button type="button" className="layerColorButton" disabled={layer.locked} title={layer.locked ? "Gesperrte Layer können nicht aktiv sein" : "Als aktiven Layer verwenden"} onClick={() => store.setActiveLayerId(layer.id)}>
                 <span style={{ background: layer.color }} />
               </button>
@@ -141,6 +160,9 @@ export function LayerDimensionPanel() {
                   onBlur={event => event.target.value.trim() && event.target.value.trim() !== layer.name && store.updateLayer(layer.id, { name: event.target.value.trim() })}
                 />
                 <small>{count} Objekte{active ? " · aktiv" : ""}</small>
+                <label className="layerElevationField">Höhe Z
+                  <span><input type="number" min="-50" max="200" step="0.05" defaultValue={layer.elevation} onBlur={event => store.updateLayer(layer.id, { elevation: Number(event.target.value) || 0 })} /><em>m</em></span>
+                </label>
                 <div className="layerOpacityRow">
                   <span>Deckkraft</span>
                   <input type="range" min="0.1" max="1" step="0.05" value={layer.opacity} onChange={event => store.updateLayer(layer.id, { opacity: Number(event.target.value) })} />
@@ -161,7 +183,7 @@ export function LayerDimensionPanel() {
           );
         })}
       </div>
-      <p className="panelHint">Sichtbarkeit, Sperre, PDF-Druck, Farbe, Deckkraft und Zeichenreihenfolge werden im Projekt gespeichert. Nicht druckbare Layer fehlen im PDF-Export.</p>
+      <p className="panelHint">Es wird immer auf der aktiven Ebene gezeichnet. Ihre Höhe wirkt sofort in 3D, Front- und Seitenansicht. Sichtbarkeit, Sperre, PDF-Druck, Farbe und Deckkraft bleiben im Projekt gespeichert.</p>
     </section>
   );
 }

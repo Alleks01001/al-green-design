@@ -1,0 +1,26 @@
+AL Green Design Studio 3.1 Levels & Elevations Alpha 7
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien überschreiben und „Commit changes“ wählen.
+
+Commit-Nachricht:
+AL Green Studio 3.1 Alpha 7 – Höhenebenen, Front- und Seitenansicht
+
+Kontrolle nach Vercel-Deployment:
+/version muss Paketversion 3.1.0-alpha.7 anzeigen.
+
+Funktionsprüfung im Studio:
+1. Im Bereich „Ebenen & Bemaßung“ beispielsweise „Terrasse +0,45“ wählen.
+2. Terrasse zeichnen oder ein vorhandenes Objekt auf diese Ebene verschieben.
+3. Oben „3D“, „Front“ und „Seite“ nacheinander öffnen.
+4. Das Objekt muss in allen Ansichten auf der eingestellten Höhe liegen.
+5. Objekt auswählen und rechts den Z-Versatz ändern.
+6. Front-, Seiten- und 3D-Ansicht müssen die Änderung sofort zeigen.
+7. Projekt als .algreen speichern, Seite neu laden und Speicherung kontrollieren.
+
+Garden-KI:
+- Mit OPENAI_API_KEY wird die Online-KI genutzt.
+- Ohne API-Schlüssel bleibt der lokale CAD-Generator aktiv.

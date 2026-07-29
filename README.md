@@ -2,7 +2,7 @@
 
 Professionelle Garten-, Landschafts- und Außenanlagenplanung mit CAD, BIM, Terrain, Pflanzenintelligenz, Rendering, KI-Designer, Planimport, Video → 3D und Scan/LiDAR.
 
-## V3.1 Professional CAD Alpha 6
+## V3.1 Professional CAD Alpha 7
 
 Diese Version erweitert die stabile V3.0-Codebasis um:
 
@@ -44,10 +44,15 @@ Diese Version erweitert die stabile V3.0-Codebasis um:
 - Garden-KI verwendet bei vorhandener Konfiguration die Online-KI und ansonsten automatisch einen lokalen CAD-Generator
 - freie Texte erzeugen immer sichtbare, ausgewählte und sofort bearbeitbare CAD-Objekte
 - der AI Garden Designer setzt die erste berechnete Variante unmittelbar in den Plan ein
+- frei benennbare Ebenen mit numerischen Höhen von −50,00 m bis +200,00 m
+- Ebenenvorlagen für Terrasse +0,45 m, EG +0,30 m, 1. OG +3,20 m und Pool −1,20 m
+- frei editierbarer Z-Versatz je Objekt zusätzlich zur Ebenenhöhe
+- höhenrichtige 3D-Platzierung aller unterstützten Objektarten
+- klickbare Front- und Seitenansicht mit Geländeprofil, Höhenraster und Ebenenlinien
 - weiterhin PDF-Planimport, PDF-Planexport und leerer Projektneustart
 - fixierte obere Werkzeugleiste und unabhängig scrollbare Seitenbereiche
 
-- Version: `3.1.0-alpha.6`
+- Version: `3.1.0-alpha.7`
 - Projektschema: `3.1-alpha.4`
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`

@@ -8,6 +8,7 @@ import { ProfessionalCadPanel } from "@/components/cad/ProfessionalCadPanel";
 import { LayerDimensionPanel } from "@/components/cad/LayerDimensionPanel";
 import { AdvancedModifyPanel } from "@/components/cad/AdvancedModifyPanel";
 import { ThreeViewport } from "@/components/render/ThreeViewport";
+import { ElevationViewport } from "@/components/render/ElevationViewport";
 import { RenderSettingsPanel } from "@/components/render/RenderSettingsPanel";
 import { GardenAI } from "@/components/ai/GardenAI";
 import { GardenDesignerPanel } from "@/components/ai/GardenDesignerPanel";
@@ -110,8 +111,9 @@ export function StudioShell() {
   async function exportPdfPlan() {
     const previousView = viewMode;
     const previousSelection = [...selectedIds];
+    const changedView = viewMode !== "2d" && viewMode !== "split";
     try {
-      if (viewMode === "3d") setViewMode("2d");
+      if (changedView) setViewMode("2d");
       if (selectedIds.length > 0) setSelectedIds([]);
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       await exportCadPlanToPdf(projectName);
@@ -120,7 +122,7 @@ export function StudioShell() {
       setFileMessage(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen");
     } finally {
       if (previousSelection.length > 0) setSelectedIds(previousSelection);
-      if (previousView === "3d") setViewMode(previousView);
+      if (changedView) setViewMode(previousView);
     }
   }
 
@@ -159,7 +161,7 @@ export function StudioShell() {
         <div className="newProjectOverlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setNewProjectOpen(false); }}>
           <form className="newProjectDialog" role="dialog" aria-modal="true" aria-labelledby="new-project-title" onSubmit={submitNewProject}>
             <div className="newProjectHeading">
-              <div><span>Projektassistent · Alpha 6</span><h2 id="new-project-title">Neues Projekt erstellen</h2></div>
+              <div><span>Projektassistent · Alpha 7</span><h2 id="new-project-title">Neues Projekt erstellen</h2></div>
               <button type="button" aria-label="Dialog schließen" onClick={() => setNewProjectOpen(false)}>×</button>
             </div>
             <p>Lege eine neue Zeichenfläche an. Das Grundstück wird maßstäblich erzeugt und kann sofort weitergezeichnet werden.</p>
@@ -226,9 +228,9 @@ export function StudioShell() {
           </div>
         </div>
         <div className="viewSwitch">
-          {(["2d", "3d", "split"] as const).map(mode => (
+          {(["2d", "3d", "front", "side", "split"] as const).map(mode => (
             <button key={mode} type="button" className={viewMode === mode ? "active" : ""} onClick={() => setViewMode(mode)}>
-              {mode === "split" ? "2D + 3D" : mode.toUpperCase()}
+              {mode === "split" ? "2D + 3D" : mode === "front" ? "Front" : mode === "side" ? "Seite" : mode.toUpperCase()}
             </button>
           ))}
         </div>
@@ -252,6 +254,8 @@ export function StudioShell() {
         <div className={`workspace view-${viewMode}`}>
           {(viewMode === "2d" || viewMode === "split") && <CadCanvas key={`cad-${projectId}`} />}
           {(viewMode === "3d" || viewMode === "split") && <ThreeViewport key={`three-${projectId}`} />}
+          {viewMode === "front" && <ElevationViewport direction="front" />}
+          {viewMode === "side" && <ElevationViewport direction="side" />}
         </div>
         <BimInspector />
       </section>

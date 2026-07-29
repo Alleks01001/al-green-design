@@ -87,7 +87,7 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
     return (
       <aside className="libraryLauncherPanel" id="objektdatenbank">
         <div className="panelHeading">
-          <div><span className="eyebrow">V3.1 Alpha 6</span><h3>Professional Library</h3></div>
+          <div><span className="eyebrow">V3.1 Alpha 7</span><h3>Professional Library</h3></div>
           <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
         </div>
         <p>Die Datenbank öffnet als eigene große Arbeitsseite. Kein eingebettetes Kartenraster und kein horizontaler Scrollbalken.</p>
@@ -297,7 +297,7 @@ export function LibraryPanel({ workspace = false, initialTab = "objects" }: { wo
   return (
     <aside className="libraryPanel objectDatabasePanel libraryWorkspace" id="objektdatenbank" aria-label="Professional Library">
       <div className="panelHeading">
-        <div><span className="eyebrow">V3.1 Alpha 6 · Vollseiten-Datenbank</span><h3>Professional Library</h3></div>
+        <div><span className="eyebrow">V3.1 Alpha 7 · Vollseiten-Datenbank</span><h3>Professional Library</h3></div>
         <div className="libraryHeadingActions">
           <span>{OBJECT_CATALOG.length + CONSTRUCTION_CATALOG.length + PLANT_CATALOG.length + MATERIAL_CATALOG.length}</span>
           <Link className="libraryBackLink" href="/">← Zurück zum Studio</Link>

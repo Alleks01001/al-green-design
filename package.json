@@ -1,6 +1,6 @@
 {
   "name": "al-green-design-studio-3",
-  "version": "3.1.0-alpha.6",
+  "version": "3.1.0-alpha.7",
   "private": true,
   "engines": {
     "node": "24.x"
@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "validate:alpha7": "node scripts/validate-alpha7.mjs"
   },
   "dependencies": {
     "next": "14.2.35",

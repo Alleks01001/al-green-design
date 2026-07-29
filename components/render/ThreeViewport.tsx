@@ -387,6 +387,9 @@ export function ThreeViewport() {
     for (const entity of entities.filter(item => item.visible && layerMap.get(item.layerId)?.visible !== false)) {
       if (entity.kind === "annotation") continue;
       const selected = selectedIds.includes(entity.id);
+      const layerElevation = layerMap.get(entity.layerId)?.elevation ?? 0;
+      const terrainY = elevationAt(terrain, entity.position.x, entity.position.y);
+      const baseY = terrainY + layerElevation + (entity.elevationOffset ?? 0);
       const entityGroup = new THREE.Group();
       entityGroup.name = `entity:${entity.id}`;
       entityGroup.userData.entityId = entity.id;
@@ -399,13 +402,13 @@ export function ThreeViewport() {
       };
 
       if (entity.kind === "plant") {
-        const terrainY = elevationAt(terrain, entity.position.x, entity.position.y);
-        addPlantModel(entityGroup, entity, terrainY, plantingSettings.growthYears, selected);
+        addPlantModel(entityGroup, entity, baseY, plantingSettings.growthYears, selected);
         finishEntity();
         continue;
       }
 
       if (entity.shape === "line" || entity.shape === "polyline") {
+        entityGroup.position.y = baseY;
         for (let index = 1; index < entity.points.length; index += 1) {
           addSegment(entityGroup, entity, entity.points[index - 1], entity.points[index]);
         }
@@ -413,8 +416,7 @@ export function ThreeViewport() {
         continue;
       }
 
-      const terrainY = elevationAt(terrain, entity.position.x, entity.position.y);
-      if (addCatalogObject(entityGroup, entity, terrainY, selected)) {
+      if (addCatalogObject(entityGroup, entity, baseY, selected)) {
         finishEntity();
         continue;
       }
@@ -427,7 +429,7 @@ export function ThreeViewport() {
         : new THREE.BoxGeometry(entity.width, height, entity.depth);
       const mesh = new THREE.Mesh(geometry, material);
       if (entity.shape === "ellipse") mesh.scale.z = entity.depth / Math.max(entity.width, .01);
-      mesh.position.set(entity.position.x, terrainY + height / 2, entity.position.y);
+      mesh.position.set(entity.position.x, baseY + height / 2, entity.position.y);
       mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotation);
       mesh.castShadow = entity.kind === "building" || height > 0.5;
       mesh.receiveShadow = true;

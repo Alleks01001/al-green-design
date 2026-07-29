@@ -10,17 +10,17 @@ export type StudioPlugin = {
 };
 
 const plugins: StudioPlugin[] = [
-  { id: "cad", name: "Professional CAD Core", version: "3.1-alpha.6", status: "active", capabilities: ["detail-tools", "draw", "new-project-assistant", "property-boundary", "object-snap", "intersection-snap", "ortho", "precision-transform", "groups", "blocks", "layers", "associative-dimensions", "offset", "mirror", "rectangular-array", "polar-array", "trim-extend", "align", "dynamic-connectors", "material-aware-2d-symbols", "undo-redo"] },
+  { id: "cad", name: "Professional CAD Core", version: "3.1-alpha.7", status: "active", capabilities: ["detail-tools", "draw", "new-project-assistant", "property-boundary", "object-snap", "intersection-snap", "ortho", "precision-transform", "groups", "blocks", "layers", "elevation-levels", "object-z-offset", "front-view", "side-view", "associative-dimensions", "offset", "mirror", "rectangular-array", "polar-array", "trim-extend", "align", "dynamic-connectors", "material-aware-2d-symbols", "undo-redo"] },
   { id: "bim", name: "Landscape BIM", version: "2.2", status: "active", capabilities: ["properties", "quantities", "costs", "carbon"] },
   { id: "terrain", name: "Terrain Engine", version: "2.3", status: "active", capabilities: ["terrain-grid", "contours", "cut-fill"] },
-  { id: "plants", name: "Plant Intelligence", version: "3.1-alpha.6", status: "active", capabilities: ["suitability", "bloom-calendar", "growth", "botanical-3d-forms"] },
-  { id: "render", name: "Render Engine", version: "3.1-alpha.6", status: "active", capabilities: ["presets", "lighting", "png-export", "interactive-3d-selection", "shift-multiselect", "pbr-material-preview", "persistent-camera"] },
-  { id: "ai-designer", name: "AI Garden Designer", version: "3.1-alpha.6", status: "active", capabilities: ["free-text-cad-generation", "online-openai", "reliable-local-fallback", "instant-first-variant", "variants", "budget", "editable-output"] },
-  { id: "object-library", name: "Professional Library", version: "3.1-alpha.6", status: "active", capabilities: ["objects", "real-plant-taxa", "construction-assemblies", "soils", "technical-materials", "professional-filters", "standalone-library", "persistent-placement", "2d-3d-visualization", "bim-placement"] },
-  { id: "media-import", name: "Media & Reality Capture", version: "3.1-alpha.6", status: "active", capabilities: ["image-reference", "pdf-plan-import", "video-to-3d", "scan-lidar"] },
-  { id: "documentation", name: "Documentation", version: "3.1-alpha.6", status: "foundation", capabilities: ["pdf-plan-export", "printable-layers", "plan-layout", "reports", "revision-data"] },
-  { id: "collaboration", name: "Collaboration", version: "3.1-alpha.6", status: "planned", capabilities: ["comments", "tasks", "versioning"] },
-  { id: "exchange", name: "Professional Import/Export", version: "3.1-alpha.6", status: "foundation", capabilities: ["algreen", "pdf", "png", "csv"] }
+  { id: "plants", name: "Plant Intelligence", version: "3.1-alpha.7", status: "active", capabilities: ["suitability", "bloom-calendar", "growth", "botanical-3d-forms"] },
+  { id: "render", name: "Render Engine", version: "3.1-alpha.7", status: "active", capabilities: ["presets", "lighting", "png-export", "interactive-3d-selection", "shift-multiselect", "pbr-material-preview", "persistent-camera", "elevation-aware-placement", "orthographic-elevations"] },
+  { id: "ai-designer", name: "AI Garden Designer", version: "3.1-alpha.7", status: "active", capabilities: ["free-text-cad-generation", "online-openai", "reliable-local-fallback", "instant-first-variant", "variants", "budget", "editable-output"] },
+  { id: "object-library", name: "Professional Library", version: "3.1-alpha.7", status: "active", capabilities: ["objects", "real-plant-taxa", "construction-assemblies", "soils", "technical-materials", "professional-filters", "standalone-library", "persistent-placement", "2d-3d-visualization", "bim-placement"] },
+  { id: "media-import", name: "Media & Reality Capture", version: "3.1-alpha.7", status: "active", capabilities: ["image-reference", "pdf-plan-import", "video-to-3d", "scan-lidar"] },
+  { id: "documentation", name: "Documentation", version: "3.1-alpha.7", status: "foundation", capabilities: ["pdf-plan-export", "printable-layers", "plan-layout", "reports", "revision-data"] },
+  { id: "collaboration", name: "Collaboration", version: "3.1-alpha.7", status: "planned", capabilities: ["comments", "tasks", "versioning"] },
+  { id: "exchange", name: "Professional Import/Export", version: "3.1-alpha.7", status: "foundation", capabilities: ["algreen", "pdf", "png", "csv"] }
 ];
 
 export function getStudioPlugins(): StudioPlugin[] {

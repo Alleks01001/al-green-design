@@ -31,7 +31,7 @@ export type LinePattern = "solid" | "dashed" | "dotted";
 export type CadEntity = {
   id: Id; kind: EntityKind; shape: CadShape; name: string;
   points: Vec2[]; position: Vec2; width: number; depth: number; height: number;
-  radius?: number; rotation: number; layerId: Id; materialId?: Id;
+  radius?: number; rotation: number; layerId: Id; elevationOffset?: number; materialId?: Id;
   fillColor?: string; strokeColor?: string; opacity?: number; strokeWidth?: number;
   linePattern?: LinePattern; arrowStart?: boolean; arrowEnd?: boolean;
   objectDefinitionId?: Id;
@@ -122,7 +122,7 @@ export type ProjectState = {
   terrain: TerrainModel; plantingSettings: PlantingSettings; renderSettings: RenderSettings; planReference?: PlanReference;
   blockDefinitions: BlockDefinition[]; orthogonalMode: boolean; nudgeStep: number;
   dimensionSettings: DimensionSettings;
-  selectedIds: Id[]; activeLayerId: Id; activeTool: CadTool; viewMode: "2d" | "3d" | "split";
+  selectedIds: Id[]; activeLayerId: Id; activeTool: CadTool; viewMode: "2d" | "3d" | "front" | "side" | "split";
   gridSize: number; gridVisible: boolean; snapEnabled: boolean; snapModes: SnapMode[]; showDimensions: boolean;
   projectCurrency: "EUR"; vatPercent: number;
 };

@@ -40,7 +40,7 @@ export function GardenDesignerPanel() {
   return (
     <section className="gardenDesignerPanel">
       <div className="panelHeading">
-        <div><span className="eyebrow">Studio Alpha 6</span><h3>AI Garden Designer</h3></div>
+        <div><span className="eyebrow">Studio Alpha 7</span><h3>AI Garden Designer</h3></div>
         <span className="aiStatus">lokal</span>
       </div>
       <textarea value={prompt} onChange={event => setPrompt(event.target.value)} aria-label="Entwurfsbeschreibung" />

@@ -48,6 +48,11 @@ export default function VersionPage() {
         <li>Garden-KI mit Online-Generierung und automatischem lokalen CAD-Fallback ohne stille Fehlschläge</li>
         <li>Freie Beschreibungen können mehrere bearbeitbare Flächen, Pflanzen, Wege, Mauern, Wasser- und Ausstattungsobjekte gemeinsam erzeugen</li>
         <li>Der AI Garden Designer setzt seine erste Variante unmittelbar sichtbar in 2D und 3D ein</li>
+        <li>Frei benennbare Höhenebenen von −50,00 m bis +200,00 m mit direkter numerischer Bearbeitung</li>
+        <li>Schnellvorlagen für Terrasse +0,45 m, Erdgeschoss +0,30 m, 1. Obergeschoss +3,20 m und Pool −1,20 m</li>
+        <li>Objektbezogener Z-Versatz zusätzlich zur Ebenenhöhe; Bauteilhöhe bleibt unabhängig editierbar</li>
+        <li>Höhenrichtige Platzierung von Pflanzen, Linien, Mauern, Flächen, Gebäuden und Bibliotheksobjekten in 3D</li>
+        <li>Klickbare Front- und Seitenansicht mit Geländeprofil, Höhenraster, Ebenenlinien und synchroner Auswahl</li>
       </ul>
       <h2>Weiterhin enthalten</h2>
       <ul>

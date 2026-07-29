@@ -87,7 +87,7 @@ type Store = ProjectState & {
   createBlockFromSelected: (name: string) => void;
   insertBlock: (definitionId: string) => void;
   deleteBlockDefinition: (definitionId: string) => void;
-  addLayer: (name?: string) => void;
+  addLayer: (name?: string, elevation?: number) => void;
   updateLayer: (id: string, patch: Partial<Layer>) => void;
   deleteLayer: (id: string) => void;
   moveLayer: (id: string, direction: -1 | 1) => void;
@@ -297,7 +297,7 @@ export function createNewProjectState(options: NewProjectOptions): ProjectState 
     laborUnitPrice: 0,
     carbonKgPerUnit: 0,
     maintenanceCycle: "keine",
-    custom: { widthM: width, depthM: depth, generatedBy: "Projektassistent Alpha 6" }
+    custom: { widthM: width, depthM: depth, generatedBy: "Projektassistent Alpha 7" }
   }] : [];
   project.blockDefinitions = [];
   project.planReference = undefined;
@@ -401,9 +401,11 @@ function cloneSelectionBatch(
 }
 
 function normalizeProject(project: ProjectState): ProjectState {
+  const supportedViewModes: ProjectState["viewMode"][] = ["2d", "3d", "front", "side", "split"];
   return {
     ...project,
     schemaVersion: "3.1-alpha.4",
+    viewMode: supportedViewModes.includes(project.viewMode) ? project.viewMode : "split",
     selectedIds: (project.selectedIds ?? []).filter(id => project.entities.some(entity => entity.id === id)),
     activeTool: "select",
     snapModes: project.snapModes?.length ? Array.from(new Set([...project.snapModes, "intersection" as SnapMode])) : ["grid", "endpoint", "midpoint", "center", "intersection"],
@@ -429,6 +431,7 @@ function normalizeProject(project: ProjectState): ProjectState {
       opacity: entity.opacity ?? 1,
       strokeWidth: entity.strokeWidth ?? entity.width,
       linePattern: entity.linePattern ?? "solid",
+      elevationOffset: Number.isFinite(entity.elevationOffset) ? Math.min(200, Math.max(-50, entity.elevationOffset!)) : 0,
       metadata: entity.metadata ?? {}
     })),
     projectCurrency: "EUR",
@@ -455,7 +458,8 @@ function normalizeProject(project: ProjectState): ProjectState {
         ...layer,
         color: /^#[0-9a-f]{6}$/i.test(layer.color) ? layer.color : "#7b3650",
         printable: layer.printable ?? true,
-        opacity: Number.isFinite(layer.opacity) ? Math.min(1, Math.max(0.1, layer.opacity)) : 1
+        opacity: Number.isFinite(layer.opacity) ? Math.min(1, Math.max(0.1, layer.opacity)) : 1,
+        elevation: Number.isFinite(layer.elevation) ? Math.min(200, Math.max(-50, layer.elevation)) : 0
       }));
       const required: Layer[] = [
         { id: "layer-furniture", name: "Ausstattung & Möbel", color: "#8a6448", visible: true, locked: false, printable: true, opacity: 1, elevation: 0 },
@@ -890,26 +894,32 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         ...current,
         blockDefinitions: current.blockDefinitions.filter(item => item.id !== definitionId)
       })),
-      addLayer: (name = "Neuer Layer") => commit("Layer erstellt", current => {
+      addLayer: (name, elevation = 0) => commit("Ebene erstellt", current => {
         const id = makeId("layer");
         const palette = ["#7b3650", "#456f7e", "#657a45", "#9a6b36", "#70588f", "#8a5050", "#3f776b"];
+        const requestedName = name?.trim() || `Neue Ebene ${current.layers.length + 1}`;
+        const duplicateCount = current.layers.filter(layer => layer.name === requestedName || layer.name.startsWith(`${requestedName} `)).length;
+        const uniqueName = current.layers.some(layer => layer.name === requestedName) ? `${requestedName} ${duplicateCount + 1}` : requestedName;
         return {
           ...current,
           layers: [...current.layers, {
             id,
-            name: `${name} ${current.layers.length + 1}`,
+            name: uniqueName,
             color: palette[current.layers.length % palette.length],
             visible: true,
             locked: false,
             printable: true,
             opacity: 1,
-            elevation: 0
+            elevation: Number.isFinite(elevation) ? Math.min(200, Math.max(-50, elevation)) : 0
           }],
           activeLayerId: id
         };
       }),
       updateLayer: (id, patch) => commit("Layer geändert", current => {
-        const layers = current.layers.map(layer => layer.id === id ? { ...layer, ...patch } : layer);
+        const safePatch = patch.elevation === undefined
+          ? patch
+          : { ...patch, elevation: Number.isFinite(patch.elevation) ? Math.min(200, Math.max(-50, patch.elevation)) : 0 };
+        const layers = current.layers.map(layer => layer.id === id ? { ...layer, ...safePatch } : layer);
         const active = layers.find(layer => layer.id === current.activeLayerId);
         const fallback = layers.find(layer => layer.visible && !layer.locked);
         return {
