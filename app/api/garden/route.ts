@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 const GardenSchema = {
   type: 'object',
   properties: {
@@ -39,12 +42,17 @@ const GardenSchema = {
 export async function POST(req: Request) {
   try {
     const { prompt, model } = await req.json();
+    const userPrompt = String(prompt || '').trim();
+
+    if (!userPrompt) {
+      return NextResponse.json({ ok: false, fallback: true, error: 'Bitte zuerst eine Gartenbeschreibung eingeben.' }, { status: 400 });
+    }
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({
         ok: false,
         fallback: true,
-        error: 'OPENAI_API_KEY ist nicht gesetzt.'
+        error: 'OPENAI_API_KEY ist in Vercel nicht gesetzt. Lokale Generierung wird verwendet.'
       });
     }
 
@@ -55,14 +63,14 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: model || 'gpt-4o',
+        model: model || process.env.OPENAI_MODEL || 'gpt-4o',
         messages: [
           {
             role: 'system',
             content:
               'Du bist Landschaftsarchitekt und Gebäudeplaner. Interpretiere den vollständigen Wunsch. Erzeuge nicht nur einen Gebäudekubus: nutze bei Gebäuden sinnvolle Bauteile wie Bodenplatte, Außen-/Innenwände, Dach, Fenster, Türen, Schiebetüren, Balkon, Geländer und Stützen. Platziere Garten, Gelände und Architektur logisch. Antworte ausschließlich im vorgegebenen JSON-Schema.'
           },
-          { role: 'user', content: String(prompt || '') }
+          { role: 'user', content: userPrompt }
         ],
         response_format: {
           type: 'json_schema',

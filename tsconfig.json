@@ -68,6 +68,24 @@
     "node_modules",
     ".next",
     "ios",
-    "docs"
+    "docs",
+    "components/GardenStudio.tsx",
+    "components/LandscapePlatform.tsx",
+    "components/editor2d",
+    "components/editor3d",
+    "components/shell",
+    "components/panels",
+    "stores/editor-store.tsx",
+    "BrandLogo3D.tsx",
+    "GardenAI.tsx",
+    "LandscapePlatform.tsx",
+    "layout.tsx",
+    "page.tsx",
+    "robots.ts",
+    "route.ts",
+    "architecture.ts",
+    "importedModel.ts",
+    "lidarBridge.ts",
+    "scan.ts"
   ]
 }

@@ -21,7 +21,12 @@ export function GardenDesignerPanel() {
   function generate() {
     setGeneratedAt(Date.now());
     setActiveId("concept-1");
-    setMessage("Drei lokale Entwurfsvarianten wurden berechnet. Wähle eine Variante und übernimm sie in den Plan.");
+    const first = concepts[0];
+    const base = store.entities.filter(item => item.metadata?.generatedBy !== "Garden Designer 2.6");
+    store.setEntities([...base, ...first.entities], `AI-Entwurf „${first.title}“ sofort erzeugt`);
+    store.setSelectedIds(first.entities.map(entity => entity.id));
+    store.setViewMode("split");
+    setMessage(`${first.title} wurde sofort mit ${first.entities.length} bearbeitbaren CAD-Objekten in den Plan eingesetzt. Du kannst darunter eine andere Variante wählen.`);
   }
 
   function applyConcept(replacePrevious: boolean) {
@@ -35,7 +40,7 @@ export function GardenDesignerPanel() {
   return (
     <section className="gardenDesignerPanel">
       <div className="panelHeading">
-        <div><span className="eyebrow">Studio 2.6</span><h3>AI Garden Designer</h3></div>
+        <div><span className="eyebrow">Studio Alpha 6</span><h3>AI Garden Designer</h3></div>
         <span className="aiStatus">lokal</span>
       </div>
       <textarea value={prompt} onChange={event => setPrompt(event.target.value)} aria-label="Entwurfsbeschreibung" />
@@ -45,7 +50,7 @@ export function GardenDesignerPanel() {
         <label><span>Budget</span><select value={budget} onChange={event => setBudget(event.target.value as GardenDesignBrief["budget"])}><option value="compact">Kompakt</option><option value="balanced">Ausgewogen</option><option value="premium">Premium</option></select></label>
         <label className="designerCheck"><input type="checkbox" checked={sunny} onChange={event => setSunny(event.target.checked)} /> sonniger Standort</label>
       </div>
-      <button type="button" className="designerGenerate" onClick={generate}>3 Entwurfsvarianten erzeugen</button>
+      <button type="button" className="designerGenerate" onClick={generate}>3 Varianten erzeugen · erste sofort einsetzen</button>
       <div className="conceptTabs">
         {concepts.map(concept => <button type="button" key={concept.id} className={active.id === concept.id ? "active" : ""} onClick={() => setActiveId(concept.id)}>{concept.title}<small>{concept.score}/100</small></button>)}
       </div>

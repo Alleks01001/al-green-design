@@ -1,0 +1,28 @@
+AL Green Design Studio 3.1 New Project & Reliable Garden AI Alpha 6
+
+1. ZIP entpacken.
+2. Den entpackten Ordner öffnen.
+3. Strg + A drücken.
+4. Alle enthaltenen Ordner und Dateien gemeinsam in das GitHub-Hauptverzeichnis ziehen.
+5. Vorhandene Dateien überschreiben und Commit changes wählen.
+
+Commit-Nachricht:
+AL Green Studio 3.1 Alpha 6 – neues Projekt und zuverlässige Garden-KI
+
+Kontrolle nach Vercel-Deployment:
+/version muss Paketversion 3.1.0-alpha.6 anzeigen.
+
+Online-KI in Vercel:
+- Environment Variable OPENAI_API_KEY mit dem eigenen API-Schlüssel anlegen.
+- Optional OPENAI_MODEL setzen, wenn ein bestimmtes verfügbares Modell verwendet werden soll.
+- Danach neu deployen.
+- Ohne API-Schlüssel arbeitet automatisch der eingebaute lokale CAD-Generator.
+
+Zusatzprüfung im Studio:
+1. „＋ Neues Projekt“ wählen.
+2. Projektname und zum Beispiel 20 × 15 m eingeben.
+3. „Grundstück anlegen“ aktiviert lassen und Projekt erstellen.
+4. Im Garden-KI-Feld „Moderner Garten mit Pool, Pergola, Weg und 5 Bäumen“ eingeben.
+5. „Jetzt generieren & in den Plan einsetzen“ drücken.
+6. Neue Objekte müssen ausgewählt in 2D + 3D erscheinen; die Meldung muss Online- oder Lokalmodus nennen.
+7. Seite neu laden; Projekt und KI-Objekte müssen erhalten bleiben.
