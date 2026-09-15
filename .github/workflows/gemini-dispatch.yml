@@ -55,7 +55,7 @@ jobs:
         id: 'request'
         uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
         env:
-          REQUEST: '${{ github.event.comment.body || github.event.review.body || "" }}'
+          REQUEST: '${{ github.event.comment.body || github.event.review.body }}'
         with:
           script: |-
             const request = process.env.REQUEST || '';
@@ -75,4 +75,3 @@ jobs:
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
     secrets: 'inherit'
-
