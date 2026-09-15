@@ -21,22 +21,10 @@ jobs:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 30
     permissions:
-      contents: 'write'
+      contents: 'read'
       id-token: 'write'
       issues: 'write'
-      pull-requests: 'write'
     steps:
-      - name: 'Mint GitHub App token when configured'
-        id: 'mint_identity_token'
-        if: '${{ vars.APP_ID }}'
-        uses: 'actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf' # v2
-        with:
-          app-id: '${{ vars.APP_ID }}'
-          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
-          permission-contents: 'write'
-          permission-issues: 'write'
-          permission-pull-requests: 'write'
-
       - name: 'Checkout repository'
         uses: 'actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8' # v6
         with:
@@ -65,7 +53,7 @@ jobs:
         uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # v0.1.22
         env:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
+          GITHUB_TOKEN: '${{ github.token }}'
           GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
@@ -96,16 +84,9 @@ jobs:
                   "includeTools": [
                     "add_issue_comment",
                     "issue_read",
-                    "create_pull_request",
-                    "pull_request_read",
-                    "list_pull_requests",
-                    "search_pull_requests",
-                    "create_branch",
-                    "create_or_update_file",
                     "get_commit",
                     "get_file_contents",
                     "list_commits",
-                    "push_files",
                     "search_code"
                   ],
                   "env": {
@@ -129,74 +110,28 @@ jobs:
 
             Verwende insbesondere die registrierten Werkzeuge
             mcp_github_issue_read, mcp_github_get_file_contents,
-            mcp_github_search_code, mcp_github_create_branch,
-            mcp_github_push_files, mcp_github_create_pull_request und
-            mcp_github_add_issue_comment. read_file ist ausschließlich für die
-            vorbereitete .gemini/context.json gedacht.
+            mcp_github_search_code und mcp_github_add_issue_comment. read_file
+            ist ausschließlich für die vorbereitete .gemini/context.json gedacht.
 
             Arbeite die Aufgabe selbstständig und vollständig ab:
             1. Prüfe Issue, relevante Dateien und bestehende Tests mit den registrierten
                mcp_github_-Werkzeugen.
-            2. Erzeuge vom aktuellen main einen neuen Branch mit dem Präfix
-               gemini/issue-${{ github.event.issue.number }}-.
-            3. Implementiere nur die beschriebene Funktion. Nutze bevorzugt
-               mcp_github_push_files für einen zusammenhängenden Commit. Verändere
-               keine GitHub-Workflows, Secrets oder Sicherheitsregeln.
-            4. Ergänze passende Tests bzw. Validatoren. Erhalte gespeicherte
+            2. Entwickle die beschriebene Funktion als vollständigen, direkt
+               anwendbaren Unified Diff gegen den aktuellen Stand von main. Liefere
+               tatsächlichen Code und nicht nur eine Analyse oder Review-Hinweise.
+            3. Ergänze passende Tests bzw. Validatoren. Erhalte gespeicherte
                Projektdaten, Import/Export und Rückwärtskompatibilität.
-            5. Öffne genau einen Pull Request gegen main. Beschreibe auf Deutsch,
-               was du geändert hast, welche Risiken bestehen und welche Checks die
-               CI noch ausführen muss. Behaupte keine lokal ausgeführten Tests.
-            6. Kommentiere das Issue mit dem Link zum Pull Request. Falls du nicht
-               sicher implementieren kannst, ändere keinen Code und kommentiere den
-               konkreten Blocker.
+            4. Veröffentliche genau einen deutschen Issue-Kommentar mit der Überschrift
+               "## Gemini-Entwicklungsvorschlag". Er muss enthalten:
+               - eine kurze Umsetzungszusammenfassung,
+               - alle betroffenen Dateien,
+               - den vollständigen Unified Diff in einem diff-Codeblock,
+               - vorgeschlagene Prüfungen und bekannte Grenzen.
+               Halte den Gesamtkommentar unter 45.000 Zeichen. Ist die Aufgabe dafür
+               zu groß, liefere eine kleine, in sich vollständige erste Ausbaustufe.
+            5. Behaupte keine lokal ausgeführten Tests. Falls du nicht sicher
+               implementieren kannst, veröffentliche statt eines unvollständigen
+               Patches den konkreten Blocker.
 
-            Schreibe niemals direkt nach main und führe keine Löschaktionen aus.
-
-      # Pull requests opened with the repository GITHUB_TOKEN do not start a
-      # second workflow run. Verify Gemini's remote branch in this same run so
-      # every generated change still passes the project's complete quality gate.
-      - name: 'Locate Gemini pull request'
-        id: 'pull_request'
-        env:
-          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || github.token }}'
-          REPOSITORY: '${{ github.repository }}'
-          ISSUE_NUMBER: '${{ github.event.issue.number }}'
-        run: |-
-          response="$(curl --fail-with-body --silent --show-error \
-            --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${REPOSITORY}/pulls?state=open&per_page=100")"
-          pull_request="$(jq -c \
-            --arg prefix "gemini/issue-${ISSUE_NUMBER}-" \
-            '[.[] | select(.head.ref | startswith($prefix))] | sort_by(.number) | last' \
-            <<<"${response}")"
-
-          if [[ "${pull_request}" == 'null' ]]; then
-            echo "::error::Gemini did not create an open pull request for issue ${ISSUE_NUMBER}."
-            exit 1
-          fi
-
-          echo "number=$(jq -r '.number' <<<"${pull_request}")" >> "${GITHUB_OUTPUT}"
-          echo "head_sha=$(jq -r '.head.sha' <<<"${pull_request}")" >> "${GITHUB_OUTPUT}"
-
-      - name: 'Checkout Gemini implementation'
-        uses: 'actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8' # v6
-        with:
-          ref: '${{ steps.pull_request.outputs.head_sha }}'
-          persist-credentials: 'false'
-
-      - name: 'Use Node.js 24'
-        uses: 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' # v7.0.0
-        with:
-          node-version: '24.x'
-          cache: 'npm'
-
-      - name: 'Install dependencies'
-        run: 'npm ci'
-
-      - name: 'Verify Gemini implementation'
-        env:
-          OPENAI_API_KEY: ''
-        run: 'npm run verify'
+            Du hast absichtlich nur Lesezugriff auf Repository-Inhalte. Versuche
+            weder Branches, Commits noch Pull Requests anzulegen oder zu verändern.

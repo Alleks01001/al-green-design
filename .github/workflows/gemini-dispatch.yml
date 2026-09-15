@@ -78,8 +78,8 @@ jobs:
 
   development-dispatch:
     # Development requests are accepted only on repository issues and only
-    # from repository owners and collaborators. Gemini implements the issue
-    # on a separate branch and opens a pull request; it never writes to main.
+    # from repository owners and collaborators. Gemini prepares a complete
+    # code patch in the issue; repository writes stay with the maintainer.
     if: |-
       github.event_name == 'issue_comment' &&
       !github.event.issue.pull_request &&
@@ -109,10 +109,9 @@ jobs:
     needs: 'development-dispatch'
     uses: './.github/workflows/gemini-develop.yml'
     permissions:
-      contents: 'write'
+      contents: 'read'
       id-token: 'write'
       issues: 'write'
-      pull-requests: 'write'
     with:
       additional_context: '${{ needs.development-dispatch.outputs.additional_context }}'
     secrets: 'inherit'
