@@ -45,6 +45,16 @@ jobs:
           PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
 
+      # Work around run-gemini-cli#533: recent Gemini CLI releases can show
+      # multiple consent prompts on a fresh GitHub runner. Installing with the
+      # documented --consent flag keeps the workflow fully non-interactive.
+      - name: 'Install Gemini code review extension'
+        env:
+          GEMINI_CLI_VERSION: '0.50.0'
+        run: |-
+          npx --yes "@google/gemini-cli@${GEMINI_CLI_VERSION}" extensions install --consent \
+            'https://github.com/gemini-cli-extensions/code-review' </dev/null
+
       - name: 'Run Gemini review'
         id: 'gemini_review'
         uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # v0.1.22
@@ -57,15 +67,15 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
-          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
+          gemini_cli_version: '0.50.0'
           gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
-          gemini_model: '${{ vars.GEMINI_MODEL }}'
+          gemini_model: "${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}"
           workflow_name: 'gemini-review'
           github_pr_number: '${{ github.event.pull_request.number || github.event.issue.number }}'
           settings: |-
             {
               "model": {
-                "maxSessionTurns": 25
+                "maxSessionTurns": 12
               },
               "telemetry": {
                 "enabled": false
@@ -92,12 +102,30 @@ jobs:
                 }
               },
               "tools": {
-                "core": []
+                "core": [
+                  "activate_skill",
+                  "mcp_github_*"
+                ]
               }
             }
-          extensions: |-
-            [
-              "https://github.com/gemini-cli-extensions/code-review"
-            ]
-          prompt: '/pr-code-review'
+          # Work around run-gemini-cli#510: the extension command currently
+          # references obsolete MCP tool names. Keep the extension's review
+          # skill, but give Gemini an explicit prompt with the registered names.
+          prompt: |-
+            Prüfe Pull Request #${{ github.event.pull_request.number || github.event.issue.number }}
+            im Repository ${{ github.repository }}. Antworte auf Deutsch.
+            Zusätzlicher Fokus: ${{ inputs.additional_context }}
 
+            Aktiviere zuerst mit activate_skill den Skill code-review-commons.
+            Verwende danach ausschließlich diese registrierten GitHub-MCP-Werkzeuge:
+            - mcp_github_pull_request_read mit method "get" für Metadaten,
+              method "get_files" für die Dateiliste und method "get_diff" für den Diff.
+            - mcp_github_pull_request_review_write mit method "create", um einen
+              ausstehenden Review anzulegen.
+            - mcp_github_add_comment_to_pending_review für präzise Inline-Hinweise.
+            - mcp_github_pull_request_review_write mit method "submit_pending", um
+              den Review mit event "COMMENT" einzureichen.
+
+            Suche nach Fehlern, Sicherheitsproblemen, Regressionen und fehlenden Tests.
+            Veröffentliche keine Secrets. Verwende niemals APPROVE oder REQUEST_CHANGES.
+            Reiche auch dann eine kurze Zusammenfassung ein, wenn du keine Probleme findest.
