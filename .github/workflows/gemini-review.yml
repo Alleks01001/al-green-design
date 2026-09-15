@@ -108,4 +108,24 @@ jobs:
                 ]
               }
             }
-          prompt: '/pr-code-review'
+          # Work around run-gemini-cli#510: the extension command currently
+          # references obsolete MCP tool names. Keep the extension's review
+          # skill, but give Gemini an explicit prompt with the registered names.
+          prompt: |-
+            Prüfe Pull Request #${{ github.event.pull_request.number || github.event.issue.number }}
+            im Repository ${{ github.repository }}. Antworte auf Deutsch.
+            Zusätzlicher Fokus: ${{ inputs.additional_context }}
+
+            Aktiviere zuerst mit activate_skill den Skill code-review-commons.
+            Verwende danach ausschließlich diese registrierten GitHub-MCP-Werkzeuge:
+            - mcp_github_pull_request_read mit method "get" für Metadaten,
+              method "get_files" für die Dateiliste und method "get_diff" für den Diff.
+            - mcp_github_pull_request_review_write mit method "create", um einen
+              ausstehenden Review anzulegen.
+            - mcp_github_add_comment_to_pending_review für präzise Inline-Hinweise.
+            - mcp_github_pull_request_review_write mit method "submit_pending", um
+              den Review mit event "COMMENT" einzureichen.
+
+            Suche nach Fehlern, Sicherheitsproblemen, Regressionen und fehlenden Tests.
+            Veröffentliche keine Secrets. Verwende niemals APPROVE oder REQUEST_CHANGES.
+            Reiche auch dann eine kurze Zusammenfassung ein, wenn du keine Probleme findest.
