@@ -110,7 +110,6 @@ jobs:
     uses: './.github/workflows/gemini-develop.yml'
     permissions:
       contents: 'read'
-      id-token: 'write'
       issues: 'write'
     with:
       additional_context: '${{ needs.development-dispatch.outputs.additional_context }}'
