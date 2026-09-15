@@ -75,3 +75,44 @@ jobs:
     with:
       additional_context: '${{ needs.dispatch.outputs.additional_context }}'
     secrets: 'inherit'
+
+  development-dispatch:
+    # Development requests are accepted only on repository issues and only
+    # from repository owners and collaborators. Gemini implements the issue
+    # on a separate branch and opens a pull request; it never writes to main.
+    if: |-
+      github.event_name == 'issue_comment' &&
+      !github.event.issue.pull_request &&
+      github.event.sender.type == 'User' &&
+      startsWith(github.event.comment.body, '@gemini-cli /develop') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+    outputs:
+      additional_context: '${{ steps.request.outputs.additional_context }}'
+    steps:
+      - name: 'Read development request'
+        id: 'request'
+        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
+        env:
+          REQUEST: '${{ github.event.comment.body }}'
+        with:
+          script: |-
+            const request = process.env.REQUEST || '';
+            const additionalContext = request
+              .replace(/^@gemini-cli\s+\/develop/i, '')
+              .trim();
+            core.setOutput('additional_context', additionalContext);
+
+  develop:
+    needs: 'development-dispatch'
+    uses: './.github/workflows/gemini-develop.yml'
+    permissions:
+      contents: 'write'
+      id-token: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+    with:
+      additional_context: '${{ needs.development-dispatch.outputs.additional_context }}'
+    secrets: 'inherit'
