@@ -6,6 +6,7 @@ on:
       - 'opened'
       - 'reopened'
       - 'ready_for_review'
+      - 'synchronize'
   pull_request_review_comment:
     types:
       - 'created'
