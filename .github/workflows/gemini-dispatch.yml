@@ -1,0 +1,78 @@
+name: 'Gemini Code Review'
+
+on:
+  pull_request:
+    types:
+      - 'opened'
+      - 'reopened'
+      - 'ready_for_review'
+  pull_request_review_comment:
+    types:
+      - 'created'
+  pull_request_review:
+    types:
+      - 'submitted'
+  issue_comment:
+    types:
+      - 'created'
+
+defaults:
+  run:
+    shell: 'bash'
+
+jobs:
+  dispatch:
+    # Automatic reviews run only for branches in this repository. Manual
+    # requests are accepted only from repository owners and collaborators.
+    if: |-
+      (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.fork == false
+      ) || (
+        github.event_name == 'pull_request_review_comment' &&
+        github.event.sender.type == 'User' &&
+        startsWith(github.event.comment.body, '@gemini-cli /review') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      ) || (
+        github.event_name == 'pull_request_review' &&
+        github.event.sender.type == 'User' &&
+        startsWith(github.event.review.body || '', '@gemini-cli /review') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)
+      ) || (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.event.sender.type == 'User' &&
+        startsWith(github.event.comment.body, '@gemini-cli /review') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+    outputs:
+      additional_context: '${{ steps.request.outputs.additional_context }}'
+    steps:
+      - name: 'Read review request'
+        id: 'request'
+        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
+        env:
+          REQUEST: '${{ github.event.comment.body || github.event.review.body || "" }}'
+        with:
+          script: |-
+            const request = process.env.REQUEST || '';
+            const additionalContext = request
+              .replace(/^@gemini-cli\s+\/review/i, '')
+              .trim();
+            core.setOutput('additional_context', additionalContext);
+
+  review:
+    needs: 'dispatch'
+    uses: './.github/workflows/gemini-review.yml'
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+    with:
+      additional_context: '${{ needs.dispatch.outputs.additional_context }}'
+    secrets: 'inherit'
+

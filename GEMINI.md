@@ -1,0 +1,48 @@
+# AL Green Design – Gemini project context
+
+## Purpose
+
+AL Green Design Studio is a browser-based professional garden, landscape and exterior CAD application. It combines a 2D plan editor with synchronized 3D, elevation views, BIM-style object data, terrain, layers, plant and material libraries, PDF workflows and an optional AI garden designer.
+
+## Technology
+
+- Next.js 14, React 18 and TypeScript
+- Three.js for 3D rendering
+- Node.js 24.x
+- Deployment target: Vercel
+
+## Required checks
+
+Run these commands for changes that affect application code:
+
+```bash
+npm ci
+npm run typecheck
+npm run validate:alpha8
+npm run build
+```
+
+There is currently no `lint` script. Do not claim linting was run unless a lint command is added and executed.
+
+## Review priorities
+
+1. Functional correctness and prevention of project-data loss.
+2. Synchronization between 2D, 3D, front and side views.
+3. Geometry, units, snapping, elevations and object-transform calculations.
+4. Undo/redo, local persistence and backward compatibility of saved projects.
+5. React state consistency, performance and Three.js resource cleanup.
+6. Next.js client/server boundaries and Vercel compatibility.
+7. Mobile and touch usability, especially on iPhone.
+8. Security: never expose API keys or other secrets in client code, logs or repository files.
+
+## Working rules
+
+- Keep changes focused and avoid broad rewrites unless they are required for correctness.
+- Preserve existing project behavior unless the pull request explicitly changes it.
+- Treat imported plans, images, PDFs and saved project files as untrusted input.
+- Do not delete user-created objects or stored project data without an explicit, reversible migration.
+- Do not edit generated files manually.
+- Update `package-lock.json` only through npm dependency operations.
+- Review comments must be concise, actionable and written in German.
+- Report only demonstrable problems; avoid style-only comments and speculation.
+

@@ -1,0 +1,9 @@
+# Gemini CLI local files
+.gemini/
+gha-creds-*.json
+
+# Local secrets
+.env
+.env.local
+.env.*.local
+
