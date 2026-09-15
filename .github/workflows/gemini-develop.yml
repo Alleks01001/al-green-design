@@ -82,7 +82,6 @@ jobs:
                     "ghcr.io/github/github-mcp-server:v0.27.0"
                   ],
                   "includeTools": [
-                    "add_issue_comment",
                     "issue_read",
                     "get_commit",
                     "get_file_contents",
@@ -110,8 +109,8 @@ jobs:
 
             Verwende insbesondere die registrierten Werkzeuge
             mcp_github_issue_read, mcp_github_get_file_contents,
-            mcp_github_search_code und mcp_github_add_issue_comment. read_file
-            ist ausschließlich für die vorbereitete .gemini/context.json gedacht.
+            und mcp_github_search_code. read_file ist ausschließlich für die
+            vorbereitete .gemini/context.json gedacht.
 
             Arbeite die Aufgabe selbstständig und vollständig ab:
             1. Prüfe Issue, relevante Dateien und bestehende Tests mit den registrierten
@@ -121,8 +120,8 @@ jobs:
                tatsächlichen Code und nicht nur eine Analyse oder Review-Hinweise.
             3. Ergänze passende Tests bzw. Validatoren. Erhalte gespeicherte
                Projektdaten, Import/Export und Rückwärtskompatibilität.
-            4. Veröffentliche genau einen deutschen Issue-Kommentar mit der Überschrift
-               "## Gemini-Entwicklungsvorschlag". Er muss enthalten:
+            4. Gib als einzige finale Antwort eine deutsche Markdown-Nutzlast mit
+               der Überschrift "## Gemini-Entwicklungsvorschlag" zurück. Sie muss enthalten:
                - eine kurze Umsetzungszusammenfassung,
                - alle betroffenen Dateien,
                - den vollständigen Unified Diff in einem diff-Codeblock,
@@ -135,3 +134,31 @@ jobs:
 
             Du hast absichtlich nur Lesezugriff auf Repository-Inhalte. Versuche
             weder Branches, Commits noch Pull Requests anzulegen oder zu verändern.
+
+      - name: 'Publish Gemini development proposal'
+        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
+        env:
+          GEMINI_RESPONSE: '${{ steps.gemini_develop.outputs.gemini_response }}'
+        with:
+          script: |-
+            const response = (process.env.GEMINI_RESPONSE || '').trim();
+            if (!response) {
+              core.setFailed('Gemini returned no development proposal.');
+              return;
+            }
+
+            const heading = '## Gemini-Entwicklungsvorschlag';
+            const body = response.startsWith(heading)
+              ? response
+              : `${heading}\n\n${response}`;
+            if (body.length > 60000) {
+              core.setFailed(`Gemini proposal is too long for a safe issue comment (${body.length} characters).`);
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
