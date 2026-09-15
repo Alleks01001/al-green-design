@@ -44,6 +44,9 @@ Diese Version erweitert die stabile V3.0-Codebasis um:
 - Garden-KI verwendet bei vorhandener Konfiguration die Online-KI und ansonsten automatisch einen lokalen CAD-Generator
 - freie Texte erzeugen immer sichtbare, ausgewählte und sofort bearbeitbare CAD-Objekte
 - der AI Garden Designer setzt die erste berechnete Variante unmittelbar in den Plan ein
+- der AI Garden Designer berücksichtigt Pool, Teich, Pergola, Rasen, Beet, Sichtschutz, Hecke und gewünschte Baumzahlen aus dem Beschreibungstext
+- alle lokalen Entwurfsvarianten passen sich an Größe, Lage und Drehung der Grundstücksfläche an
+- automatische GitHub-Qualitätsprüfung für Typen, Garden-Designer-Logik, Produktionsbuild und Alpha-8-Validierung
 - frei benennbare Ebenen mit numerischen Höhen von −50,00 m bis +200,00 m
 - Ebenenvorlagen für Terrasse +0,45 m, EG +0,30 m, 1. OG +3,20 m und Pool −1,20 m
 - frei editierbarer Z-Versatz je Objekt zusätzlich zur Ebenenhöhe
@@ -64,3 +67,4 @@ Diese Version erweitert die stabile V3.0-Codebasis um:
 - Node.js: `24.x`
 - Start lokal: `npm install` und `npm run dev`
 - Produktionsprüfung: `/version`
+- Vollständige lokale Prüfung: `npm run verify`

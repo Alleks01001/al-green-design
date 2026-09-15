@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test:designer": "node scripts/validate-garden-designer.mjs",
+    "verify": "npm run typecheck && npm run test:designer && npm run build && npm run validate:alpha8",
     "validate:alpha8": "node scripts/validate-alpha8.mjs"
   },
   "dependencies": {
