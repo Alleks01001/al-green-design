@@ -57,7 +57,6 @@ export type NewProjectOptions = {
 
 type Store = ProjectState & {
   isHydrated: boolean;
-  persistence: ProjectPersistenceState;
   canUndo: boolean;
   canRedo: boolean;
   history: HistoryEntry[];
@@ -481,6 +480,7 @@ function normalizeProject(project: ProjectState): ProjectState {
 }
 
 const Context = createContext<Store | null>(null);
+const PersistenceContext = createContext<ProjectPersistenceState>(INITIAL_PROJECT_PERSISTENCE);
 
 export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   const [internal, setInternal] = useState<InternalState>({
@@ -542,7 +542,6 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
     return {
       ...project,
       isHydrated,
-      persistence,
       canUndo: internal.undo.length > 0,
       canRedo: internal.redo.length > 0,
       history: internal.history,
@@ -1104,13 +1103,21 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
         });
       }
     };
-  }, [commit, internal, isHydrated, persistence, updateUi]);
+  }, [commit, internal, isHydrated, updateUi]);
 
-  return <Context.Provider value={value}>{children}</Context.Provider>;
+  return (
+    <PersistenceContext.Provider value={persistence}>
+      <Context.Provider value={value}>{children}</Context.Provider>
+    </PersistenceContext.Provider>
+  );
 }
 
 export function useProjectStore() {
   const value = useContext(Context);
   if (!value) throw new Error("useProjectStore must be used inside ProjectStoreProvider");
   return value;
+}
+
+export function useProjectPersistence() {
+  return useContext(PersistenceContext);
 }

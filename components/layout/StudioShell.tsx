@@ -19,7 +19,7 @@ import { TerrainPanel } from "@/components/terrain/TerrainPanel";
 import { PlantIntelligencePanel } from "@/components/plants/PlantIntelligencePanel";
 import { FoundationPanel } from "@/components/system/FoundationPanel";
 import { MediaImportPanel } from "@/components/import/MediaImportPanel";
-import { useProjectStore } from "@/stores/projectStore";
+import { useProjectPersistence, useProjectStore } from "@/stores/projectStore";
 import type { CadTool, ProjectFile } from "@/types/domain";
 import { STUDIO_BUILD_LABEL, STUDIO_PACKAGE_VERSION } from "@/core/platform/version";
 import { exportCadPlanToPdf } from "@/lib/pdf/exportPlanPdf";
@@ -49,6 +49,7 @@ const tools: Array<{ id: CadTool; label: string; icon: string }> = [
 
 export function StudioShell() {
   const store = useProjectStore();
+  const persistence = useProjectPersistence();
   const {
     activeTool,
     setTool,
@@ -75,7 +76,6 @@ export function StudioShell() {
     clearProject,
     selectedIds,
     setSelectedIds,
-    persistence,
     id: projectId,
     name: projectName
   } = store;
