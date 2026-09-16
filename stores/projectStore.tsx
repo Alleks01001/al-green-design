@@ -13,6 +13,11 @@ import { distance, entitiesBounds, entityCenter, makeId, transformEntityAround, 
 import { mirrorEntity, offsetEntity, polarTransformEntity, trimOrExtendLine, type LineEditMode, type MirrorAxis } from "@/core/cad/modify";
 import { isHostedOpening, moveHostedOpening, syncHostedOpenings } from "@/core/cad/openings";
 import { applyTerrainPreset, createTerrainGrid } from "@/engines/terrain/terrainEngine";
+import {
+  INITIAL_PROJECT_PERSISTENCE,
+  persistProjectLocally,
+  type ProjectPersistenceState
+} from "@/core/platform/projectPersistence";
 import type {
   CadEntity,
   CadTool,
@@ -475,6 +480,7 @@ function normalizeProject(project: ProjectState): ProjectState {
 }
 
 const Context = createContext<Store | null>(null);
+const PersistenceContext = createContext<ProjectPersistenceState>(INITIAL_PROJECT_PERSISTENCE);
 
 export function ProjectStoreProvider({ children }: { children: ReactNode }) {
   const [internal, setInternal] = useState<InternalState>({
@@ -484,6 +490,7 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
     history: []
   });
   const [isHydrated, setIsHydrated] = useState(false);
+  const [persistence, setPersistence] = useState<ProjectPersistenceState>(INITIAL_PROJECT_PERSISTENCE);
 
   useEffect(() => {
     try {
@@ -503,18 +510,14 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isHydrated) return;
+    const savedAt = new Date().toISOString();
     const file: ProjectFile = {
       application: "AL Green Design Studio",
       version: "3.1-alpha.4",
-      savedAt: new Date().toISOString(),
+      savedAt,
       project: internal.project
     };
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(file));
-    } catch {
-      // Large plan references can exceed the browser storage quota. The editor must keep running;
-      // the full project can still be exported manually as an .algreen file.
-    }
+    setPersistence(current => persistProjectLocally(window.localStorage, STORAGE_KEY, file, savedAt, current));
   }, [internal.project, isHydrated]);
 
   const updateUi = useCallback((producer: (project: ProjectState) => ProjectState) => {
@@ -1102,11 +1105,19 @@ export function ProjectStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [commit, internal, isHydrated, updateUi]);
 
-  return <Context.Provider value={value}>{children}</Context.Provider>;
+  return (
+    <PersistenceContext.Provider value={persistence}>
+      <Context.Provider value={value}>{children}</Context.Provider>
+    </PersistenceContext.Provider>
+  );
 }
 
 export function useProjectStore() {
   const value = useContext(Context);
   if (!value) throw new Error("useProjectStore must be used inside ProjectStoreProvider");
   return value;
+}
+
+export function useProjectPersistence() {
+  return useContext(PersistenceContext);
 }
