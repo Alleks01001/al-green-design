@@ -75,11 +75,12 @@ export function StudioShell() {
     clearProject,
     selectedIds,
     setSelectedIds,
+    persistence,
     id: projectId,
     name: projectName
   } = store;
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const [fileMessage, setFileMessage] = useState("Automatisch lokal gespeichert");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("Neues Gartenprojekt");
   const [newProjectWidth, setNewProjectWidth] = useState(20);
@@ -105,7 +106,7 @@ export function StudioShell() {
     anchor.download = `AL_Green_Design_${new Date().toISOString().slice(0, 10)}.algreen`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setFileMessage("Projektdatei exportiert");
+    setActionMessage("Projektdatei exportiert");
   }
 
 
@@ -118,9 +119,9 @@ export function StudioShell() {
       if (selectedIds.length > 0) setSelectedIds([]);
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       await exportCadPlanToPdf(projectName);
-      setFileMessage("PDF-Plan exportiert");
-    } catch (error) {
-      setFileMessage(error instanceof Error ? error.message : "PDF-Export fehlgeschlagen");
+      setActionMessage("PDF-Plan exportiert");
+    } catch {
+      setActionMessage("PDF-Export fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       if (previousSelection.length > 0) setSelectedIds(previousSelection);
       if (changedView) setViewMode(previousView);
@@ -131,7 +132,7 @@ export function StudioShell() {
     const confirmed = window.confirm("Wirklich die gesamte Zeichnung in diesem Projekt leeren? Projektname und Grundeinstellungen bleiben erhalten. Die Aktion kann unmittelbar über Rückgängig wiederhergestellt werden.");
     if (!confirmed) return;
     clearProject();
-    setFileMessage("Zeichnung geleert – Rückgängig ist möglich");
+    setActionMessage("Zeichnung geleert – Rückgängig ist möglich");
   }
 
   function submitNewProject(event: FormEvent<HTMLFormElement>) {
@@ -140,7 +141,7 @@ export function StudioShell() {
     const depth = Math.min(200, Math.max(3, Number(newProjectDepth) || 15));
     createProject({ name: newProjectName, width, depth, createProperty, terrainEnabled });
     setNewProjectOpen(false);
-    setFileMessage(`${newProjectName.trim() || "Neues Gartenprojekt"} · ${width} × ${depth} m erstellt`);
+    setActionMessage(`${newProjectName.trim() || "Neues Gartenprojekt"} · ${width} × ${depth} m erstellt`);
   }
 
   async function importProject(event: ChangeEvent<HTMLInputElement>) {
@@ -150,11 +151,19 @@ export function StudioShell() {
     try {
       const parsed = JSON.parse(await file.text()) as ProjectFile;
       importProjectFile(parsed);
-      setFileMessage(`${file.name} geladen`);
-    } catch (error) {
-      setFileMessage(error instanceof Error ? error.message : "Projekt konnte nicht geladen werden");
+      setActionMessage(`${file.name} geladen`);
+    } catch {
+      setActionMessage("Projekt konnte nicht geladen werden. Bitte eine gültige .algreen-Datei wählen.");
     }
   }
+
+  const persistenceMessage = persistence.phase === "loading"
+    ? "Lokale Sicherung wird vorbereitet …"
+    : persistence.phase === "error"
+      ? persistence.error
+      : `Lokal gespeichert${persistence.lastSavedAt
+        ? ` · ${new Date(persistence.lastSavedAt).toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" })}`
+        : ""}`;
 
   return (
     <main className="studio">
@@ -224,8 +233,17 @@ export function StudioShell() {
               <button type="button" onClick={exportPdfPlan}>PDF exportieren</button>
               <button type="button" className="dangerAction" onClick={startBlankProject}>Zeichnung leeren</button>
               <input ref={fileInput} type="file" accept=".algreen,.json,application/json" onChange={importProject} hidden />
-              <small>{fileMessage}</small>
             </div>
+          </div>
+          <div className="studioFeedback">
+            <small
+              className={`persistenceStatus persistence-${persistence.phase}`}
+              role={persistence.phase === "error" ? "alert" : "status"}
+              aria-live={persistence.phase === "error" ? "assertive" : "polite"}
+            >
+              {persistenceMessage}
+            </small>
+            {actionMessage && <small className="fileActionStatus" role="status" aria-live="polite">{actionMessage}</small>}
           </div>
         </div>
         <div className="viewSwitch">

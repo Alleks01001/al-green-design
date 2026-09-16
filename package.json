@@ -11,7 +11,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:designer": "node scripts/validate-garden-designer.mjs",
-    "verify": "npm run typecheck && npm run test:designer && npm run build && npm run validate:alpha8",
+    "test:persistence": "node scripts/validate-project-persistence.mjs",
+    "verify": "npm run typecheck && npm run test:designer && npm run test:persistence && npm run build && npm run validate:alpha8",
     "validate:alpha8": "node scripts/validate-alpha8.mjs"
   },
   "dependencies": {
